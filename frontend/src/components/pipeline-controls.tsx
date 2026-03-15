@@ -6,10 +6,10 @@ import { JobProgress } from "./job-progress";
 import type { Job } from "@/lib/types";
 
 const PHASES = [
-  { key: "scrape", label: "Scraping", icon: "📍", run: runScrape, defaultParams: {} },
-  { key: "enrich", label: "Enriquecer", icon: "🔬", run: runEnrich, defaultParams: {} },
-  { key: "generate", label: "Gerar LPs", icon: "🎨", run: runGenerate, defaultParams: {} },
-  { key: "outreach", label: "Gerar Msgs", icon: "📨", run: runOutreach, defaultParams: {} },
+  { key: "scrape", label: "Scraping", description: "Google Maps", run: runScrape, defaultParams: {} },
+  { key: "enrich", label: "Enriquecer", description: "Análise de gaps", run: runEnrich, defaultParams: {} },
+  { key: "generate", label: "Gerar LPs", description: "Landing pages", run: runGenerate, defaultParams: {} },
+  { key: "outreach", label: "Outreach", description: "WhatsApp msgs", run: runOutreach, defaultParams: {} },
 ] as const;
 
 interface PipelineControlsProps {
@@ -36,22 +36,43 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
   }, [onJobDone]);
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-      <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-4">Pipeline</h3>
-      <div className="flex gap-3 flex-wrap">
-        {PHASES.map((phase) => (
+    <div className="rounded-xl border border-border bg-surface p-5">
+      <div className="flex items-center gap-3 mb-4">
+        <h3 className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider font-[family-name:var(--font-mono)]">
+          Pipeline
+        </h3>
+        {activeJob && (
+          <span className="flex items-center gap-1.5 text-[10px] text-info font-[family-name:var(--font-mono)]">
+            <span className="w-1.5 h-1.5 rounded-full bg-info animate-pulse" />
+            Em execução
+          </span>
+        )}
+      </div>
+
+      <div className="flex gap-2 flex-wrap">
+        {PHASES.map((phase, i) => (
           <button
             key={phase.key}
             onClick={() => handleRun(phase)}
             disabled={activeJob !== null}
-            className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed border border-zinc-700 rounded-lg text-sm transition-colors"
+            className="group flex items-center gap-3 px-4 py-2.5 bg-surface-raised hover:bg-surface-overlay disabled:opacity-30 disabled:cursor-not-allowed border border-border hover:border-text-muted/30 rounded-lg transition-default"
           >
-            <span>{phase.icon}</span>
-            {phase.label}
+            <span className="flex items-center justify-center w-5 h-5 rounded-md bg-surface-overlay text-[10px] font-bold text-text-muted font-[family-name:var(--font-mono)] group-hover:text-accent group-hover:bg-accent-subtle transition-default">
+              {i + 1}
+            </span>
+            <div className="text-left">
+              <p className="text-[13px] font-medium text-text group-hover:text-text transition-default">{phase.label}</p>
+              <p className="text-[10px] text-text-muted">{phase.description}</p>
+            </div>
           </button>
         ))}
       </div>
-      {error && <p className="text-red-400 text-sm mt-3">{error}</p>}
+
+      {error && (
+        <div className="mt-3 px-3 py-2 rounded-lg border border-danger/20 bg-danger/5">
+          <p className="text-danger text-xs font-[family-name:var(--font-mono)]">{error}</p>
+        </div>
+      )}
       {activeJob && <JobProgress jobId={activeJob.id} onDone={handleDone} />}
     </div>
   );

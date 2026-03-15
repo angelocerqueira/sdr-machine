@@ -1,17 +1,28 @@
 interface StatsCardProps {
   label: string;
   value: string | number;
-  icon: string;
+  icon: React.ReactNode;
+  accent?: boolean;
 }
 
-export function StatsCard({ label, value, icon }: StatsCardProps) {
+export function StatsCard({ label, value, icon, accent }: StatsCardProps) {
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-zinc-400 text-sm">{label}</span>
-        <span className="text-xl">{icon}</span>
+    <div className={`rounded-xl border p-5 card-glow transition-default ${
+      accent
+        ? "border-accent/20 bg-accent-subtle"
+        : "border-border bg-surface"
+    }`}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-text-secondary text-xs font-medium uppercase tracking-wider font-[family-name:var(--font-mono)]">
+          {label}
+        </span>
+        <span className={`${accent ? "text-accent" : "text-text-muted"}`}>
+          {icon}
+        </span>
       </div>
-      <p className="text-2xl font-bold text-white">{value}</p>
+      <p className={`stat-number text-3xl font-bold ${accent ? "text-accent" : "text-text"}`}>
+        {value}
+      </p>
     </div>
   );
 }

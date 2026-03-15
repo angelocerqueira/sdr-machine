@@ -17,16 +17,27 @@ export function KanbanColumn({ id, label, leads }: KanbanColumnProps) {
   return (
     <div
       ref={setNodeRef}
-      className={`bg-zinc-900 border border-zinc-800 rounded-xl p-3 min-w-[220px] w-[220px] flex flex-col ${
-        isOver ? "ring-2 ring-blue-500/50" : ""
+      className={`rounded-xl border bg-surface min-w-[240px] w-[240px] flex flex-col transition-default ${
+        isOver ? "border-accent/40 bg-accent-subtle" : "border-border"
       }`}
     >
-      <div className="flex items-center justify-between mb-3 px-1">
-        <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">{label}</h3>
-        <span className="text-xs text-zinc-500 bg-zinc-800 rounded-full px-2 py-0.5">{leads.length}</span>
+      {/* Column header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+        <h3 className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider font-[family-name:var(--font-mono)]">
+          {label}
+        </h3>
+        <span className={`text-[11px] font-medium font-[family-name:var(--font-mono)] rounded-full px-2 py-0.5 ${
+          leads.length > 0
+            ? "bg-accent-subtle text-accent"
+            : "bg-surface-raised text-text-muted"
+        }`}>
+          {leads.length}
+        </span>
       </div>
+
+      {/* Cards */}
       <SortableContext items={leads.map((l) => l.id)} strategy={verticalListSortingStrategy}>
-        <div className="flex flex-col gap-2 flex-1 min-h-[100px]">
+        <div className="flex flex-col gap-2 p-2 flex-1 min-h-[120px]">
           {leads.map((lead) => (
             <KanbanCard key={lead.id} lead={lead} />
           ))}

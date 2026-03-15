@@ -18,13 +18,12 @@ export function KanbanCard({ lead }: KanbanCardProps) {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
   };
 
   const hasError = lead.status.endsWith("_failed");
-  const scoreColor =
-    (lead.opportunity_score ?? 0) >= 60 ? "text-green-400" :
-    (lead.opportunity_score ?? 0) >= 40 ? "text-yellow-400" : "text-zinc-400";
+  const score = lead.opportunity_score ?? 0;
+  const scoreClass = score >= 60 ? "score-high" : score >= 40 ? "score-mid" : "score-low";
+  const borderAccent = score >= 60 ? "border-l-accent" : score >= 40 ? "border-l-warning" : "border-l-border";
 
   return (
     <div
@@ -32,22 +31,30 @@ export function KanbanCard({ lead }: KanbanCardProps) {
       style={style}
       {...attributes}
       {...listeners}
-      className={`bg-zinc-800 border rounded-lg p-3 cursor-grab active:cursor-grabbing ${
-        hasError ? "border-red-500/50" : "border-zinc-700"
-      }`}
+      className={`group rounded-lg border border-border bg-surface-raised p-3 cursor-grab active:cursor-grabbing card-glow transition-default border-l-2 ${borderAccent} ${
+        isDragging ? "kanban-card-dragging" : ""
+      } ${hasError ? "border-danger/30" : ""}`}
     >
       <Link href={`/leads/${lead.id}`} className="block">
-        <p className="text-sm font-medium text-white truncate">{lead.nome}</p>
-        <div className="flex items-center justify-between mt-1.5">
-          <span className="text-xs text-zinc-400">{lead.nicho}</span>
-          <span className={`text-xs font-mono ${scoreColor}`}>
+        <p className="text-[13px] font-medium text-text truncate">{lead.nome}</p>
+        <div className="flex items-center justify-between mt-2">
+          <span className="text-[11px] text-text-muted font-[family-name:var(--font-mono)]">{lead.nicho}</span>
+          <span className={`text-[11px] font-semibold font-[family-name:var(--font-mono)] ${scoreClass}`}>
             {lead.opportunity_score ?? "—"}
           </span>
         </div>
         {lead.rating && (
-          <p className="text-xs text-zinc-500 mt-1">{lead.rating}⭐ · {lead.cidade}</p>
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <span className="text-[10px] text-text-muted">{lead.rating}</span>
+            <svg className="w-2.5 h-2.5 text-warning" viewBox="0 0 12 12" fill="currentColor">
+              <path d="M6 0l1.8 3.6L12 4.2l-3 2.9.7 4.1L6 9.1 2.3 11.2l.7-4.1-3-2.9 4.2-.6z" />
+            </svg>
+            <span className="text-[10px] text-text-muted">{lead.cidade}</span>
+          </div>
         )}
-        {hasError && <p className="text-xs text-red-400 mt-1">Erro na fase</p>}
+        {hasError && (
+          <p className="text-[10px] text-danger mt-1.5 font-[family-name:var(--font-mono)]">Erro na fase</p>
+        )}
       </Link>
     </div>
   );

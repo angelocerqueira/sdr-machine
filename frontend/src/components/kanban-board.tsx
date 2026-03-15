@@ -49,41 +49,46 @@ export function KanbanBoard() {
     }
   };
 
-  // Collect unique values for filter dropdowns
   const nichos = [...new Set(leads.map((l) => l.nicho).filter(Boolean))];
   const cidades = [...new Set(leads.map((l) => l.cidade).filter(Boolean))];
 
-  if (loading) return <div className="text-zinc-400">Carregando...</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-text-muted text-sm">
+        <span className="w-4 h-4 border-2 border-text-muted border-t-accent rounded-full animate-spin" />
+        Carregando...
+      </div>
+    );
+  }
+
+  const selectClass =
+    "bg-surface-raised border border-border rounded-lg px-3 py-1.5 text-[13px] text-text-secondary focus:border-accent/50 focus:outline-none transition-default appearance-none cursor-pointer hover:border-text-muted";
+  const inputClass =
+    "bg-surface-raised border border-border rounded-lg px-3 py-1.5 text-[13px] text-text-secondary placeholder:text-text-muted focus:border-accent/50 focus:outline-none transition-default w-28 font-[family-name:var(--font-mono)]";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Filters */}
-      <div className="flex gap-3 flex-wrap">
-        <select
-          value={filterNicho}
-          onChange={(e) => setFilterNicho(e.target.value)}
-          className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-300"
-        >
+      <div className="flex gap-3 flex-wrap items-center">
+        <span className="text-[11px] uppercase tracking-widest text-text-muted font-[family-name:var(--font-mono)]">Filtros</span>
+        <select value={filterNicho} onChange={(e) => setFilterNicho(e.target.value)} className={selectClass}>
           <option value="">Todos nichos</option>
           {nichos.map((n) => <option key={n} value={n!}>{n}</option>)}
         </select>
-        <select
-          value={filterCidade}
-          onChange={(e) => setFilterCidade(e.target.value)}
-          className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-300"
-        >
+        <select value={filterCidade} onChange={(e) => setFilterCidade(e.target.value)} className={selectClass}>
           <option value="">Todas cidades</option>
           {cidades.map((c) => <option key={c} value={c!}>{c}</option>)}
         </select>
         <input
           type="number"
-          placeholder="Score mín."
+          placeholder="Score min"
           value={filterScoreMin}
           onChange={(e) => setFilterScoreMin(e.target.value)}
-          className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-300 w-28"
+          className={inputClass}
         />
       </div>
 
+      {/* Board */}
       <DndContext collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
         <div className="flex gap-3 overflow-x-auto pb-4">
           {KANBAN_COLUMNS.map((col) => (
