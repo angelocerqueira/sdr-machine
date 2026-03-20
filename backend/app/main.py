@@ -6,7 +6,7 @@ from app.routers import dashboard, leads, pipeline, settings
 
 app = FastAPI(title="SDR Machine API", version="1.0.0")
 
-cors_origins = ["http://localhost:3000"]
+cors_origins = ["http://localhost:3000", "http://localhost:4000"]
 if app_settings.frontend_url and app_settings.frontend_url not in cors_origins:
     cors_origins.append(app_settings.frontend_url)
 
