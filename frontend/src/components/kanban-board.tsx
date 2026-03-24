@@ -15,7 +15,7 @@ export function KanbanBoard() {
   const [filterScoreMin, setFilterScoreMin] = useState("");
 
   const fetchLeads = useCallback(async () => {
-    const params: Record<string, string> = { per_page: "500" };
+    const params: Record<string, string> = { per_page: "100" };
     if (filterNicho) params.nicho = filterNicho;
     if (filterCidade) params.cidade = filterCidade;
     if (filterScoreMin) params.score_min = filterScoreMin;
