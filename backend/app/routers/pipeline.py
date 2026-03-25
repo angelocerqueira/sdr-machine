@@ -196,7 +196,7 @@ def _run_generate(job_id: int, params: dict):
                 html = generate_landing_page(lead_data)
                 if html:
                     lead.lp_html = html
-                    lead.status = "generated"
+                    lead.status = "lp_generated"
                     db.commit()
                     generated += 1
                 else:
