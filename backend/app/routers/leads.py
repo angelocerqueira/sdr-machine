@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -8,6 +8,13 @@ from app.models import Lead
 from app.schemas import LeadListOut, LeadOut, LeadSummaryOut, LeadUpdate, OutreachMessageOut
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
+
+ORDER_MAP = {
+    "score_desc": Lead.opportunity_score.desc().nulls_last(),
+    "score_asc": Lead.opportunity_score.asc().nulls_last(),
+    "name_asc": Lead.nome.asc(),
+    "created_desc": Lead.created_at.desc(),
+}
 
 VALID_STATUSES = {
     "scraped",
@@ -39,6 +46,7 @@ def lead_counts(
     nicho: str | None = None,
     cidade: str | None = None,
     score_min: int | None = None,
+    search: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Return lead counts grouped by status. Used by Kanban column headers."""
@@ -50,6 +58,8 @@ def lead_counts(
         query = query.filter(Lead.cidade == cidade)
     if score_min is not None:
         query = query.filter(Lead.opportunity_score >= score_min)
+    if search:
+        query = query.filter(or_(Lead.nome.ilike(f"%{search}%"), Lead.telefone.ilike(f"%{search}%")))
 
     rows = query.group_by(Lead.status).all()
     return {status: count for status, count in rows}
@@ -61,6 +71,8 @@ def list_leads(
     nicho: str | None = None,
     cidade: str | None = None,
     score_min: int | None = None,
+    search: str | None = None,
+    order_by: str = Query("score_desc", pattern="^(score_desc|score_asc|name_asc|created_desc)$"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -75,6 +87,10 @@ def list_leads(
         query = query.filter(Lead.cidade == cidade)
     if score_min is not None:
         query = query.filter(Lead.opportunity_score >= score_min)
+    if search:
+        query = query.filter(or_(Lead.nome.ilike(f"%{search}%"), Lead.telefone.ilike(f"%{search}%")))
+
+    query = query.order_by(ORDER_MAP[order_by])
 
     total = query.count()
     items = query.offset((page - 1) * per_page).limit(per_page).all()
