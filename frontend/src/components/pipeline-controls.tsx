@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { runScrape, runEnrich, runGenerate, runOutreach } from "@/lib/api";
+import { useState, useEffect, useCallback } from "react";
+import { runScrape, runEnrich, runGenerate, runOutreach, getPipelineStatus } from "@/lib/api";
 import { JobProgress } from "./job-progress";
+import { ConfirmModal } from "./confirm-modal";
 import type { Job } from "@/lib/types";
 
 const PHASES = [
@@ -12,6 +13,13 @@ const PHASES = [
   { key: "outreach", label: "Outreach", description: "WhatsApp msgs", run: runOutreach, defaultParams: {} },
 ] as const;
 
+const PHASE_DESCRIPTIONS: Record<string, string> = {
+  scrape: "Buscar negócios no Google Maps por nicho e cidade.",
+  enrich: "Analisar o site de cada lead (SSL, responsividade, PageSpeed).",
+  generate: "Gerar uma landing page personalizada com IA para cada lead. Custo estimado: ~$0.01/lead.",
+  outreach: "Gerar 3 mensagens de WhatsApp (inicial + 2 follow-ups) para cada lead.",
+};
+
 interface PipelineControlsProps {
   onJobDone?: () => void;
 }
@@ -19,6 +27,18 @@ interface PipelineControlsProps {
 export function PipelineControls({ onJobDone }: PipelineControlsProps) {
   const [activeJob, setActiveJob] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [eligibleCounts, setEligibleCounts] = useState<Record<string, number>>({});
+  const [runningJobs, setRunningJobs] = useState<string[]>([]);
+  const [pendingPhase, setPendingPhase] = useState<typeof PHASES[number] | null>(null);
+
+  useEffect(() => {
+    getPipelineStatus()
+      .then((data) => {
+        setEligibleCounts(data.eligible_counts);
+        setRunningJobs(data.running_jobs);
+      })
+      .catch(() => {});
+  }, [activeJob]);
 
   const handleRun = useCallback(async (phase: typeof PHASES[number]) => {
     setError(null);
@@ -29,6 +49,13 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
       setError(e instanceof Error ? e.message : "Erro ao iniciar job");
     }
   }, []);
+
+  const handleConfirm = useCallback(() => {
+    if (pendingPhase) {
+      handleRun(pendingPhase);
+      setPendingPhase(null);
+    }
+  }, [pendingPhase, handleRun]);
 
   const handleDone = useCallback(() => {
     setActiveJob(null);
@@ -50,22 +77,34 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        {PHASES.map((phase, i) => (
-          <button
-            key={phase.key}
-            onClick={() => handleRun(phase)}
-            disabled={activeJob !== null}
-            className="group flex items-center gap-3 px-4 py-2.5 bg-surface-raised hover:bg-surface-overlay disabled:opacity-30 disabled:cursor-not-allowed border border-border hover:border-text-muted/30 rounded-lg transition-default"
-          >
-            <span className="flex items-center justify-center w-5 h-5 rounded-md bg-surface-overlay text-[10px] font-bold text-text-muted font-[family-name:var(--font-mono)] group-hover:text-accent group-hover:bg-accent-subtle transition-default">
-              {i + 1}
-            </span>
-            <div className="text-left">
-              <p className="text-[13px] font-medium text-text group-hover:text-text transition-default">{phase.label}</p>
-              <p className="text-[10px] text-text-muted">{phase.description}</p>
-            </div>
-          </button>
-        ))}
+        {PHASES.map((phase, i) => {
+          const count = eligibleCounts[phase.key] ?? 0;
+          const isRunning = runningJobs.includes(phase.key);
+          const disabled = activeJob !== null || isRunning;
+          return (
+            <button
+              key={phase.key}
+              onClick={() => setPendingPhase(phase)}
+              disabled={disabled}
+              className="group flex items-center gap-3 px-4 py-2.5 bg-surface-raised hover:bg-surface-overlay disabled:opacity-30 disabled:cursor-not-allowed border border-border hover:border-text-muted/30 rounded-lg transition-default"
+            >
+              <span className="flex items-center justify-center w-5 h-5 rounded-md bg-surface-overlay text-[10px] font-bold text-text-muted font-[family-name:var(--font-mono)] group-hover:text-accent group-hover:bg-accent-subtle transition-default">
+                {i + 1}
+              </span>
+              <div className="text-left">
+                <p className="text-[13px] font-medium text-text group-hover:text-text transition-default">
+                  {phase.label}
+                  {phase.key !== "scrape" && count > 0 && (
+                    <span className="ml-1.5 text-[10px] text-accent font-[family-name:var(--font-mono)]">
+                      ({count})
+                    </span>
+                  )}
+                </p>
+                <p className="text-[10px] text-text-muted">{phase.description}</p>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {error && (
@@ -74,6 +113,21 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
         </div>
       )}
       {activeJob && <JobProgress jobId={activeJob.id} onDone={handleDone} />}
+
+      <ConfirmModal
+        open={pendingPhase !== null}
+        title={`Executar ${pendingPhase?.label ?? ""}?`}
+        confirmLabel="Executar"
+        onConfirm={handleConfirm}
+        onCancel={() => setPendingPhase(null)}
+      >
+        <p>{pendingPhase ? PHASE_DESCRIPTIONS[pendingPhase.key] : ""}</p>
+        {pendingPhase && pendingPhase.key !== "scrape" && (
+          <p className="mt-2 text-accent font-[family-name:var(--font-mono)] text-[13px]">
+            {eligibleCounts[pendingPhase.key] ?? 0} leads elegíveis
+          </p>
+        )}
+      </ConfirmModal>
     </div>
   );
 }
