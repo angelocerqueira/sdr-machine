@@ -13,7 +13,10 @@ export function JobProgress({ jobId, onDone }: JobProgressProps) {
   const [status, setStatus] = useState<"running" | "done" | "error">("running");
   const onDoneRef = useRef(onDone);
   const scrollRef = useRef<HTMLDivElement>(null);
-  onDoneRef.current = onDone;
+
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
 
   useEffect(() => {
     const cleanup = streamJob(jobId, (event) => {
