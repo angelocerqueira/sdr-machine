@@ -2,14 +2,14 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import Link from "next/link";
 import type { Lead } from "@/lib/types";
 
 interface KanbanCardProps {
   lead: Lead;
+  onSelect: (id: number) => void;
 }
 
-export function KanbanCard({ lead }: KanbanCardProps) {
+export function KanbanCard({ lead, onSelect }: KanbanCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: lead.id,
     data: { lead },
@@ -35,12 +35,17 @@ export function KanbanCard({ lead }: KanbanCardProps) {
         isDragging ? "kanban-card-dragging" : ""
       } ${hasError ? "border-danger/30" : ""}`}
     >
-      <Link href={`/leads/${lead.id}`} className="block">
+      <div onClick={() => onSelect(lead.id)}>
         <p className="text-[13px] font-medium text-text truncate">{lead.nome}</p>
         <div className="flex items-center justify-between mt-2">
           <span className="text-[11px] text-text-muted font-[family-name:var(--font-mono)]">{lead.nicho}</span>
-          <span className={`text-[11px] font-semibold font-[family-name:var(--font-mono)] ${scoreClass}`}>
+          <span className={`tooltip text-[11px] font-semibold font-[family-name:var(--font-mono)] ${scoreClass}`}>
             {lead.opportunity_score ?? "—"}
+            {lead.opportunity_reasons?.length > 0 && (
+              <span className="tooltip-content">
+                {lead.opportunity_reasons.slice(0, 4).join(" · ")}
+              </span>
+            )}
           </span>
         </div>
         {lead.rating && (
@@ -55,7 +60,7 @@ export function KanbanCard({ lead }: KanbanCardProps) {
         {hasError && (
           <p className="text-[10px] text-danger mt-1.5 font-[family-name:var(--font-mono)]">Erro na fase</p>
         )}
-      </Link>
+      </div>
     </div>
   );
 }
