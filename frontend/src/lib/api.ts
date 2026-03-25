@@ -78,5 +78,9 @@ export const runGenerate = (params: { lead_ids?: number[]; max_count?: number })
 export const runOutreach = (params: { lead_ids?: number[] }) =>
   fetchAPI<Job>("/api/pipeline/outreach", { method: "POST", body: JSON.stringify(params) });
 
+// Pipeline Status
+export const getPipelineStatus = () =>
+  fetchAPI<{ eligible_counts: Record<string, number>; running_jobs: string[] }>("/api/pipeline/status");
+
 // Settings
 export const getSettings = () => fetchAPI<Settings>("/api/settings");
