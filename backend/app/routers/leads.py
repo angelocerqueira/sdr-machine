@@ -26,6 +26,35 @@ VALID_STATUSES = {
 }
 
 
+@router.get("/filters")
+def lead_filters(db: Session = Depends(get_db)):
+    """Return distinct nichos and cidades for dynamic filter dropdowns."""
+    nichos = [r[0] for r in db.query(Lead.nicho).filter(Lead.nicho.isnot(None)).distinct().order_by(Lead.nicho).all()]
+    cidades = [r[0] for r in db.query(Lead.cidade).filter(Lead.cidade.isnot(None)).distinct().order_by(Lead.cidade).all()]
+    return {"nichos": nichos, "cidades": cidades}
+
+
+@router.get("/counts")
+def lead_counts(
+    nicho: str | None = None,
+    cidade: str | None = None,
+    score_min: int | None = None,
+    db: Session = Depends(get_db),
+):
+    """Return lead counts grouped by status. Used by Kanban column headers."""
+    query = db.query(Lead.status, func.count(Lead.id))
+
+    if nicho:
+        query = query.filter(Lead.nicho == nicho)
+    if cidade:
+        query = query.filter(Lead.cidade == cidade)
+    if score_min is not None:
+        query = query.filter(Lead.opportunity_score >= score_min)
+
+    rows = query.group_by(Lead.status).all()
+    return {status: count for status, count in rows}
+
+
 @router.get("", response_model=LeadListOut)
 def list_leads(
     status: str | None = None,
