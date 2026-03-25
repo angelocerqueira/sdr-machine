@@ -29,6 +29,22 @@ export default function JobsPage() {
     });
   }, []);
 
+  const getResultText = (job: Job) => {
+    const s = job.result_summary;
+    if (!s?.total) return job.error_message || "—";
+    const KEY_MAP: Record<string, string> = {
+      scrape: "created",
+      enrich: "enriched",
+      generate: "generated",
+      outreach: "messaged",
+    };
+    const count = s[KEY_MAP[job.type] ?? "success"] ?? 0;
+    const errCount = (s.errors as string[] | undefined)?.length ?? 0;
+    return errCount > 0
+      ? `${count}/${s.total} ok, ${errCount} erros`
+      : `${count}/${s.total} ok`;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-text-muted text-sm">
@@ -72,9 +88,7 @@ export default function JobsPage() {
                     </span>
                   </td>
                   <td className="px-5 py-3.5 text-text-secondary font-[family-name:var(--font-mono)] text-xs">
-                    {job.result_summary?.total
-                      ? `${job.result_summary.success}/${job.result_summary.total} ok`
-                      : job.error_message || "—"}
+                    {getResultText(job)}
                   </td>
                   <td className="px-5 py-3.5 text-text-muted font-[family-name:var(--font-mono)] text-xs">
                     {new Date(job.created_at).toLocaleString("pt-BR")}
