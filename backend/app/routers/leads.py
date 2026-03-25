@@ -26,6 +26,14 @@ VALID_STATUSES = {
 }
 
 
+@router.get("/filters")
+def lead_filters(db: Session = Depends(get_db)):
+    """Return distinct nichos and cidades for dynamic filter dropdowns."""
+    nichos = [r[0] for r in db.query(Lead.nicho).filter(Lead.nicho.isnot(None)).distinct().order_by(Lead.nicho).all()]
+    cidades = [r[0] for r in db.query(Lead.cidade).filter(Lead.cidade.isnot(None)).distinct().order_by(Lead.cidade).all()]
+    return {"nichos": nichos, "cidades": cidades}
+
+
 @router.get("/counts")
 def lead_counts(
     nicho: str | None = None,

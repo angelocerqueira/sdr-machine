@@ -20,6 +20,9 @@ export const getLeads = (params?: Record<string, string>) => {
   return fetchAPI<LeadListResponse>(`/api/leads${qs}`);
 };
 
+export const getLeadFilters = () =>
+  fetchAPI<{ nichos: string[]; cidades: string[] }>("/api/leads/filters");
+
 export const getLeadCounts = (params?: Record<string, string>) => {
   const qs = params ? "?" + new URLSearchParams(params).toString() : "";
   return fetchAPI<Record<string, number>>(`/api/leads/counts${qs}`);

@@ -3,12 +3,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { DndContext, DragEndEvent, pointerWithin } from "@dnd-kit/core";
 import { KanbanColumn } from "./kanban-column";
-import { getLeadCounts, updateLead } from "@/lib/api";
+import { getLeadCounts, getLeadFilters, updateLead } from "@/lib/api";
 import { KANBAN_COLUMNS } from "@/lib/types";
 import type { Lead } from "@/lib/types";
 
 export function KanbanBoard() {
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [nichos, setNichos] = useState<string[]>([]);
+  const [cidades, setCidades] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterNicho, setFilterNicho] = useState("");
   const [filterCidade, setFilterCidade] = useState("");
@@ -17,25 +19,33 @@ export function KanbanBoard() {
   // Per-column refresh triggers: bump to make a column refetch
   const [refreshKeys, setRefreshKeys] = useState<Record<string, number>>({});
 
-  const fetchCounts = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
       const params: Record<string, string> = {};
       if (filterNicho) params.nicho = filterNicho;
       if (filterCidade) params.cidade = filterCidade;
       if (filterScoreMin) params.score_min = filterScoreMin;
-      const data = await getLeadCounts(params);
-      setCounts(data);
+
+      const [countsData, filtersData] = await Promise.all([
+        getLeadCounts(params),
+        getLeadFilters().catch(() => null),
+      ]);
+
+      setCounts(countsData);
+      if (filtersData) {
+        setNichos(filtersData.nichos);
+        setCidades(filtersData.cidades);
+      }
     } catch (err) {
-      console.error("Erro ao carregar contagens:", err);
+      console.error("Erro ao carregar dados:", err);
     } finally {
       setLoading(false);
     }
   }, [filterNicho, filterCidade, filterScoreMin]);
 
   useEffect(() => {
-    setLoading(true);
-    fetchCounts();
-  }, [fetchCounts]);
+    fetchData();
+  }, [fetchData]);
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -74,6 +84,8 @@ export function KanbanBoard() {
     }));
   };
 
+  const selectClass =
+    "bg-surface-raised border border-border rounded-lg px-3 py-1.5 text-[13px] text-text-secondary focus:border-accent/50 focus:outline-none transition-default appearance-none cursor-pointer hover:border-text-muted";
   const inputClass =
     "bg-surface-raised border border-border rounded-lg px-3 py-1.5 text-[13px] text-text-secondary placeholder:text-text-muted focus:border-accent/50 focus:outline-none transition-default w-28 font-[family-name:var(--font-mono)]";
 
@@ -93,20 +105,26 @@ export function KanbanBoard() {
         <span className="text-[11px] uppercase tracking-widest text-text-muted font-[family-name:var(--font-mono)]">
           Filtros
         </span>
-        <input
-          type="text"
-          placeholder="Nicho"
+        <select
           value={filterNicho}
           onChange={(e) => setFilterNicho(e.target.value)}
-          className={inputClass}
-        />
-        <input
-          type="text"
-          placeholder="Cidade"
+          className={selectClass}
+        >
+          <option value="">Todos nichos</option>
+          {nichos.map((n) => (
+            <option key={n} value={n}>{n}</option>
+          ))}
+        </select>
+        <select
           value={filterCidade}
           onChange={(e) => setFilterCidade(e.target.value)}
-          className={inputClass}
-        />
+          className={selectClass}
+        >
+          <option value="">Todas cidades</option>
+          {cidades.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
         <input
           type="number"
           placeholder="Score min"
