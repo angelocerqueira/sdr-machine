@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { DndContext, DragEndEvent, pointerWithin } from "@dnd-kit/core";
+import { DndContext, DragEndEvent, PointerSensor, pointerWithin, useSensor, useSensors } from "@dnd-kit/core";
 import { KanbanColumn } from "./kanban-column";
 import { LeadSheet } from "./lead-sheet";
 import { getLeadCounts, getLeadFilters, updateLead } from "@/lib/api";
@@ -9,6 +9,9 @@ import { KANBAN_COLUMNS } from "@/lib/types";
 import type { Lead } from "@/lib/types";
 
 export function KanbanBoard() {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [nichos, setNichos] = useState<string[]>([]);
   const [cidades, setCidades] = useState<string[]>([]);
@@ -146,7 +149,7 @@ export function KanbanBoard() {
       </div>
 
       {/* Board */}
-      <DndContext collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
         <div className="flex gap-3 overflow-x-auto pb-4">
           {KANBAN_COLUMNS.map((col) => (
             <KanbanColumn
