@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DndContext, DragEndEvent, pointerWithin } from "@dnd-kit/core";
 import { KanbanColumn } from "./kanban-column";
+import { LeadSheet } from "./lead-sheet";
 import { getLeadCounts, getLeadFilters, updateLead } from "@/lib/api";
 import { KANBAN_COLUMNS } from "@/lib/types";
 import type { Lead } from "@/lib/types";
@@ -15,6 +16,8 @@ export function KanbanBoard() {
   const [filterNicho, setFilterNicho] = useState("");
   const [filterCidade, setFilterCidade] = useState("");
   const [filterScoreMin, setFilterScoreMin] = useState("");
+  const [search, setSearch] = useState("");
+  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
 
   // Per-column refresh triggers: bump to make a column refetch
   const [refreshKeys, setRefreshKeys] = useState<Record<string, number>>({});
@@ -25,6 +28,7 @@ export function KanbanBoard() {
       if (filterNicho) params.nicho = filterNicho;
       if (filterCidade) params.cidade = filterCidade;
       if (filterScoreMin) params.score_min = filterScoreMin;
+      if (search) params.search = search;
 
       const [countsData, filtersData] = await Promise.all([
         getLeadCounts(params),
@@ -41,7 +45,7 @@ export function KanbanBoard() {
     } finally {
       setLoading(false);
     }
-  }, [filterNicho, filterCidade, filterScoreMin]);
+  }, [filterNicho, filterCidade, filterScoreMin, search]);
 
   useEffect(() => {
     fetchData();
@@ -105,6 +109,13 @@ export function KanbanBoard() {
         <span className="text-[11px] uppercase tracking-widest text-text-muted font-[family-name:var(--font-mono)]">
           Filtros
         </span>
+        <input
+          type="text"
+          placeholder="Buscar por nome ou telefone..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="bg-surface-raised border border-border rounded-lg px-3 py-1.5 text-[13px] text-text-secondary placeholder:text-text-muted focus:border-accent/50 focus:outline-none transition-default w-64"
+        />
         <select
           value={filterNicho}
           onChange={(e) => setFilterNicho(e.target.value)}
@@ -147,10 +158,14 @@ export function KanbanBoard() {
               filterNicho={filterNicho || undefined}
               filterCidade={filterCidade || undefined}
               filterScoreMin={filterScoreMin || undefined}
+              search={search || undefined}
+              orderBy="score_desc"
+              onSelectLead={setSelectedLeadId}
             />
           ))}
         </div>
       </DndContext>
+      <LeadSheet leadId={selectedLeadId} onClose={() => setSelectedLeadId(null)} />
     </div>
   );
 }

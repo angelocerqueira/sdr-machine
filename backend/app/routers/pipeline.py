@@ -11,7 +11,7 @@ from app.database import get_db, SessionLocal
 from app.models import Lead, Job, OutreachMessage
 from app.schemas import (
     ScrapeRequest, EnrichRequest, GenerateRequest, OutreachRequest,
-    JobOut, JobListOut,
+    JobOut, JobListOut, PipelineStatusOut,
 )
 from app.config import settings
 
@@ -196,7 +196,7 @@ def _run_generate(job_id: int, params: dict):
                 html = generate_landing_page(lead_data)
                 if html:
                     lead.lp_html = html
-                    lead.status = "generated"
+                    lead.status = "lp_generated"
                     db.commit()
                     generated += 1
                 else:
@@ -311,6 +311,12 @@ _RUNNERS = {
 
 
 def _start_job(job_type: str, params: dict, bg: BackgroundTasks, db: Session) -> Job:
+    existing = db.query(Job).filter(Job.type == job_type, Job.status == "running").first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Já existe um job '{job_type}' em execução (#{existing.id})"
+        )
     job = Job(type=job_type, params=params)
     db.add(job)
     db.commit()
@@ -322,6 +328,21 @@ def _start_job(job_type: str, params: dict, bg: BackgroundTasks, db: Session) ->
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+
+@router.get("/pipeline/status", response_model=PipelineStatusOut)
+def pipeline_status(db: Session = Depends(get_db)):
+    eligible = {
+        "scrape": 0,
+        "enrich": db.query(Lead).filter(Lead.status == "scraped").count(),
+        "generate": db.query(Lead).filter(Lead.status == "enriched").count(),
+        "outreach": db.query(Lead).filter(Lead.status == "lp_generated").count(),
+    }
+    running = [
+        row[0] for row in
+        db.query(Job.type).filter(Job.status == "running").distinct().all()
+    ]
+    return PipelineStatusOut(eligible_counts=eligible, running_jobs=running)
 
 
 @router.post("/pipeline/scrape", response_model=JobOut)

@@ -17,6 +17,9 @@ interface KanbanColumnProps {
   filterNicho?: string;
   filterCidade?: string;
   filterScoreMin?: string;
+  search?: string;
+  orderBy?: string;
+  onSelectLead: (id: number) => void;
 }
 
 export function KanbanColumn({
@@ -27,6 +30,9 @@ export function KanbanColumn({
   filterNicho,
   filterCidade,
   filterScoreMin,
+  search,
+  orderBy,
+  onSelectLead,
 }: KanbanColumnProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [page, setPage] = useState(1);
@@ -46,8 +52,10 @@ export function KanbanColumn({
     if (filterNicho) params.nicho = filterNicho;
     if (filterCidade) params.cidade = filterCidade;
     if (filterScoreMin) params.score_min = filterScoreMin;
+    if (search) params.search = search;
+    params.order_by = orderBy || "score_desc";
     return params;
-  }, [id, filterNicho, filterCidade, filterScoreMin]);
+  }, [id, filterNicho, filterCidade, filterScoreMin, search, orderBy]);
 
   // Load first page (also re-runs on filter change or refreshKey bump)
   useEffect(() => {
@@ -136,13 +144,25 @@ export function KanbanColumn({
           className="flex flex-col gap-2 p-2 flex-1 min-h-[120px] max-h-[calc(100vh-320px)] overflow-y-auto"
         >
           {loading ? (
-            <div className="flex items-center justify-center py-6">
-              <span className="w-3.5 h-3.5 border-2 border-text-muted border-t-accent rounded-full animate-spin" />
+            <div className="space-y-2">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="rounded-lg border border-border-subtle p-3 space-y-2">
+                  <div className="skeleton h-3.5 w-3/4" />
+                  <div className="flex justify-between">
+                    <div className="skeleton h-3 w-16" />
+                    <div className="skeleton h-3 w-8" />
+                  </div>
+                </div>
+              ))}
             </div>
+          ) : leads.length === 0 ? (
+            <p className="text-[11px] text-text-muted text-center py-8 font-[family-name:var(--font-mono)]">
+              Nenhum lead
+            </p>
           ) : (
             <>
               {leads.map((lead) => (
-                <KanbanCard key={lead.id} lead={lead} />
+                <KanbanCard key={lead.id} lead={lead} onSelect={onSelectLead} />
               ))}
               {loadingMore && (
                 <div className="flex items-center justify-center py-2">

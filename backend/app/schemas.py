@@ -81,6 +81,11 @@ class JobListOut(BaseModel):
 
 # === Pipeline ===
 
+class PipelineStatusOut(BaseModel):
+    eligible_counts: dict[str, int]
+    running_jobs: list[str]
+
+
 class ScrapeRequest(BaseModel):
     nichos: list[str] = []
     cidades: list[str] = []
