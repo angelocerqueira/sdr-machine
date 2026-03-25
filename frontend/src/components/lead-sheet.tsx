@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getLead, getLeadLpUrl, getLeadMessages } from "@/lib/api";
+import { getLead, getLeadLpUrl, getLeadMessages, runGenerate, runOutreach } from "@/lib/api";
 import type { Lead, OutreachMessage } from "@/lib/types";
+import { ConfirmModal } from "./confirm-modal";
 
 interface LeadSheetProps {
   leadId: number | null;
@@ -76,6 +77,8 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
   const [lead, setLead] = useState<Lead | null>(null);
   const [messages, setMessages] = useState<OutreachMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"generate" | "outreach" | null>(null);
 
   const handleClose = useCallback(() => {
     onClose();
@@ -219,6 +222,44 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
                 </div>
               )}
 
+              {/* Action buttons */}
+              {(lead.status === "enriched" || lead.status === "lp_generated") && (
+                <div className="flex gap-2">
+                  {lead.status === "enriched" && (
+                    <button
+                      onClick={() => setPendingAction("generate")}
+                      disabled={actionLoading}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-accent hover:bg-accent-dim disabled:opacity-50 text-bg text-[13px] font-medium rounded-lg transition-default"
+                    >
+                      {actionLoading ? (
+                        <span className="w-3.5 h-3.5 border-2 border-bg/30 border-t-bg rounded-full animate-spin" />
+                      ) : (
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="w-4 h-4">
+                          <path d="M2 12l4-8 4 6 3-4 1 6" />
+                        </svg>
+                      )}
+                      Gerar LP
+                    </button>
+                  )}
+                  {lead.status === "lp_generated" && (
+                    <button
+                      onClick={() => setPendingAction("outreach")}
+                      disabled={actionLoading}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-accent hover:bg-accent-dim disabled:opacity-50 text-bg text-[13px] font-medium rounded-lg transition-default"
+                    >
+                      {actionLoading ? (
+                        <span className="w-3.5 h-3.5 border-2 border-bg/30 border-t-bg rounded-full animate-spin" />
+                      ) : (
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="w-4 h-4">
+                          <path d="M2 3h12M2 8h8M2 13h10" />
+                        </svg>
+                      )}
+                      Gerar Outreach
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* LP iframe preview */}
               {lead.lp_html && (
                 <div className="rounded-xl border border-border bg-surface overflow-hidden">
@@ -288,6 +329,43 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
             </div>
           ) : null}
         </div>
+
+        {/* Action confirmation modal */}
+        <ConfirmModal
+          open={pendingAction !== null}
+          title={pendingAction === "generate" ? "Gerar Landing Page?" : "Gerar Outreach?"}
+          confirmLabel="Executar"
+          onConfirm={async () => {
+            if (!lead || !pendingAction) return;
+            setPendingAction(null);
+            setActionLoading(true);
+            try {
+              if (pendingAction === "generate") {
+                await runGenerate({ lead_ids: [lead.id] });
+              } else {
+                await runOutreach({ lead_ids: [lead.id] });
+              }
+              // Refetch lead to get updated status
+              const updated = await getLead(lead.id);
+              setLead(updated);
+              if (pendingAction === "outreach") {
+                const msgs = await getLeadMessages(lead.id).catch(() => [] as OutreachMessage[]);
+                setMessages(msgs);
+              }
+            } catch {
+              // Error handled silently — job may still be processing in background
+            } finally {
+              setActionLoading(false);
+            }
+          }}
+          onCancel={() => setPendingAction(null)}
+        >
+          <p>
+            {pendingAction === "generate"
+              ? `Gerar uma landing page personalizada para "${lead?.nome}". Usa a Claude API (~$0.01).`
+              : `Gerar 3 mensagens de WhatsApp para "${lead?.nome}".`}
+          </p>
+        </ConfirmModal>
 
         {/* Footer: score color bar */}
         <div
