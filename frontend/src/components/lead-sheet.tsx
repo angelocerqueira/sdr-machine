@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getLead, getLeadLpUrl, getLeadMessages, runGenerate, runOutreach } from "@/lib/api";
+import { getLead, getLeadLpUrl, getLeadMessages, runGenerate, runOutreach, runEnrich } from "@/lib/api";
 import type { Lead, OutreachMessage } from "@/lib/types";
 import { ConfirmModal } from "./confirm-modal";
+import { DiagnosticPanel } from "./diagnostic-panel";
 
 interface LeadSheetProps {
   leadId: number | null;
@@ -78,7 +79,7 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
   const [messages, setMessages] = useState<OutreachMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const [pendingAction, setPendingAction] = useState<"generate" | "outreach" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"generate" | "outreach" | "re-enrich" | null>(null);
 
   const handleClose = useCallback(() => {
     onClose();
@@ -223,169 +224,10 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
               )}
 
               {/* Marketing Diagnostic */}
-              {(() => {
-                const diag = lead.site_analysis?.diagnostico_marketing as Record<string, unknown> | undefined;
-                if (!diag) return null;
-
-                const FUNNEL_LABELS: Record<string, string> = {
-                  descoberta: "Descoberta",
-                  atracao: "Atração",
-                  consideracao: "Consideração",
-                  acao: "Ação",
-                  apologia: "Apologia",
-                };
-                const FUNNEL_ORDER = ["descoberta", "atracao", "consideracao", "acao", "apologia"];
-                const momento = diag.momento_funil as string;
-                const funil = diag.funil as Record<string, { diagnostico: string; acoes_top2: Array<{ acao: string; resultado_esperado: string; kpi: string }> }> | undefined;
-                const iaPot = diag.potencial_ia_automacao as { score: number; oportunidades: string[]; justificativa: string } | undefined;
-                const prioridades = diag.prioridades_top3 as string[] | undefined;
-
-                return (
-                  <div className="space-y-4">
-                    {/* Resumo + momento funil */}
-                    <div className="rounded-xl border border-border bg-surface p-4">
-                      <h3 className="text-[10px] uppercase tracking-widest font-[family-name:var(--font-mono)] text-text-muted mb-3">
-                        Diagnóstico de Marketing
-                      </h3>
-                      <p className="text-[13px] text-text-secondary leading-relaxed mb-4">
-                        {diag.resumo_executivo as string}
-                      </p>
-
-                      {/* Funnel stages visualization */}
-                      <div className="flex gap-1 mb-4">
-                        {FUNNEL_ORDER.map((stage) => (
-                          <div
-                            key={stage}
-                            className={`flex-1 h-1.5 rounded-full transition-colors ${
-                              stage === momento
-                                ? "bg-accent"
-                                : FUNNEL_ORDER.indexOf(stage) < FUNNEL_ORDER.indexOf(momento)
-                                ? "bg-accent/30"
-                                : "bg-surface-overlay"
-                            }`}
-                            title={FUNNEL_LABELS[stage]}
-                          />
-                        ))}
-                      </div>
-                      <p className="text-[11px] font-[family-name:var(--font-mono)]">
-                        <span className="text-text-muted">Momento atual: </span>
-                        <span className="text-accent font-medium">{FUNNEL_LABELS[momento] ?? momento}</span>
-                      </p>
-                    </div>
-
-                    {/* Potencial IA */}
-                    {iaPot && (
-                      <div className="rounded-xl border border-border bg-surface p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <h3 className="text-[10px] uppercase tracking-widest font-[family-name:var(--font-mono)] text-text-muted">
-                            Potencial IA & Automação
-                          </h3>
-                          <span className={`text-[13px] font-bold font-[family-name:var(--font-mono)] ${
-                            iaPot.score >= 60 ? "text-accent" : iaPot.score >= 40 ? "text-warning" : "text-text-muted"
-                          }`}>
-                            {iaPot.score}/100
-                          </span>
-                        </div>
-                        {/* Score bar */}
-                        <div className="w-full h-1.5 rounded-full bg-surface-overlay mb-3">
-                          <div
-                            className={`h-full rounded-full transition-all ${
-                              iaPot.score >= 60 ? "bg-accent" : iaPot.score >= 40 ? "bg-warning" : "bg-text-muted"
-                            }`}
-                            style={{ width: `${iaPot.score}%` }}
-                          />
-                        </div>
-                        <p className="text-[12px] text-text-secondary leading-relaxed mb-3">
-                          {iaPot.justificativa}
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {iaPot.oportunidades.map((opp, i) => (
-                            <span
-                              key={i}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-info/10 border border-info/20 text-[10px] text-info font-[family-name:var(--font-mono)]"
-                            >
-                              {opp}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Prioridades */}
-                    {prioridades && prioridades.length > 0 && (
-                      <div className="rounded-xl border border-border bg-surface p-4">
-                        <h3 className="text-[10px] uppercase tracking-widest font-[family-name:var(--font-mono)] text-text-muted mb-3">
-                          Top 3 Prioridades
-                        </h3>
-                        <div className="space-y-2">
-                          {prioridades.map((p, i) => (
-                            <div key={i} className="flex items-start gap-2.5">
-                              <span className="flex items-center justify-center w-5 h-5 rounded-md bg-accent-subtle text-[10px] font-bold text-accent font-[family-name:var(--font-mono)] shrink-0 mt-0.5">
-                                {i + 1}
-                              </span>
-                              <span className="text-[12px] text-text-secondary">{p}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Funnel details (collapsible) */}
-                    {funil && (
-                      <details className="rounded-xl border border-border bg-surface">
-                        <summary className="px-4 py-3 cursor-pointer text-[10px] uppercase tracking-widest font-[family-name:var(--font-mono)] text-text-muted hover:text-text transition-colors select-none">
-                          Detalhes por Etapa do Funil
-                        </summary>
-                        <div className="px-4 pb-4 space-y-4">
-                          {FUNNEL_ORDER.map((stage) => {
-                            const data = funil[stage];
-                            if (!data) return null;
-                            const isActive = stage === momento;
-                            return (
-                              <div
-                                key={stage}
-                                className={`rounded-lg border p-3 ${
-                                  isActive
-                                    ? "border-accent/30 bg-accent-subtle/30"
-                                    : "border-border-subtle bg-surface-raised"
-                                }`}
-                              >
-                                <div className="flex items-center gap-2 mb-2">
-                                  {isActive && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
-                                  <h4 className={`text-[11px] font-semibold uppercase tracking-wider font-[family-name:var(--font-mono)] ${
-                                    isActive ? "text-accent" : "text-text-muted"
-                                  }`}>
-                                    {FUNNEL_LABELS[stage]}
-                                  </h4>
-                                </div>
-                                <p className="text-[12px] text-text-secondary leading-relaxed mb-2">
-                                  {data.diagnostico}
-                                </p>
-                                {data.acoes_top2 && (
-                                  <div className="space-y-1.5">
-                                    {data.acoes_top2.map((acao, ai) => (
-                                      <div key={ai} className="flex items-start gap-2 text-[11px]">
-                                        <span className="text-accent mt-0.5">→</span>
-                                        <div>
-                                          <span className="text-text">{acao.acao}</span>
-                                          <span className="text-text-muted"> · {acao.resultado_esperado}</span>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </details>
-                    )}
-                  </div>
-                );
-              })()}
+              <DiagnosticPanel siteAnalysis={lead.site_analysis as Record<string, unknown>} />
 
               {/* Action buttons */}
-              {(lead.status === "enriched" || lead.status === "lp_generated") && (
+              {(lead.status === "enriched" || lead.status === "lp_generated" || lead.status === "disqualified") && (
                 <div className="flex gap-2">
                   {lead.status === "enriched" && (
                     <button
@@ -417,6 +259,23 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
                         </svg>
                       )}
                       Gerar Outreach
+                    </button>
+                  )}
+                  {lead.status === "disqualified" && (
+                    <button
+                      onClick={() => setPendingAction("re-enrich")}
+                      disabled={actionLoading}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-warning/20 hover:bg-warning/30 border border-warning/30 disabled:opacity-50 text-warning text-[13px] font-medium rounded-lg transition-default"
+                    >
+                      {actionLoading ? (
+                        <span className="w-3.5 h-3.5 border-2 border-warning/30 border-t-warning rounded-full animate-spin" />
+                      ) : (
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="w-4 h-4">
+                          <path d="M1 8a7 7 0 0113.4-2.8M15 8a7 7 0 01-13.4 2.8" />
+                          <path d="M14.4 1v4.2h-4.2M1.6 15v-4.2h4.2" />
+                        </svg>
+                      )}
+                      Re-enriquecer
                     </button>
                   )}
                 </div>
@@ -495,22 +354,31 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
         {/* Action confirmation modal */}
         <ConfirmModal
           open={pendingAction !== null}
-          title={pendingAction === "generate" ? "Gerar Landing Page?" : "Gerar Outreach?"}
+          title={
+            pendingAction === "generate"
+              ? "Gerar Landing Page?"
+              : pendingAction === "re-enrich"
+              ? "Re-enriquecer Lead?"
+              : "Gerar Outreach?"
+          }
           confirmLabel="Executar"
           onConfirm={async () => {
             if (!lead || !pendingAction) return;
+            const action = pendingAction;
             setPendingAction(null);
             setActionLoading(true);
             try {
-              if (pendingAction === "generate") {
+              if (action === "generate") {
                 await runGenerate({ lead_ids: [lead.id] });
+              } else if (action === "re-enrich") {
+                await runEnrich({ lead_ids: [lead.id] });
               } else {
                 await runOutreach({ lead_ids: [lead.id] });
               }
               // Refetch lead to get updated status
               const updated = await getLead(lead.id);
               setLead(updated);
-              if (pendingAction === "outreach") {
+              if (action === "outreach") {
                 const msgs = await getLeadMessages(lead.id).catch(() => [] as OutreachMessage[]);
                 setMessages(msgs);
               }
@@ -525,6 +393,8 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
           <p>
             {pendingAction === "generate"
               ? `Gerar uma landing page personalizada para "${lead?.nome}". Usa a Claude API (~$0.01).`
+              : pendingAction === "re-enrich"
+              ? `Re-enriquecer "${lead?.nome}" com novo diagnóstico. O lead voltará para a fila de enriquecimento.`
               : `Gerar 3 mensagens de WhatsApp para "${lead?.nome}".`}
           </p>
         </ConfirmModal>

@@ -28,8 +28,8 @@ VALID_STATUSES = {
     "closed",
     "delivered",
     "scrape_failed",
-    "enrichment_failed",
-    "generation_failed",
+    "enrich_failed",
+    "generate_failed",
     "outreach_failed",
 }
 

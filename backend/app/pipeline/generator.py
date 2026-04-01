@@ -70,7 +70,7 @@ Use estas informações pra ajustar o tom e foco da LP:
 O objetivo é fazer o dono do negócio pensar "caramba, eu PRECISO desse site" ao abrir o link.
 
 DADOS DO NEGÓCIO:
-- Nome: {lead_data['nome']}
+- Nome: {lead_data.get('nome', 'N/A')}
 - Categoria: {niche}
 - Endereço: {lead_data.get('endereco', '')}
 - Telefone: {lead_data.get('telefone', '')}

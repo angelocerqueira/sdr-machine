@@ -10,8 +10,10 @@ interface ScrapeModalProps {
 }
 
 export function ScrapeModal({ open, onConfirm, onCancel }: ScrapeModalProps) {
-  const [nicho, setNicho] = useState("");
-  const [cidade, setCidade] = useState("");
+  const [nichos, setNichos] = useState<string[]>([]);
+  const [cidades, setCidades] = useState<string[]>([]);
+  const [nichoInput, setNichoInput] = useState("");
+  const [cidadeInput, setCidadeInput] = useState("");
   const [maxResults, setMaxResults] = useState(50);
   const [suggestedNichos, setSuggestedNichos] = useState<string[]>([]);
   const [suggestedCidades, setSuggestedCidades] = useState<string[]>([]);
@@ -35,19 +37,59 @@ export function ScrapeModal({ open, onConfirm, onCancel }: ScrapeModalProps) {
     return () => document.removeEventListener("keydown", handleEsc);
   }, [open, onCancel]);
 
+  const addNicho = useCallback(() => {
+    const val = nichoInput.trim();
+    if (val && !nichos.includes(val)) {
+      setNichos((prev) => [...prev, val]);
+    }
+    setNichoInput("");
+  }, [nichoInput, nichos]);
+
+  const addCidade = useCallback(() => {
+    const val = cidadeInput.trim();
+    if (val && !cidades.includes(val)) {
+      setCidades((prev) => [...prev, val]);
+    }
+    setCidadeInput("");
+  }, [cidadeInput, cidades]);
+
   const handleConfirm = useCallback(() => {
-    if (!nicho.trim() || !cidade.trim()) return;
+    // Include current input values if not yet added
+    const finalNichos = [...nichos];
+    const finalCidades = [...cidades];
+    if (nichoInput.trim() && !finalNichos.includes(nichoInput.trim())) {
+      finalNichos.push(nichoInput.trim());
+    }
+    if (cidadeInput.trim() && !finalCidades.includes(cidadeInput.trim())) {
+      finalCidades.push(cidadeInput.trim());
+    }
+    if (finalNichos.length === 0 || finalCidades.length === 0) return;
     onConfirm({
-      nichos: [nicho.trim()],
-      cidades: [cidade.trim()],
+      nichos: finalNichos,
+      cidades: finalCidades,
       max_results: maxResults,
     });
-    setNicho("");
-    setCidade("");
+    setNichos([]);
+    setCidades([]);
+    setNichoInput("");
+    setCidadeInput("");
     setMaxResults(50);
-  }, [nicho, cidade, maxResults, onConfirm]);
+  }, [nichos, cidades, nichoInput, cidadeInput, maxResults, onConfirm]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent, addFn: () => void) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addFn();
+      }
+    },
+    []
+  );
 
   if (!open) return null;
+
+  const hasNichos = nichos.length > 0 || nichoInput.trim().length > 0;
+  const hasCidades = cidades.length > 0 || cidadeInput.trim().length > 0;
 
   const inputClass =
     "w-full px-3 py-2 bg-surface-raised border border-border rounded-lg text-[13px] text-text placeholder:text-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-default";
@@ -58,49 +100,94 @@ export function ScrapeModal({ open, onConfirm, onCancel }: ScrapeModalProps) {
       <div className="relative bg-surface rounded-xl border border-border p-6 max-w-md w-full mx-4 shadow-xl">
         <h3 className="text-[15px] font-semibold text-text mb-1">Scraping Google Maps</h3>
         <p className="text-[12px] text-text-muted mb-5">
-          Buscar negócios por nicho e cidade no Google Maps.
+          Buscar negócios por nicho e cidade no Google Maps. Adicione múltiplos nichos/cidades com Enter.
         </p>
 
         <div className="space-y-4">
+          {/* Nichos */}
           <div>
             <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1.5 font-[family-name:var(--font-mono)]">
-              Nicho
+              Nichos
             </label>
+            {nichos.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {nichos.map((n) => (
+                  <span
+                    key={n}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent-subtle border border-accent/20 text-[11px] text-accent font-[family-name:var(--font-mono)]"
+                  >
+                    {n}
+                    <button
+                      onClick={() => setNichos((prev) => prev.filter((x) => x !== n))}
+                      className="hover:text-text transition-colors ml-0.5"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             <input
               type="text"
-              value={nicho}
-              onChange={(e) => setNicho(e.target.value)}
+              value={nichoInput}
+              onChange={(e) => setNichoInput(e.target.value)}
+              onKeyDown={(e) => handleKeyDown(e, addNicho)}
               placeholder="Ex: dentista, restaurante, academia..."
               className={inputClass}
               list="nicho-suggestions"
               autoFocus
             />
             <datalist id="nicho-suggestions">
-              {suggestedNichos.map((n) => (
-                <option key={n} value={n} />
-              ))}
+              {suggestedNichos
+                .filter((n) => !nichos.includes(n))
+                .map((n) => (
+                  <option key={n} value={n} />
+                ))}
             </datalist>
           </div>
 
+          {/* Cidades */}
           <div>
             <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1.5 font-[family-name:var(--font-mono)]">
-              Cidade
+              Cidades
             </label>
+            {cidades.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {cidades.map((c) => (
+                  <span
+                    key={c}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent-subtle border border-accent/20 text-[11px] text-accent font-[family-name:var(--font-mono)]"
+                  >
+                    {c}
+                    <button
+                      onClick={() => setCidades((prev) => prev.filter((x) => x !== c))}
+                      className="hover:text-text transition-colors ml-0.5"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             <input
               type="text"
-              value={cidade}
-              onChange={(e) => setCidade(e.target.value)}
+              value={cidadeInput}
+              onChange={(e) => setCidadeInput(e.target.value)}
+              onKeyDown={(e) => handleKeyDown(e, addCidade)}
               placeholder="Ex: Chapecó SC, Florianópolis SC..."
               className={inputClass}
               list="cidade-suggestions"
             />
             <datalist id="cidade-suggestions">
-              {suggestedCidades.map((c) => (
-                <option key={c} value={c} />
-              ))}
+              {suggestedCidades
+                .filter((c) => !cidades.includes(c))
+                .map((c) => (
+                  <option key={c} value={c} />
+                ))}
             </datalist>
           </div>
 
+          {/* Max results */}
           <div>
             <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1.5 font-[family-name:var(--font-mono)]">
               Máximo de resultados
@@ -125,7 +212,7 @@ export function ScrapeModal({ open, onConfirm, onCancel }: ScrapeModalProps) {
           </button>
           <button
             onClick={handleConfirm}
-            disabled={!nicho.trim() || !cidade.trim()}
+            disabled={!hasNichos || !hasCidades}
             className="px-4 py-2 text-[13px] text-bg font-medium rounded-lg transition-default bg-accent hover:bg-accent-dim disabled:opacity-30 disabled:cursor-not-allowed"
           >
             Executar Scraping

@@ -15,6 +15,7 @@ export interface Lead {
   opportunity_score: number | null;
   opportunity_reasons: string[];
   site_analysis: Record<string, unknown>;
+  social_profiles: Record<string, unknown>;
   lp_html: string | null;
   job_id: number | null;
   created_at: string;

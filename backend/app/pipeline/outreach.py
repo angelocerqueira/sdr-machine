@@ -3,7 +3,7 @@ Módulo 4: Outreach via WhatsApp
 Gera mensagens personalizadas para cada lead usando o diagnóstico de marketing.
 """
 
-import re
+import time
 import urllib.parse
 
 import requests
@@ -41,7 +41,7 @@ def _generate_ai_message(lead_data: dict, lp_url: str, msg_type: str) -> str | N
     if not diag:
         return None
 
-    nome = lead_data["nome"]
+    nome = lead_data.get("nome", "")
     rating = lead_data.get("rating", "")
     reviews = lead_data.get("reviews_count", "")
     nicho = lead_data.get("nicho", lead_data.get("categoria", ""))
@@ -68,7 +68,7 @@ DIAGNÓSTICO DO NEGÓCIO:
 - Resumo: {resumo}
 - Momento no funil de marketing: {momento}
 - Top 3 prioridades: {', '.join(prioridades)}
-- Oportunidades de IA/automação: {', '.join(ia_opps)}
+- Oportunidades de IA/automação: {', '.join(ia_opps) if ia_opps else 'automação geral de processos'}
 
 LINK DA LP DE DEMONSTRAÇÃO: {lp_url}
 
@@ -165,7 +165,7 @@ Retorne APENAS o texto da mensagem."""
 
 def _fallback_initial_com_site(lead_data: dict, lp_url: str) -> str:
     """Mensagem fallback pra quem TEM site mas é ruim."""
-    nome = lead_data["nome"]
+    nome = lead_data.get("nome", "")
     gaps = lead_data.get("opportunity_reasons", [])[:2]
     gaps_text = ""
     if gaps:
@@ -190,7 +190,7 @@ Abraço!
 
 def _fallback_initial_sem_site(lead_data: dict, lp_url: str) -> str:
     """Mensagem fallback pra quem NÃO tem site."""
-    nome = lead_data["nome"]
+    nome = lead_data.get("nome", "")
 
     return f"""Oi! Tudo bem?
 
@@ -210,7 +210,7 @@ Abraço!
 
 
 def _fallback_followup_48h(lead_data: dict, lp_url: str) -> str:
-    nome = lead_data["nome"]
+    nome = lead_data.get("nome", "")
     return f"""Oi! Só passando pra saber se conseguiu ver a prévia que fiz pra {nome}?
 
 {lp_url}
@@ -221,7 +221,7 @@ Caso tenha interesse, essa semana ainda consigo implementar com condição espec
 
 
 def _fallback_followup_final(lead_data: dict) -> str:
-    nome = lead_data["nome"]
+    nome = lead_data.get("nome", "")
     return f"""Oi! Última mensagem sobre aquela prévia do site da {nome}.
 
 Se não for o momento, sem problemas! Mas se quiser conversar sobre presença digital no futuro, é só me chamar.
@@ -248,7 +248,9 @@ def generate_messages(lead_id: int | str, lead_data: dict) -> list[dict]:
     # Tentar IA primeiro, fallback pra template
     if has_diagnostic:
         initial_text = _generate_ai_message(lead_data, lp, "initial")
+        time.sleep(1)  # Rate limit between Claude API calls
         followup_48h_text = _generate_ai_message(lead_data, lp, "followup_48h")
+        time.sleep(1)
         followup_final_text = _generate_ai_message(lead_data, lp, "followup_final")
     else:
         initial_text = None

@@ -18,21 +18,39 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+_SOCIAL_NON_PROFILE_PATHS = {
+    "instagram": {"p", "reel", "reels", "stories", "explore", "accounts", "about", "legal", "developer"},
+    "facebook": {"sharer", "sharer.php", "share", "dialog", "plugins", "login.php", "groups"},
+    "linkedin": {"sharearticle", "share", "cws", "pub", "pulse"},
+    "tiktok": {"embed"},
+    "youtube": {"watch", "results", "feed"},
+}
+
+
+def _is_profile_url(platform: str, href: str) -> bool:
+    """Verifica se a URL é realmente um perfil e não um link de compartilhamento/post."""
+    # Extract the first path segment after the domain (stop at /, ? or #)
+    match = re.search(rf"{platform}\.com/([^/?#]+)", href.lower())
+    if not match:
+        return False
+    first_segment = match.group(1).strip("/")
+    if not first_segment:
+        return False
+    blocked = _SOCIAL_NON_PROFILE_PATHS.get(platform, set())
+    return first_segment not in blocked
+
+
 def _extract_social_urls(soup: BeautifulSoup) -> dict:
-    """Extrai URLs de redes sociais dos links do site."""
+    """Extrai URLs de redes sociais dos links do site, filtrando links de compartilhamento."""
     social = {}
+    platforms = ["instagram", "facebook", "linkedin", "tiktok", "youtube"]
     for a in soup.find_all("a", href=True):
-        href = a["href"].lower().strip()
-        if "instagram.com/" in href and "instagram" not in social:
-            social["instagram"] = a["href"].strip()
-        elif "facebook.com/" in href and "facebook" not in social:
-            social["facebook"] = a["href"].strip()
-        elif "linkedin.com/" in href and "linkedin" not in social:
-            social["linkedin"] = a["href"].strip()
-        elif "tiktok.com/" in href and "tiktok" not in social:
-            social["tiktok"] = a["href"].strip()
-        elif "youtube.com/" in href and "youtube" not in social:
-            social["youtube"] = a["href"].strip()
+        href = a["href"].strip()
+        href_lower = href.lower()
+        for platform in platforms:
+            if platform not in social and f"{platform}.com/" in href_lower and _is_profile_url(platform, href_lower):
+                social[platform] = href
+                break
     return social
 
 
@@ -147,11 +165,11 @@ def scrape_social_profiles(lead_info: dict, social_urls: dict) -> dict:
             profiles["instagram"] = ig_data
             time.sleep(1)  # Rate limit
 
-    # LinkedIn (busca por nome da empresa)
-    nome = lead_info.get("nome", "")
-    cidade = lead_info.get("cidade", "")
+    # LinkedIn (only if URL found on site)
     li_url = social_urls.get("linkedin")
-    if li_url or nome:
+    if li_url:
+        nome = lead_info.get("nome", "")
+        cidade = lead_info.get("cidade", "")
         li_data = _search_linkedin_company(nome, cidade)
         if li_data:
             profiles["linkedin"] = li_data
@@ -262,8 +280,9 @@ def check_pagespeed(url: str) -> dict:
         data = resp.json()
 
         score = data.get("lighthouseResult", {}).get("categories", {}).get("performance", {}).get("score", 0)
+        perf_score = max(0, int((score or 0) * 100))
         return {
-            "performance_score": int((score or 0) * 100),
+            "performance_score": perf_score,
             "first_contentful_paint": data.get("lighthouseResult", {}).get("audits", {}).get("first-contentful-paint", {}).get("displayValue", "N/A"),
         }
     except Exception:
@@ -498,8 +517,9 @@ def _parse_diagnostic_response(text: str) -> dict | None:
         return None
 
     pot = data.get("potencial_ia_automacao", {})
-    if not isinstance(pot.get("score"), (int, float)) or not (0 <= pot["score"] <= 100):
-        logger.warning("Diagnóstico: score de potencial inválido: %s", pot.get("score"))
+    pot_score = pot.get("score") if isinstance(pot, dict) else None
+    if pot_score is None or not isinstance(pot_score, (int, float)) or not (0 <= pot_score <= 100):
+        logger.warning("Diagnóstico: score de potencial inválido: %s", pot_score)
         return None
 
     return data
@@ -589,7 +609,7 @@ def enrich_lead_data(website: str, lead_info: dict | None = None, skip_pagespeed
     # 5. Scrape redes sociais
     social_profiles: dict = {}
     social_urls = html_analysis.get("social_urls", {})
-    if lead_info and settings.apify_token:
+    if lead_info and settings.apify_token and not settings.skip_social_scraping:
         social_profiles = scrape_social_profiles(lead_info, social_urls)
 
     # 6. Diagnóstico de marketing via IA
@@ -615,8 +635,9 @@ def enrich_lead_data(website: str, lead_info: dict | None = None, skip_pagespeed
             qualified = False
 
         # Adicionar razões do diagnóstico às opportunity_reasons
-        if diagnostic.get("prioridades_top3"):
-            reasons.extend(diagnostic["prioridades_top3"])
+        prioridades = diagnostic.get("prioridades_top3") or []
+        if prioridades:
+            reasons.extend(prioridades)
 
     return {
         "opportunity_score": score,

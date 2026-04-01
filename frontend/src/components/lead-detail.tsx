@@ -2,6 +2,7 @@
 
 import type { Lead } from "@/lib/types";
 import { getLeadLpUrl } from "@/lib/api";
+import { DiagnosticPanel } from "./diagnostic-panel";
 
 interface LeadDetailProps {
   lead: Lead;
@@ -61,110 +62,7 @@ export function LeadDetail({ lead }: LeadDetailProps) {
       )}
 
       {/* Marketing Diagnostic */}
-      {(() => {
-        const diag = lead.site_analysis?.diagnostico_marketing as Record<string, unknown> | undefined;
-        if (!diag) return null;
-
-        const FUNNEL_LABELS: Record<string, string> = {
-          descoberta: "Descoberta",
-          atracao: "Atração",
-          consideracao: "Consideração",
-          acao: "Ação",
-          apologia: "Apologia",
-        };
-        const FUNNEL_ORDER = ["descoberta", "atracao", "consideracao", "acao", "apologia"];
-        const momento = diag.momento_funil as string;
-        const iaPot = diag.potencial_ia_automacao as { score: number; oportunidades: string[]; justificativa: string } | undefined;
-        const prioridades = diag.prioridades_top3 as string[] | undefined;
-
-        return (
-          <div className="rounded-xl border border-border bg-surface p-5 space-y-5">
-            <div>
-              <h3 className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider font-[family-name:var(--font-mono)] mb-3">
-                Diagnóstico de Marketing
-              </h3>
-              <p className="text-[13px] text-text-secondary leading-relaxed mb-4">
-                {diag.resumo_executivo as string}
-              </p>
-
-              {/* Funnel bar */}
-              <div className="flex gap-1 mb-2">
-                {FUNNEL_ORDER.map((stage) => (
-                  <div
-                    key={stage}
-                    className={`flex-1 h-1.5 rounded-full ${
-                      stage === momento
-                        ? "bg-accent"
-                        : FUNNEL_ORDER.indexOf(stage) < FUNNEL_ORDER.indexOf(momento)
-                        ? "bg-accent/30"
-                        : "bg-surface-overlay"
-                    }`}
-                    title={FUNNEL_LABELS[stage]}
-                  />
-                ))}
-              </div>
-              <p className="text-[11px] font-[family-name:var(--font-mono)]">
-                <span className="text-text-muted">Momento: </span>
-                <span className="text-accent font-medium">{FUNNEL_LABELS[momento] ?? momento}</span>
-              </p>
-            </div>
-
-            {/* IA + Prioridades side by side */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {iaPot && (
-                <div className="rounded-lg border border-border-subtle bg-surface-raised p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] uppercase tracking-widest font-[family-name:var(--font-mono)] text-text-muted">
-                      Potencial IA
-                    </span>
-                    <span className={`text-[13px] font-bold font-[family-name:var(--font-mono)] ${
-                      iaPot.score >= 60 ? "text-accent" : iaPot.score >= 40 ? "text-warning" : "text-text-muted"
-                    }`}>
-                      {iaPot.score}/100
-                    </span>
-                  </div>
-                  <div className="w-full h-1.5 rounded-full bg-surface-overlay mb-3">
-                    <div
-                      className={`h-full rounded-full ${
-                        iaPot.score >= 60 ? "bg-accent" : iaPot.score >= 40 ? "bg-warning" : "bg-text-muted"
-                      }`}
-                      style={{ width: `${iaPot.score}%` }}
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {iaPot.oportunidades.map((opp, i) => (
-                      <span
-                        key={i}
-                        className="inline-flex px-2 py-0.5 rounded-md bg-info/10 border border-info/20 text-[10px] text-info font-[family-name:var(--font-mono)]"
-                      >
-                        {opp}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {prioridades && prioridades.length > 0 && (
-                <div className="rounded-lg border border-border-subtle bg-surface-raised p-4">
-                  <span className="text-[10px] uppercase tracking-widest font-[family-name:var(--font-mono)] text-text-muted block mb-2">
-                    Top 3 Prioridades
-                  </span>
-                  <div className="space-y-2">
-                    {prioridades.map((p, i) => (
-                      <div key={i} className="flex items-start gap-2">
-                        <span className="flex items-center justify-center w-4 h-4 rounded bg-accent-subtle text-[9px] font-bold text-accent font-[family-name:var(--font-mono)] shrink-0 mt-0.5">
-                          {i + 1}
-                        </span>
-                        <span className="text-[12px] text-text-secondary">{p}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
+      <DiagnosticPanel siteAnalysis={lead.site_analysis as Record<string, unknown>} compact />
 
       {/* LP Preview */}
       {lead.lp_html && (

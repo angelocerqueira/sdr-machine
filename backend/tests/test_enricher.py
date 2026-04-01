@@ -9,10 +9,15 @@ from app.pipeline.enricher import (
     analyze_html,
     calculate_score,
     _extract_visible_text,
+    _extract_social_urls,
+    _is_profile_url,
     _parse_diagnostic_response,
+    _scrape_instagram_profile,
+    scrape_social_profiles,
     generate_diagnostic,
     enrich_lead_data,
 )
+from bs4 import BeautifulSoup
 
 
 # ---------------------------------------------------------------------------
@@ -356,3 +361,190 @@ class TestEnrichLeadData:
         assert result["qualified"] is True
         assert result["opportunity_score"] == 95
         assert "diagnostico_marketing" not in result["site_analysis"]
+
+    @patch("app.pipeline.enricher.settings")
+    @patch("app.pipeline.enricher.generate_diagnostic")
+    @patch("app.pipeline.enricher.fetch_website")
+    def test_skip_social_scraping(self, mock_fetch, mock_diag, mock_settings):
+        """Social scraping should be skipped when skip_social_scraping=True."""
+        mock_settings.skip_social_scraping = True
+        mock_settings.apify_token = "test-token"
+        mock_settings.skip_ai_diagnostic = True
+        mock_settings.ai_potential_threshold = 25
+        mock_fetch.return_value = {"status": "ok", "html": SAMPLE_HTML, "has_ssl": True}
+        mock_diag.return_value = None
+
+        result = enrich_lead_data("http://example.com", lead_info=SAMPLE_LEAD_INFO, skip_pagespeed=True)
+
+        assert result["social_profiles"] == {}
+
+
+# ---------------------------------------------------------------------------
+# Tests: _extract_social_urls (profile URL filtering)
+# ---------------------------------------------------------------------------
+
+class TestExtractSocialUrls:
+    def test_extracts_profile_urls(self):
+        html = '<a href="https://instagram.com/dentista123">IG</a><a href="https://facebook.com/minhaclinica">FB</a>'
+        soup = BeautifulSoup(html, "html.parser")
+        result = _extract_social_urls(soup)
+        assert "instagram" in result
+        assert "facebook" in result
+
+    def test_filters_share_links(self):
+        html = '<a href="https://facebook.com/sharer/sharer.php?u=test">Compartilhar</a>'
+        soup = BeautifulSoup(html, "html.parser")
+        result = _extract_social_urls(soup)
+        assert "facebook" not in result
+
+    def test_filters_instagram_post_links(self):
+        html = '<a href="https://instagram.com/p/ABC123">Ver post</a>'
+        soup = BeautifulSoup(html, "html.parser")
+        result = _extract_social_urls(soup)
+        assert "instagram" not in result
+
+    def test_filters_instagram_reel_links(self):
+        html = '<a href="https://instagram.com/reel/XYZ789">Ver reel</a>'
+        soup = BeautifulSoup(html, "html.parser")
+        result = _extract_social_urls(soup)
+        assert "instagram" not in result
+
+    def test_filters_linkedin_share_links(self):
+        html = '<a href="https://linkedin.com/shareArticle?url=test">Share</a>'
+        soup = BeautifulSoup(html, "html.parser")
+        result = _extract_social_urls(soup)
+        assert "linkedin" not in result
+
+    def test_preserves_original_case(self):
+        html = '<a href="https://Instagram.com/MyClinic">IG</a>'
+        soup = BeautifulSoup(html, "html.parser")
+        result = _extract_social_urls(soup)
+        assert result.get("instagram") == "https://Instagram.com/MyClinic"
+
+    def test_takes_first_profile_only(self):
+        html = '<a href="https://instagram.com/first">1</a><a href="https://instagram.com/second">2</a>'
+        soup = BeautifulSoup(html, "html.parser")
+        result = _extract_social_urls(soup)
+        assert "first" in result["instagram"]
+
+
+class TestIsProfileUrl:
+    def test_valid_profile(self):
+        assert _is_profile_url("instagram", "https://instagram.com/dentista123") is True
+
+    def test_post_url(self):
+        assert _is_profile_url("instagram", "https://instagram.com/p/abc123") is False
+
+    def test_share_url(self):
+        assert _is_profile_url("facebook", "https://facebook.com/sharer/test") is False
+
+    def test_no_path(self):
+        assert _is_profile_url("instagram", "https://instagram.com/") is False
+
+    def test_youtube_watch(self):
+        assert _is_profile_url("youtube", "https://youtube.com/watch?v=abc") is False
+
+    def test_youtube_channel(self):
+        assert _is_profile_url("youtube", "https://youtube.com/mychannel") is True
+
+
+# ---------------------------------------------------------------------------
+# Tests: scrape_social_profiles
+# ---------------------------------------------------------------------------
+
+class TestScrapeProfiles:
+    @patch("app.pipeline.enricher._search_linkedin_company")
+    @patch("app.pipeline.enricher._scrape_instagram_profile")
+    def test_only_scrapes_instagram_when_url_found(self, mock_ig, mock_li):
+        mock_ig.return_value = {"platform": "instagram", "username": "test", "followers": 100}
+        mock_li.return_value = None
+
+        social_urls = {"instagram": "https://instagram.com/test"}
+        result = scrape_social_profiles({"nome": "Test", "cidade": "SP"}, social_urls)
+
+        assert "instagram" in result
+        mock_ig.assert_called_once()
+        mock_li.assert_not_called()  # No linkedin URL → no LinkedIn scrape
+
+    @patch("app.pipeline.enricher._search_linkedin_company")
+    @patch("app.pipeline.enricher._scrape_instagram_profile")
+    def test_scrapes_linkedin_only_when_url_found(self, mock_ig, mock_li):
+        mock_ig.return_value = None
+        mock_li.return_value = {"platform": "linkedin", "name": "Test Corp"}
+
+        social_urls = {"linkedin": "https://linkedin.com/company/test"}
+        result = scrape_social_profiles({"nome": "Test Corp", "cidade": "SP"}, social_urls)
+
+        assert "linkedin" in result
+        mock_li.assert_called_once()
+
+    @patch("app.pipeline.enricher._search_linkedin_company")
+    @patch("app.pipeline.enricher._scrape_instagram_profile")
+    def test_preserves_urls_without_scraping(self, mock_ig, mock_li):
+        """URLs found on site should be preserved even without Apify scraping."""
+        mock_ig.return_value = None
+        mock_li.return_value = None
+
+        social_urls = {"facebook": "https://facebook.com/test", "tiktok": "https://tiktok.com/@test"}
+        result = scrape_social_profiles({"nome": "Test"}, social_urls)
+
+        assert result["facebook"]["url"] == "https://facebook.com/test"
+        assert result["tiktok"]["url"] == "https://tiktok.com/@test"
+
+
+# ---------------------------------------------------------------------------
+# Tests: _scrape_instagram_profile
+# ---------------------------------------------------------------------------
+
+class TestScrapeInstagram:
+    @patch("app.pipeline.enricher.settings")
+    def test_skips_without_apify_token(self, mock_settings):
+        mock_settings.apify_token = ""
+        assert _scrape_instagram_profile("https://instagram.com/test") is None
+
+    @patch("app.pipeline.enricher.settings")
+    def test_rejects_non_profile_urls(self, mock_settings):
+        mock_settings.apify_token = "test"
+        assert _scrape_instagram_profile("https://instagram.com/p/ABC123") is None
+        assert _scrape_instagram_profile("https://instagram.com/reel/XYZ") is None
+        assert _scrape_instagram_profile("https://instagram.com/explore") is None
+        assert _scrape_instagram_profile("https://instagram.com/stories") is None
+
+    @patch("app.pipeline.enricher.settings")
+    def test_rejects_empty_url(self, mock_settings):
+        mock_settings.apify_token = "test"
+        assert _scrape_instagram_profile("") is None
+
+    @patch("app.pipeline.enricher.settings")
+    @patch("app.pipeline.enricher.requests.post")
+    def test_success(self, mock_post, mock_settings):
+        mock_settings.apify_token = "test-token"
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = [{
+            "fullName": "Test Clinic",
+            "biography": "Best clinic in town",
+            "followersCount": 5000,
+            "followsCount": 200,
+            "postsCount": 150,
+            "isBusinessAccount": True,
+            "businessCategoryName": "Health",
+            "externalUrl": "https://example.com",
+            "verified": False,
+        }]
+        mock_post.return_value = mock_resp
+
+        result = _scrape_instagram_profile("https://instagram.com/testclinic")
+        assert result is not None
+        assert result["username"] == "testclinic"
+        assert result["followers"] == 5000
+        assert result["is_business"] is True
+
+    @patch("app.pipeline.enricher.settings")
+    @patch("app.pipeline.enricher.requests.post")
+    def test_api_failure_returns_none(self, mock_post, mock_settings):
+        mock_settings.apify_token = "test-token"
+        mock_post.side_effect = Exception("Connection timeout")
+
+        result = _scrape_instagram_profile("https://instagram.com/testclinic")
+        assert result is None
