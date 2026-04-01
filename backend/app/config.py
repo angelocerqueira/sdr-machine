@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     min_rating: float = 3.0
     max_results_per_search: int = 50
     opportunity_score_threshold: int = 40
+    diagnostic_model: str = ""
+    skip_ai_diagnostic: bool = False
+    skip_social_scraping: bool = False
+    ai_potential_threshold: int = 25
     frontend_url: str = "http://localhost:3000"
 
     model_config = {"env_file": ".env"}

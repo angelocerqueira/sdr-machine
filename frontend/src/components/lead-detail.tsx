@@ -2,6 +2,7 @@
 
 import type { Lead } from "@/lib/types";
 import { getLeadLpUrl } from "@/lib/api";
+import { DiagnosticPanel } from "./diagnostic-panel";
 
 interface LeadDetailProps {
   lead: Lead;
@@ -59,6 +60,9 @@ export function LeadDetail({ lead }: LeadDetailProps) {
           </div>
         </div>
       )}
+
+      {/* Marketing Diagnostic */}
+      <DiagnosticPanel siteAnalysis={lead.site_analysis as Record<string, unknown>} compact />
 
       {/* LP Preview */}
       {lead.lp_html && (

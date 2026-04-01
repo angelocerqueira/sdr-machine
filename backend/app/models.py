@@ -44,6 +44,7 @@ class Lead(Base):
     opportunity_score = Column(Integer)
     opportunity_reasons = Column(JSON, default=list)
     site_analysis = Column(JSON, default=dict)
+    social_profiles = Column(JSON, default=dict)
     lp_html = Column(Text)
     job_id = Column(Integer, ForeignKey("jobs.id", ondelete="SET NULL"))
     created_at = Column(DateTime, default=func.now())

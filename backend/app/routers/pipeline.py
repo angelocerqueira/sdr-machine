@@ -120,16 +120,32 @@ def _run_enrich(job_id: int, params: dict):
             leads = db.query(Lead).filter(Lead.status == "scraped").all()
 
         enriched = 0
+        disqualified = 0
         errors: list[str] = []
         for idx, lead in enumerate(leads):
             try:
-                result = enrich_lead_data(lead.website or "")
+                lead_info = {
+                    "nome": lead.nome,
+                    "nicho": lead.nicho,
+                    "categoria": lead.categoria,
+                    "cidade": lead.cidade,
+                    "rating": float(lead.rating) if lead.rating else None,
+                    "reviews_count": lead.reviews_count,
+                    "top_reviews": lead.top_reviews or [],
+                }
+                result = enrich_lead_data(lead.website or "", lead_info=lead_info)
                 lead.opportunity_score = result["opportunity_score"]
                 lead.opportunity_reasons = result["opportunity_reasons"]
                 lead.site_analysis = result["site_analysis"]
-                lead.status = "enriched"
+                social = result.get("social_profiles", {})
+                lead.social_profiles = social if isinstance(social, dict) else {}
+                if result.get("qualified", True):
+                    lead.status = "enriched"
+                    enriched += 1
+                else:
+                    lead.status = "disqualified"
+                    disqualified += 1
                 db.commit()
-                enriched += 1
                 _emit(job_id, {"type": "progress", "current": idx + 1, "total": len(leads)})
             except Exception as exc:
                 db.rollback()
@@ -138,7 +154,7 @@ def _run_enrich(job_id: int, params: dict):
                 errors.append(f"Lead {lead.id} ({lead.nome}): {str(exc)[:120]}")
 
         job.status = "done"
-        job.result_summary = {"enriched": enriched, "total": len(leads), "errors": errors}
+        job.result_summary = {"enriched": enriched, "disqualified": disqualified, "total": len(leads), "errors": errors}
         job.finished_at = datetime.utcnow()
         db.commit()
         _emit(job_id, {"type": "done", "summary": job.result_summary})
@@ -171,7 +187,10 @@ def _run_generate(job_id: int, params: dict):
         lead_ids = params.get("lead_ids", [])
         max_count = params.get("max_count", 50)
         if lead_ids:
-            leads = db.query(Lead).filter(Lead.id.in_(lead_ids)).all()
+            leads = db.query(Lead).filter(
+                Lead.id.in_(lead_ids),
+                Lead.status != "disqualified",
+            ).all()
         else:
             leads = db.query(Lead).filter(Lead.status == "enriched").limit(max_count).all()
 
@@ -243,9 +262,12 @@ def _run_outreach(job_id: int, params: dict):
 
         lead_ids = params.get("lead_ids", [])
         if lead_ids:
-            leads = db.query(Lead).filter(Lead.id.in_(lead_ids)).all()
+            leads = db.query(Lead).filter(
+                Lead.id.in_(lead_ids),
+                Lead.status != "disqualified",
+            ).all()
         else:
-            leads = db.query(Lead).filter(Lead.status == "generated").all()
+            leads = db.query(Lead).filter(Lead.status == "lp_generated").all()
 
         messaged = 0
         errors: list[str] = []
@@ -337,6 +359,7 @@ def pipeline_status(db: Session = Depends(get_db)):
         "enrich": db.query(Lead).filter(Lead.status == "scraped").count(),
         "generate": db.query(Lead).filter(Lead.status == "enriched").count(),
         "outreach": db.query(Lead).filter(Lead.status == "lp_generated").count(),
+        "disqualified": db.query(Lead).filter(Lead.status == "disqualified").count(),
     }
     running = [
         row[0] for row in

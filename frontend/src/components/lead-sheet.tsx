@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getLead, getLeadLpUrl, getLeadMessages, runGenerate, runOutreach } from "@/lib/api";
+import { getLead, getLeadLpUrl, getLeadMessages, runGenerate, runOutreach, runEnrich } from "@/lib/api";
 import type { Lead, OutreachMessage } from "@/lib/types";
 import { ConfirmModal } from "./confirm-modal";
+import { DiagnosticPanel } from "./diagnostic-panel";
 
 interface LeadSheetProps {
   leadId: number | null;
@@ -78,7 +79,7 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
   const [messages, setMessages] = useState<OutreachMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const [pendingAction, setPendingAction] = useState<"generate" | "outreach" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"generate" | "outreach" | "re-enrich" | null>(null);
 
   const handleClose = useCallback(() => {
     onClose();
@@ -222,8 +223,11 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
                 </div>
               )}
 
+              {/* Marketing Diagnostic */}
+              <DiagnosticPanel siteAnalysis={lead.site_analysis as Record<string, unknown>} />
+
               {/* Action buttons */}
-              {(lead.status === "enriched" || lead.status === "lp_generated") && (
+              {(lead.status === "enriched" || lead.status === "lp_generated" || lead.status === "disqualified") && (
                 <div className="flex gap-2">
                   {lead.status === "enriched" && (
                     <button
@@ -255,6 +259,23 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
                         </svg>
                       )}
                       Gerar Outreach
+                    </button>
+                  )}
+                  {lead.status === "disqualified" && (
+                    <button
+                      onClick={() => setPendingAction("re-enrich")}
+                      disabled={actionLoading}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-warning/20 hover:bg-warning/30 border border-warning/30 disabled:opacity-50 text-warning text-[13px] font-medium rounded-lg transition-default"
+                    >
+                      {actionLoading ? (
+                        <span className="w-3.5 h-3.5 border-2 border-warning/30 border-t-warning rounded-full animate-spin" />
+                      ) : (
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="w-4 h-4">
+                          <path d="M1 8a7 7 0 0113.4-2.8M15 8a7 7 0 01-13.4 2.8" />
+                          <path d="M14.4 1v4.2h-4.2M1.6 15v-4.2h4.2" />
+                        </svg>
+                      )}
+                      Re-enriquecer
                     </button>
                   )}
                 </div>
@@ -333,22 +354,31 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
         {/* Action confirmation modal */}
         <ConfirmModal
           open={pendingAction !== null}
-          title={pendingAction === "generate" ? "Gerar Landing Page?" : "Gerar Outreach?"}
+          title={
+            pendingAction === "generate"
+              ? "Gerar Landing Page?"
+              : pendingAction === "re-enrich"
+              ? "Re-enriquecer Lead?"
+              : "Gerar Outreach?"
+          }
           confirmLabel="Executar"
           onConfirm={async () => {
             if (!lead || !pendingAction) return;
+            const action = pendingAction;
             setPendingAction(null);
             setActionLoading(true);
             try {
-              if (pendingAction === "generate") {
+              if (action === "generate") {
                 await runGenerate({ lead_ids: [lead.id] });
+              } else if (action === "re-enrich") {
+                await runEnrich({ lead_ids: [lead.id] });
               } else {
                 await runOutreach({ lead_ids: [lead.id] });
               }
               // Refetch lead to get updated status
               const updated = await getLead(lead.id);
               setLead(updated);
-              if (pendingAction === "outreach") {
+              if (action === "outreach") {
                 const msgs = await getLeadMessages(lead.id).catch(() => [] as OutreachMessage[]);
                 setMessages(msgs);
               }
@@ -363,6 +393,8 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
           <p>
             {pendingAction === "generate"
               ? `Gerar uma landing page personalizada para "${lead?.nome}". Usa a Claude API (~$0.01).`
+              : pendingAction === "re-enrich"
+              ? `Re-enriquecer "${lead?.nome}" com novo diagnóstico. O lead voltará para a fila de enriquecimento.`
               : `Gerar 3 mensagens de WhatsApp para "${lead?.nome}".`}
           </p>
         </ConfirmModal>

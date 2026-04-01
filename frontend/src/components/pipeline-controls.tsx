@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { runScrape, runEnrich, runGenerate, runOutreach, getPipelineStatus } from "@/lib/api";
 import { JobProgress } from "./job-progress";
 import { ConfirmModal } from "./confirm-modal";
+import { ScrapeModal } from "./scrape-modal";
 import type { Job } from "@/lib/types";
 
 const PHASES = [
@@ -40,10 +41,10 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
       .catch(() => {});
   }, [activeJob]);
 
-  const handleRun = useCallback(async (phase: typeof PHASES[number]) => {
+  const handleRun = useCallback(async (phase: typeof PHASES[number], params?: Record<string, unknown>) => {
     setError(null);
     try {
-      const job = await phase.run(phase.defaultParams);
+      const job = await phase.run(params ?? phase.defaultParams);
       setActiveJob(job);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao iniciar job");
@@ -56,6 +57,12 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
       setPendingPhase(null);
     }
   }, [pendingPhase, handleRun]);
+
+  const handleScrapeConfirm = useCallback((params: { nichos: string[]; cidades: string[]; max_results: number }) => {
+    const scrapePhase = PHASES[0];
+    handleRun(scrapePhase, params);
+    setPendingPhase(null);
+  }, [handleRun]);
 
   const handleDone = useCallback(() => {
     setActiveJob(null);
@@ -114,8 +121,14 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
       )}
       {activeJob && <JobProgress jobId={activeJob.id} onDone={handleDone} />}
 
+      <ScrapeModal
+        open={pendingPhase?.key === "scrape"}
+        onConfirm={handleScrapeConfirm}
+        onCancel={() => setPendingPhase(null)}
+      />
+
       <ConfirmModal
-        open={pendingPhase !== null}
+        open={pendingPhase !== null && pendingPhase.key !== "scrape"}
         title={`Executar ${pendingPhase?.label ?? ""}?`}
         confirmLabel="Executar"
         onConfirm={handleConfirm}

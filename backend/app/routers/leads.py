@@ -19,6 +19,7 @@ ORDER_MAP = {
 VALID_STATUSES = {
     "scraped",
     "enriched",
+    "disqualified",
     "lp_generated",
     "outreach_ready",
     "outreach_sent",
@@ -27,8 +28,8 @@ VALID_STATUSES = {
     "closed",
     "delivered",
     "scrape_failed",
-    "enrichment_failed",
-    "generation_failed",
+    "enrich_failed",
+    "generate_failed",
     "outreach_failed",
 }
 

@@ -15,6 +15,7 @@ export interface Lead {
   opportunity_score: number | null;
   opportunity_reasons: string[];
   site_analysis: Record<string, unknown>;
+  social_profiles: Record<string, unknown>;
   lp_html: string | null;
   job_id: number | null;
   created_at: string;
@@ -79,6 +80,7 @@ export interface OutreachMessage {
 export const KANBAN_COLUMNS = [
   { id: "scraped", label: "Scrapeado" },
   { id: "enriched", label: "Analisado" },
+  { id: "disqualified", label: "Desqualificado" },
   { id: "lp_generated", label: "LP Gerada" },
   { id: "outreach_ready", label: "Msg Pronta" },
   { id: "outreach_sent", label: "Msg Enviada" },
