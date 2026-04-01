@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getJobs } from "@/lib/api";
+import { useEffect, useState, useCallback } from "react";
+import { getJobs, getJob } from "@/lib/api";
 import type { Job } from "@/lib/types";
 
 const STATUS_CONFIG: Record<string, { label: string; dot: string; text: string }> = {
@@ -18,9 +18,151 @@ const TYPE_LABELS: Record<string, string> = {
   outreach: "Outreach",
 };
 
+const KEY_MAP: Record<string, string> = {
+  scrape: "created",
+  enrich: "enriched",
+  generate: "generated",
+  outreach: "messaged",
+};
+
+function getResultText(job: Job) {
+  const s = job.result_summary;
+  if (!s?.total) return job.error_message || "—";
+  const count = s[KEY_MAP[job.type] ?? "success"] ?? 0;
+  const errCount = (s.errors as string[] | undefined)?.length ?? 0;
+  return errCount > 0
+    ? `${count}/${s.total} ok, ${errCount} erros`
+    : `${count}/${s.total} ok`;
+}
+
+function formatDuration(startedAt: string | null, finishedAt: string | null): string {
+  if (!startedAt || !finishedAt) return "—";
+  const ms = new Date(finishedAt).getTime() - new Date(startedAt).getTime();
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  const m = Math.floor(ms / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  return `${m}m ${s}s`;
+}
+
+function LogLine({ index, text, isError }: { index: number; text: string; isError?: boolean }) {
+  return (
+    <p className="leading-relaxed flex gap-2">
+      <span className="text-text-muted/40 select-none shrink-0 font-[family-name:var(--font-mono)] text-[11px]">
+        {String(index).padStart(2, "0")}
+      </span>
+      <span className={isError ? "text-danger" : "text-text-secondary"}>{text}</span>
+    </p>
+  );
+}
+
+function JobDetailModal({ job, onClose }: { job: Job; onClose: () => void }) {
+  const s = job.result_summary;
+  const errors = (s?.errors as string[] | undefined) ?? [];
+  const params = job.params as Record<string, unknown>;
+  const config = STATUS_CONFIG[job.status] || STATUS_CONFIG.pending;
+
+  const logLines: { text: string; isError?: boolean }[] = [];
+
+  // Params block
+  if (params) {
+    const nichos = params.nichos as string[] | undefined;
+    const cidades = params.cidades as string[] | undefined;
+    const maxResults = params.max_results as number | undefined;
+    const leadIds = params.lead_ids as number[] | undefined;
+
+    if (nichos?.length) logLines.push({ text: `Nichos: ${nichos.join(", ")}` });
+    if (cidades?.length) logLines.push({ text: `Cidades: ${cidades.join(", ")}` });
+    if (maxResults) logLines.push({ text: `Máximo de resultados: ${maxResults}` });
+    if (leadIds?.length) logLines.push({ text: `Lead IDs: ${leadIds.join(", ")}` });
+  }
+
+  logLines.push({ text: `Iniciado em: ${job.started_at ? new Date(job.started_at).toLocaleString("pt-BR") : "—"}` });
+  logLines.push({ text: `Concluído em: ${job.finished_at ? new Date(job.finished_at).toLocaleString("pt-BR") : "—"}` });
+  logLines.push({ text: `Duração: ${formatDuration(job.started_at, job.finished_at)}` });
+
+  // Result summary
+  if (s) {
+    const countKey = KEY_MAP[job.type];
+    if (countKey && s[countKey] !== undefined) {
+      logLines.push({ text: `${countKey.charAt(0).toUpperCase() + countKey.slice(1)}: ${s[countKey]} / ${s.total ?? "?"}` });
+    }
+    if (s.disqualified !== undefined) {
+      logLines.push({ text: `Desqualificados: ${s.disqualified}` });
+    }
+  }
+
+  // Error message (job-level failure)
+  if (job.error_message) {
+    logLines.push({ text: `ERRO: ${job.error_message}`, isError: true });
+  }
+
+  // Per-item errors
+  errors.forEach((e) => logLines.push({ text: e, isError: true }));
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(2px)" }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-xl rounded-xl border border-border bg-surface shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div className="flex items-center gap-3">
+            <span className="font-[family-name:var(--font-mono)] text-text-muted text-sm">
+              #{job.id}
+            </span>
+            <span className="text-text font-medium">{TYPE_LABELS[job.type] || job.type}</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${config.dot}`} />
+              <span className={`text-xs font-medium font-[family-name:var(--font-mono)] ${config.text}`}>
+                {config.label}
+              </span>
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-text-muted hover:text-text transition-colors p-1"
+            aria-label="Fechar"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M2 2l12 12M14 2L2 14" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Log output */}
+        <div className="p-5 space-y-1 max-h-[60vh] overflow-y-auto bg-bg/50 text-xs font-[family-name:var(--font-mono)]">
+          {logLines.length === 0 ? (
+            <p className="text-text-muted">Nenhuma informação disponível.</p>
+          ) : (
+            logLines.map((line, i) => (
+              <LogLine key={i} index={i + 1} text={line.text} isError={line.isError} />
+            ))
+          )}
+        </div>
+
+        {/* Footer summary */}
+        {errors.length > 0 && (
+          <div className="px-5 py-3 border-t border-border bg-danger/5">
+            <p className="text-xs text-danger font-[family-name:var(--font-mono)]">
+              {errors.length} erro{errors.length > 1 ? "s" : ""} encontrado{errors.length > 1 ? "s" : ""}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
 
   useEffect(() => {
     getJobs().then((data) => {
@@ -29,21 +171,10 @@ export default function JobsPage() {
     });
   }, []);
 
-  const getResultText = (job: Job) => {
-    const s = job.result_summary;
-    if (!s?.total) return job.error_message || "—";
-    const KEY_MAP: Record<string, string> = {
-      scrape: "created",
-      enrich: "enriched",
-      generate: "generated",
-      outreach: "messaged",
-    };
-    const count = s[KEY_MAP[job.type] ?? "success"] ?? 0;
-    const errCount = (s.errors as string[] | undefined)?.length ?? 0;
-    return errCount > 0
-      ? `${count}/${s.total} ok, ${errCount} erros`
-      : `${count}/${s.total} ok`;
-  };
+  const handleRowClick = useCallback(async (jobId: number) => {
+    const job = await getJob(jobId);
+    setSelectedJob(job);
+  }, []);
 
   if (loading) {
     return (
@@ -76,7 +207,11 @@ export default function JobsPage() {
             {jobs.map((job) => {
               const config = STATUS_CONFIG[job.status] || STATUS_CONFIG.pending;
               return (
-                <tr key={job.id} className="border-t border-border-subtle table-row-hover transition-default">
+                <tr
+                  key={job.id}
+                  className="border-t border-border-subtle table-row-hover transition-default cursor-pointer"
+                  onClick={() => handleRowClick(job.id)}
+                >
                   <td className="px-5 py-3.5 font-[family-name:var(--font-mono)] text-text-muted">#{job.id}</td>
                   <td className="px-5 py-3.5 text-text">{TYPE_LABELS[job.type] || job.type}</td>
                   <td className="px-5 py-3.5">
@@ -115,6 +250,10 @@ export default function JobsPage() {
           </tbody>
         </table>
       </div>
+
+      {selectedJob && (
+        <JobDetailModal job={selectedJob} onClose={() => setSelectedJob(null)} />
+      )}
     </div>
   );
 }
