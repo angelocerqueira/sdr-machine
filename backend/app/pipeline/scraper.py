@@ -38,59 +38,60 @@ def scrape_google_maps(niche: str, city: str, max_results: int | None = None) ->
         "memory": 1024,
     }
 
-    try:
-        resp = requests.post(url, json=payload, headers=headers, params=params, timeout=180)
-        resp.raise_for_status()
-        results = resp.json()
+    resp = requests.post(url, json=payload, headers=headers, params=params, timeout=180)
+    resp.raise_for_status()
+    results = resp.json()
 
-        leads = []
-        for item in results:
-            rating = item.get("totalScore", 0) or 0
-            if rating < settings.min_rating:
-                continue
+    leads = []
+    for item in results:
+        rating = item.get("totalScore", 0) or 0
+        if rating < settings.min_rating:
+            continue
 
-            lead = {
-                "nome": item.get("title", "").strip(),
-                "telefone": item.get("phone", ""),
-                "website": item.get("website", ""),
-                "endereco": item.get("address", ""),
-                "cidade": city,
-                "nicho": niche,
-                "rating": rating,
-                "reviews_count": item.get("reviewsCount", 0),
-                "google_maps_url": item.get("url", ""),
-                "categoria": item.get("categoryName", ""),
-                "top_reviews": [
-                    r.get("text", "")[:200]
-                    for r in (item.get("reviews", []) or [])[:3]
-                    if r.get("text")
-                ],
-            }
+        lead = {
+            "nome": item.get("title", "").strip(),
+            "telefone": item.get("phone", ""),
+            "website": item.get("website", ""),
+            "endereco": item.get("address", ""),
+            "cidade": city,
+            "nicho": niche,
+            "rating": rating,
+            "reviews_count": item.get("reviewsCount", 0),
+            "google_maps_url": item.get("url", ""),
+            "categoria": item.get("categoryName", ""),
+            "top_reviews": [
+                r.get("text", "")[:200]
+                for r in (item.get("reviews", []) or [])[:3]
+                if r.get("text")
+            ],
+        }
 
-            if lead["nome"]:
-                leads.append(lead)
+        if lead["nome"]:
+            leads.append(lead)
 
-        return leads
-
-    except requests.exceptions.RequestException:
-        return []
+    return leads
 
 
-def scrape_all(nichos: list[str], cidades: list[str], max_results: int | None = None) -> list[dict]:
+def scrape_all(nichos: list[str], cidades: list[str], max_results: int | None = None) -> tuple[list[dict], list[str]]:
     """
     Roda o scraping pra todas as combinações nicho x cidade.
     Deduplica por telefone/nome.
+    Retorna (leads, erros).
     """
     all_leads: list[dict] = []
+    errors: list[str] = []
     seen: set[str] = set()
 
     for niche in nichos:
         for city in cidades:
-            leads = scrape_google_maps(niche, city, max_results)
-            for lead in leads:
-                key = lead["telefone"] or lead["nome"]
-                if key and key not in seen:
-                    seen.add(key)
-                    all_leads.append(lead)
+            try:
+                leads = scrape_google_maps(niche, city, max_results)
+                for lead in leads:
+                    key = lead["telefone"] or lead["nome"]
+                    if key and key not in seen:
+                        seen.add(key)
+                        all_leads.append(lead)
+            except Exception as exc:
+                errors.append(f"{niche} em {city}: {str(exc)[:300]}")
 
-    return all_leads
+    return all_leads, errors

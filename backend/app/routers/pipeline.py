@@ -53,10 +53,9 @@ def _run_scrape(job_id: int, params: dict):
         cidades = params.get("cidades") or settings.target_cities
         max_results = params.get("max_results") or settings.max_results_per_search
 
-        raw_leads = scrape_all(nichos=nichos, cidades=cidades, max_results=max_results)
+        raw_leads, errors = scrape_all(nichos=nichos, cidades=cidades, max_results=max_results)
 
         created = 0
-        errors: list[str] = []
         for idx, ld in enumerate(raw_leads):
             try:
                 lead = Lead(
