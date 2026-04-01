@@ -19,6 +19,7 @@ ORDER_MAP = {
 VALID_STATUSES = {
     "scraped",
     "enriched",
+    "disqualified",
     "lp_generated",
     "outreach_ready",
     "outreach_sent",

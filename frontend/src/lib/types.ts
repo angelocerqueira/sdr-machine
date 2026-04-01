@@ -79,6 +79,7 @@ export interface OutreachMessage {
 export const KANBAN_COLUMNS = [
   { id: "scraped", label: "Scrapeado" },
   { id: "enriched", label: "Analisado" },
+  { id: "disqualified", label: "Desqualificado" },
   { id: "lp_generated", label: "LP Gerada" },
   { id: "outreach_ready", label: "Msg Pronta" },
   { id: "outreach_sent", label: "Msg Enviada" },

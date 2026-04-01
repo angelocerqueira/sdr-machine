@@ -2,12 +2,20 @@
 Módulo 2: Enriquecimento e Análise de Gaps
 Analisa o site de cada lead e gera um score de oportunidade.
 Score alto = site ruim = MAIS oportunidade pra você.
+Inclui diagnóstico de marketing via Claude API com avaliação de potencial IA/automação.
 """
 
+import json
+import logging
+import re
 import time
 
 import requests
 from bs4 import BeautifulSoup
+
+from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def fetch_website(url: str, timeout: int = 10) -> dict:
@@ -172,10 +180,212 @@ def calculate_score(site_data: dict, html_analysis: dict, pagespeed: dict) -> tu
     return min(score, 100), reasons
 
 
-def enrich_lead_data(website: str, skip_pagespeed: bool = False) -> dict:
+# ---------------------------------------------------------------------------
+# Diagnóstico de Marketing via Claude API
+# ---------------------------------------------------------------------------
+
+DIAGNOSTIC_JSON_SCHEMA = """{
+  "qualificado": true,
+  "motivo_desqualificacao": null,
+  "potencial_ia_automacao": {
+    "score": 75,
+    "oportunidades": ["Chatbot IA para agendamento", "Automação de follow-up por WhatsApp"],
+    "justificativa": "Explicação de por que este negócio tem potencial para IA/automação..."
+  },
+  "momento_funil": "descoberta",
+  "funil": {
+    "descoberta": {
+      "diagnostico": "Análise do estado atual do negócio nesta etapa...",
+      "acoes_top2": [
+        {"acao": "Ação concreta 1", "resultado_esperado": "Resultado mensurável", "kpi": "Métrica de acompanhamento"},
+        {"acao": "Ação concreta 2", "resultado_esperado": "Resultado mensurável", "kpi": "Métrica de acompanhamento"}
+      ]
+    },
+    "atracao": {"diagnostico": "...", "acoes_top2": [{"acao": "...", "resultado_esperado": "...", "kpi": "..."}, {"acao": "...", "resultado_esperado": "...", "kpi": "..."}]},
+    "consideracao": {"diagnostico": "...", "acoes_top2": [{"acao": "...", "resultado_esperado": "...", "kpi": "..."}, {"acao": "...", "resultado_esperado": "...", "kpi": "..."}]},
+    "acao": {"diagnostico": "...", "acoes_top2": [{"acao": "...", "resultado_esperado": "...", "kpi": "..."}, {"acao": "...", "resultado_esperado": "...", "kpi": "..."}]},
+    "apologia": {"diagnostico": "...", "acoes_top2": [{"acao": "...", "resultado_esperado": "...", "kpi": "..."}, {"acao": "...", "resultado_esperado": "...", "kpi": "..."}]}
+  },
+  "resumo_executivo": "2-3 frases sobre o estado geral do marketing digital do negócio",
+  "prioridades_top3": ["Prioridade 1", "Prioridade 2", "Prioridade 3"]
+}"""
+
+
+def _extract_visible_text(html: str) -> str:
+    """Extrai texto visível do HTML, limitado a 2000 chars pra economizar tokens."""
+    if not html:
+        return ""
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style", "noscript"]):
+        tag.decompose()
+    text = soup.get_text(separator=" ", strip=True)
+    return text[:2000]
+
+
+def _build_diagnostic_prompt(
+    lead_info: dict,
+    site_data: dict,
+    html_analysis: dict,
+    pagespeed: dict,
+    visible_text: str,
+) -> str:
+    """Monta o prompt de diagnóstico de marketing."""
+    reviews_text = ""
+    if lead_info.get("top_reviews"):
+        reviews_text = "\n".join(f'- "{r}"' for r in lead_info["top_reviews"][:3])
+
+    site_status = site_data.get("status", "unknown")
+    has_site = site_status == "ok"
+
+    return f"""Você é um consultor de marketing digital especializado em negócios locais brasileiros.
+Sua especialidade é identificar oportunidades de aplicação de IA e automação em operações comerciais.
+
+Analise os dados abaixo e gere um diagnóstico de marketing estruturado.
+
+DADOS DO NEGÓCIO:
+- Nome: {lead_info.get('nome', 'N/A')}
+- Nicho/Categoria: {lead_info.get('nicho', 'N/A')} / {lead_info.get('categoria', 'N/A')}
+- Cidade: {lead_info.get('cidade', 'N/A')}
+- Nota Google: {lead_info.get('rating', 'N/A')} ({lead_info.get('reviews_count', 0)} avaliações)
+- Avaliações destaque:
+{reviews_text or 'Sem avaliações disponíveis'}
+
+ANÁLISE TÉCNICA DO SITE:
+- Status: {"Site funcional" if has_site else f"Problemas: {site_status}"}
+- SSL/HTTPS: {"Sim" if html_analysis.get("has_ssl", site_data.get("has_ssl")) else "Não"}
+- Responsivo (mobile): {"Sim" if html_analysis.get("has_responsive_meta") else "Não"}
+- Link WhatsApp: {"Sim" if html_analysis.get("has_whatsapp_link") else "Não"}
+- Google Analytics/Tracking: {"Sim" if html_analysis.get("has_analytics") else "Não"}
+- Chatbot/Atendimento online: {"Sim" if html_analysis.get("has_chatbot") else "Não"}
+- CTA (call-to-action): {"Sim" if html_analysis.get("has_cta") else "Não"}
+- Redes sociais: {"Sim" if html_analysis.get("has_social_links") else "Não"}
+- Conteúdo: {html_analysis.get("word_count", 0)} palavras, {html_analysis.get("image_count", 0)} imagens
+- Template genérico: {"Sim" if html_analysis.get("is_template") else "Não"}
+- PageSpeed (mobile): {pagespeed.get("performance_score", "N/A")}/100
+- Título do site: {html_analysis.get("title", "N/A")}
+- Descrição: {html_analysis.get("description", "N/A")}
+
+{"CONTEÚDO VISÍVEL DO SITE (trecho):" + chr(10) + visible_text if visible_text else "SEM WEBSITE — o negócio não possui site."}
+
+INSTRUÇÕES:
+1. QUALIFICAÇÃO: Avalie se este negócio tem potencial real para serviços de IA e automação.
+   - Negócios com operação que envolve agendamento, atendimento ao cliente, follow-up, gestão de leads, CRM = ALTO potencial
+   - Negócios muito informais, sem escala, sem operação repetitiva = BAIXO potencial
+   - Seja honesto: nem todo negócio se beneficia. Se não faz sentido, marque qualificado=false
+
+2. MOMENTO NO FUNIL: Identifique em qual estágio o negócio se encontra predominantemente:
+   - descoberta: quase não é encontrado online, presença digital mínima
+   - atracao: é encontrado mas não converte visitantes em interessados
+   - consideracao: atrai visitantes mas não gera confiança/diferenciação suficiente
+   - acao: gera interesse mas perde na conversão (sem CTA claro, sem automação, processo manual)
+   - apologia: converte bem mas não fideliza nem gera indicações sistemáticas
+
+3. RECOMENDAÇÕES: Para CADA etapa do funil, dê exatamente 2 ações CONCRETAS e IMPLEMENTÁVEIS com resultado rápido.
+   As ações devem ser específicas para este negócio (não genéricas). Foque em ações que o dono pode implementar em 1-2 semanas.
+
+4. POTENCIAL IA/AUTOMAÇÃO: Score de 0 a 100.
+   - 0-25: Sem potencial relevante (desqualifica)
+   - 26-50: Potencial básico (automações simples)
+   - 51-75: Bom potencial (chatbot, CRM, automações de marketing)
+   - 76-100: Alto potencial (múltiplas oportunidades de IA na operação)
+
+Responda EXCLUSIVAMENTE com JSON válido no formato abaixo. Sem texto antes ou depois, sem markdown.
+
+{DIAGNOSTIC_JSON_SCHEMA}"""
+
+
+def _parse_diagnostic_response(text: str) -> dict | None:
+    """Parse da resposta do Claude. Retorna dict ou None se inválido."""
+    text = text.strip()
+
+    # Strip markdown code fences
+    if text.startswith("```"):
+        text = re.sub(r"^```\w*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text)
+        text = text.strip()
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        logger.warning("Diagnóstico: falha ao parsear JSON da resposta")
+        return None
+
+    # Validação básica de keys obrigatórias
+    required_keys = {"qualificado", "potencial_ia_automacao", "momento_funil", "funil", "resumo_executivo"}
+    if not required_keys.issubset(data.keys()):
+        missing = required_keys - data.keys()
+        logger.warning("Diagnóstico: keys faltando no JSON: %s", missing)
+        return None
+
+    valid_stages = {"descoberta", "atracao", "consideracao", "acao", "apologia"}
+    if data.get("momento_funil") not in valid_stages:
+        logger.warning("Diagnóstico: momento_funil inválido: %s", data.get("momento_funil"))
+        return None
+
+    pot = data.get("potencial_ia_automacao", {})
+    if not isinstance(pot.get("score"), (int, float)) or not (0 <= pot["score"] <= 100):
+        logger.warning("Diagnóstico: score de potencial inválido: %s", pot.get("score"))
+        return None
+
+    return data
+
+
+def generate_diagnostic(
+    lead_info: dict,
+    site_data: dict,
+    html_analysis: dict,
+    pagespeed: dict,
+    html: str,
+) -> dict | None:
+    """
+    Gera diagnóstico de marketing via Claude API.
+    Retorna dict com o diagnóstico ou None em caso de falha.
+    """
+    if settings.skip_ai_diagnostic:
+        return None
+
+    if not settings.anthropic_api_key:
+        logger.warning("Diagnóstico: ANTHROPIC_API_KEY não configurada")
+        return None
+
+    visible_text = _extract_visible_text(html)
+    prompt = _build_diagnostic_prompt(lead_info, site_data, html_analysis, pagespeed, visible_text)
+
+    model = settings.diagnostic_model or settings.claude_model
+
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": settings.anthropic_api_key,
+        "anthropic-version": "2023-06-01",
+    }
+
+    payload = {
+        "model": model,
+        "max_tokens": 4000,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+
+    try:
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers=headers,
+            json=payload,
+            timeout=90,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        text = data["content"][0]["text"].strip()
+        return _parse_diagnostic_response(text)
+
+    except Exception as exc:
+        logger.error("Diagnóstico: erro na API Claude: %s", str(exc)[:200])
+        return None
+
+
+def enrich_lead_data(website: str, lead_info: dict | None = None, skip_pagespeed: bool = False) -> dict:
     """
     Pipeline completo de enriquecimento para 1 lead.
-    Retorna dict com opportunity_score, opportunity_reasons, site_analysis.
+    Retorna dict com opportunity_score, opportunity_reasons, site_analysis, qualified.
     """
     # 1. Fetch site
     site_data = fetch_website(website)
@@ -189,18 +399,45 @@ def enrich_lead_data(website: str, skip_pagespeed: bool = False) -> dict:
         pagespeed = check_pagespeed(website)
         time.sleep(1)  # Rate limit
 
-    # 4. Score
+    # 4. Score técnico
     score, reasons = calculate_score(site_data, html_analysis, pagespeed)
+
+    site_analysis = {
+        "status": site_data.get("status"),
+        "has_ssl": site_data.get("has_ssl"),
+        "title": html_analysis.get("title", ""),
+        "description": html_analysis.get("description", ""),
+        **html_analysis,
+        "pagespeed": pagespeed.get("performance_score"),
+    }
+
+    # 5. Diagnóstico de marketing via IA
+    qualified = True
+    diagnostic = None
+    if lead_info:
+        diagnostic = generate_diagnostic(
+            lead_info=lead_info,
+            site_data=site_data,
+            html_analysis=html_analysis,
+            pagespeed=pagespeed,
+            html=site_data.get("html", ""),
+        )
+
+    if diagnostic:
+        site_analysis["diagnostico_marketing"] = diagnostic
+
+        # Qualificação baseada no score de potencial IA
+        ai_score = diagnostic.get("potencial_ia_automacao", {}).get("score", 0)
+        if not diagnostic.get("qualificado") or ai_score < settings.ai_potential_threshold:
+            qualified = False
+
+        # Adicionar razões do diagnóstico às opportunity_reasons
+        if diagnostic.get("prioridades_top3"):
+            reasons.extend(diagnostic["prioridades_top3"])
 
     return {
         "opportunity_score": score,
         "opportunity_reasons": reasons,
-        "site_analysis": {
-            "status": site_data.get("status"),
-            "has_ssl": site_data.get("has_ssl"),
-            "title": html_analysis.get("title", ""),
-            "description": html_analysis.get("description", ""),
-            **html_analysis,
-            "pagespeed": pagespeed.get("performance_score"),
-        },
+        "site_analysis": site_analysis,
+        "qualified": qualified,
     }
