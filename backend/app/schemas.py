@@ -24,6 +24,7 @@ class LeadOut(LeadBase):
     opportunity_score: int | None = None
     opportunity_reasons: list[str] = []
     site_analysis: dict = {}
+    social_profiles: dict = {}
     lp_html: str | None = None
     job_id: int | None = None
     created_at: datetime

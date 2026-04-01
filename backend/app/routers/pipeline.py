@@ -137,6 +137,7 @@ def _run_enrich(job_id: int, params: dict):
                 lead.opportunity_score = result["opportunity_score"]
                 lead.opportunity_reasons = result["opportunity_reasons"]
                 lead.site_analysis = result["site_analysis"]
+                lead.social_profiles = result.get("social_profiles", {})
                 if result.get("qualified", True):
                     lead.status = "enriched"
                     enriched += 1

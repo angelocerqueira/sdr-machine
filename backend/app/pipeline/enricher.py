@@ -18,6 +18,153 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+def _extract_social_urls(soup: BeautifulSoup) -> dict:
+    """Extrai URLs de redes sociais dos links do site."""
+    social = {}
+    for a in soup.find_all("a", href=True):
+        href = a["href"].lower().strip()
+        if "instagram.com/" in href and "instagram" not in social:
+            social["instagram"] = a["href"].strip()
+        elif "facebook.com/" in href and "facebook" not in social:
+            social["facebook"] = a["href"].strip()
+        elif "linkedin.com/" in href and "linkedin" not in social:
+            social["linkedin"] = a["href"].strip()
+        elif "tiktok.com/" in href and "tiktok" not in social:
+            social["tiktok"] = a["href"].strip()
+        elif "youtube.com/" in href and "youtube" not in social:
+            social["youtube"] = a["href"].strip()
+    return social
+
+
+def _scrape_instagram_profile(url: str) -> dict | None:
+    """
+    Busca dados públicos de um perfil do Instagram via Apify.
+    Retorna dict com followers, posts, bio, etc. ou None se falhar.
+    """
+    if not settings.apify_token or not url:
+        return None
+
+    # Extrair username da URL
+    match = re.search(r"instagram\.com/([^/?#]+)", url)
+    if not match:
+        return None
+    username = match.group(1).strip("/")
+    if username in ("p", "reel", "stories", "explore"):
+        return None
+
+    api_url = "https://api.apify.com/v2/acts/apify~instagram-profile-scraper/run-sync-get-dataset-items"
+    payload = {
+        "usernames": [username],
+    }
+    params = {
+        "token": settings.apify_token,
+        "timeout": 30,
+        "memory": 256,
+    }
+
+    try:
+        resp = requests.post(api_url, json=payload, params=params, timeout=60)
+        resp.raise_for_status()
+        results = resp.json()
+        if not results:
+            return None
+
+        profile = results[0]
+        return {
+            "platform": "instagram",
+            "username": username,
+            "full_name": profile.get("fullName", ""),
+            "bio": (profile.get("biography", "") or "")[:300],
+            "followers": profile.get("followersCount", 0),
+            "following": profile.get("followsCount", 0),
+            "posts_count": profile.get("postsCount", 0),
+            "is_business": profile.get("isBusinessAccount", False),
+            "category": profile.get("businessCategoryName", ""),
+            "external_url": profile.get("externalUrl", ""),
+            "is_verified": profile.get("verified", False),
+        }
+    except Exception as exc:
+        logger.warning("Instagram scrape failed for %s: %s", username, str(exc)[:100])
+        return None
+
+
+def _search_linkedin_company(company_name: str, city: str) -> dict | None:
+    """
+    Busca perfil de empresa no LinkedIn via Apify.
+    Retorna dict com dados básicos ou None se não encontrar.
+    """
+    if not settings.apify_token or not company_name:
+        return None
+
+    api_url = "https://api.apify.com/v2/acts/apify~linkedin-company-scraper/run-sync-get-dataset-items"
+    payload = {
+        "queries": [f"{company_name} {city}"],
+        "maxResults": 1,
+    }
+    params = {
+        "token": settings.apify_token,
+        "timeout": 30,
+        "memory": 256,
+    }
+
+    try:
+        resp = requests.post(api_url, json=payload, params=params, timeout=60)
+        resp.raise_for_status()
+        results = resp.json()
+        if not results:
+            return None
+
+        company = results[0]
+        return {
+            "platform": "linkedin",
+            "name": company.get("name", ""),
+            "description": (company.get("description", "") or "")[:500],
+            "followers": company.get("followersCount", 0),
+            "employees_range": company.get("employeeCountRange", ""),
+            "industry": company.get("industry", ""),
+            "website": company.get("website", ""),
+            "specialties": company.get("specialties", []),
+            "url": company.get("url", ""),
+        }
+    except Exception as exc:
+        logger.warning("LinkedIn scrape failed for %s: %s", company_name, str(exc)[:100])
+        return None
+
+
+def scrape_social_profiles(lead_info: dict, social_urls: dict) -> dict:
+    """
+    Busca dados de redes sociais do lead.
+    Usa URLs encontradas no site + busca por nome no LinkedIn.
+    Retorna dict com dados de cada plataforma encontrada.
+    """
+    profiles: dict = {}
+
+    # Instagram (se encontrou URL no site)
+    ig_url = social_urls.get("instagram")
+    if ig_url:
+        ig_data = _scrape_instagram_profile(ig_url)
+        if ig_data:
+            profiles["instagram"] = ig_data
+            time.sleep(1)  # Rate limit
+
+    # LinkedIn (busca por nome da empresa)
+    nome = lead_info.get("nome", "")
+    cidade = lead_info.get("cidade", "")
+    li_url = social_urls.get("linkedin")
+    if li_url or nome:
+        li_data = _search_linkedin_company(nome, cidade)
+        if li_data:
+            profiles["linkedin"] = li_data
+            time.sleep(1)
+
+    # Preservar URLs encontradas mesmo sem scraping
+    for platform, url in social_urls.items():
+        if platform not in profiles:
+            profiles[platform] = {"platform": platform, "url": url}
+
+    return profiles
+
+
 def fetch_website(url: str, timeout: int = 10) -> dict:
     """
     Faz o crawl básico do site do lead.
@@ -88,6 +235,7 @@ def analyze_html(html: str) -> dict:
         "has_chatbot": any(x in html_lower for x in ["tidio", "intercom", "crisp", "zendesk", "jivochat", "tawk", "drift", "chatbot"]),
         "has_cta": any(x in text for x in ["agende", "entre em contato", "fale conosco", "solicite", "orçamento", "whatsapp", "ligar"]),
         "has_social_links": any(x in html_lower for x in ["instagram.com", "facebook.com", "linkedin.com"]),
+        "social_urls": _extract_social_urls(soup),
         "title": (soup.title.string.strip() if soup.title and soup.title.string else "")[:100],
         "description": description,
         "word_count": len(text.split()),
@@ -222,6 +370,31 @@ def _extract_visible_text(html: str) -> str:
     return text[:2000]
 
 
+def _format_social_context(lead_info: dict) -> str:
+    """Formata dados de redes sociais pro prompt de diagnóstico."""
+    profiles = lead_info.get("social_profiles", {})
+    if not profiles:
+        return "REDES SOCIAIS: Nenhum perfil encontrado."
+
+    lines = ["REDES SOCIAIS:"]
+    ig = profiles.get("instagram")
+    if ig and isinstance(ig, dict) and ig.get("followers") is not None:
+        lines.append(f"- Instagram: @{ig.get('username', '?')} | {ig.get('followers', 0)} seguidores | {ig.get('posts_count', 0)} posts | {'Conta comercial' if ig.get('is_business') else 'Conta pessoal'}")
+        if ig.get("bio"):
+            lines.append(f"  Bio: {ig['bio'][:200]}")
+
+    li = profiles.get("linkedin")
+    if li and isinstance(li, dict) and li.get("name"):
+        lines.append(f"- LinkedIn: {li.get('name', '?')} | {li.get('followers', 0)} seguidores | {li.get('employees_range', '?')} funcionários | Setor: {li.get('industry', '?')}")
+
+    for platform in ("facebook", "tiktok", "youtube"):
+        p = profiles.get(platform)
+        if p and isinstance(p, dict):
+            lines.append(f"- {platform.capitalize()}: {p.get('url', 'perfil encontrado')}")
+
+    return "\n".join(lines) if len(lines) > 1 else "REDES SOCIAIS: Nenhum perfil encontrado."
+
+
 def _build_diagnostic_prompt(
     lead_info: dict,
     site_data: dict,
@@ -266,6 +439,8 @@ ANÁLISE TÉCNICA DO SITE:
 - Descrição: {html_analysis.get("description", "N/A")}
 
 {"CONTEÚDO VISÍVEL DO SITE (trecho):" + chr(10) + visible_text if visible_text else "SEM WEBSITE — o negócio não possui site."}
+
+{_format_social_context(lead_info)}
 
 INSTRUÇÕES:
 1. QUALIFICAÇÃO: Avalie se este negócio tem potencial real para serviços de IA e automação.
@@ -411,12 +586,20 @@ def enrich_lead_data(website: str, lead_info: dict | None = None, skip_pagespeed
         "pagespeed": pagespeed.get("performance_score"),
     }
 
-    # 5. Diagnóstico de marketing via IA
+    # 5. Scrape redes sociais
+    social_profiles: dict = {}
+    social_urls = html_analysis.get("social_urls", {})
+    if lead_info and settings.apify_token:
+        social_profiles = scrape_social_profiles(lead_info, social_urls)
+
+    # 6. Diagnóstico de marketing via IA
     qualified = True
     diagnostic = None
     if lead_info:
+        # Incluir dados sociais no lead_info pro diagnóstico
+        lead_info_with_social = {**lead_info, "social_profiles": social_profiles}
         diagnostic = generate_diagnostic(
-            lead_info=lead_info,
+            lead_info=lead_info_with_social,
             site_data=site_data,
             html_analysis=html_analysis,
             pagespeed=pagespeed,
@@ -439,5 +622,6 @@ def enrich_lead_data(website: str, lead_info: dict | None = None, skip_pagespeed
         "opportunity_score": score,
         "opportunity_reasons": reasons,
         "site_analysis": site_analysis,
+        "social_profiles": social_profiles,
         "qualified": qualified,
     }
