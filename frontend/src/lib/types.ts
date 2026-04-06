@@ -1,5 +1,6 @@
 export interface Lead {
   id: number;
+  public_id: string;
   nome: string;
   telefone: string | null;
   website: string | null;
@@ -77,10 +78,20 @@ export interface OutreachMessage {
   created_at: string;
 }
 
+export interface LandingPage {
+  id: number;
+  public_id: string;
+  lead_id: number;
+  version: number;
+  is_active: boolean;
+  created_at: string;
+}
+
 export const KANBAN_COLUMNS = [
   { id: "scraped", label: "Scrapeado" },
   { id: "enriched", label: "Analisado" },
   { id: "disqualified", label: "Desqualificado" },
+  { id: "failed", label: "Falhou" },
   { id: "lp_generated", label: "LP Gerada" },
   { id: "outreach_ready", label: "Msg Pronta" },
   { id: "outreach_sent", label: "Msg Enviada" },

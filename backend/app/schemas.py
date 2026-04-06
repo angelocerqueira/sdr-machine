@@ -20,6 +20,7 @@ class LeadBase(BaseModel):
 
 class LeadOut(LeadBase):
     id: int
+    public_id: str
     status: str
     opportunity_score: int | None = None
     opportunity_reasons: list[str] = []
@@ -36,6 +37,7 @@ class LeadOut(LeadBase):
 class LeadSummaryOut(LeadBase):
     """Lead without lp_html — used in list endpoints to avoid huge payloads."""
     id: int
+    public_id: str
     status: str
     opportunity_score: int | None = None
     opportunity_reasons: list[str] = []
@@ -114,6 +116,19 @@ class DashboardStats(BaseModel):
     avg_score: float | None
     total_jobs: int
     conversion_rate: float | None
+
+
+# === Landing Pages ===
+
+class LandingPageOut(BaseModel):
+    id: int
+    public_id: str
+    lead_id: int
+    version: int
+    is_active: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 # === Outreach Messages ===
