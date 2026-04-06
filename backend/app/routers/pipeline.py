@@ -216,7 +216,7 @@ def _run_generate(job_id: int, params: dict):
                 if html:
                     # Deactivate previous LPs
                     db.query(LandingPage).filter(
-                        LandingPage.lead_id == lead.id, LandingPage.is_active == True
+                        LandingPage.lead_id == lead.id, LandingPage.is_active.is_(True)
                     ).update({"is_active": False})
                     # Get next version number
                     max_version = db.query(func.max(LandingPage.version)).filter(

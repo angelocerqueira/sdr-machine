@@ -4,7 +4,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean, Column, Integer, String, Text, Numeric,
-    DateTime, ForeignKey, Index, JSON, func
+    DateTime, ForeignKey, Index, JSON, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
 
@@ -86,6 +86,7 @@ class LandingPage(Base):
 
     __table_args__ = (
         Index("idx_landing_pages_lead_id", "lead_id"),
+        UniqueConstraint("lead_id", "version", name="uq_landing_pages_lead_version"),
     )
 
 

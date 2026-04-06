@@ -10,7 +10,9 @@ export default function LpPreviewPage() {
   const [leadName, setLeadName] = useState("Carregando...");
 
   useEffect(() => {
-    getLeadByPublicId(publicId).then((lead) => setLeadName(lead.nome));
+    getLeadByPublicId(publicId)
+      .then((lead) => setLeadName(lead.nome))
+      .catch(() => setLeadName("LP não encontrada"));
   }, [publicId]);
 
   return <LpPreview publicId={publicId} leadName={leadName} />;
