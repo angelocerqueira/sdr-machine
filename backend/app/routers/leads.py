@@ -4,8 +4,8 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Lead
-from app.schemas import LeadListOut, LeadOut, LeadSummaryOut, LeadUpdate, OutreachMessageOut
+from app.models import LandingPage, Lead
+from app.schemas import LandingPageOut, LeadListOut, LeadOut, LeadSummaryOut, LeadUpdate, OutreachMessageOut
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
 
@@ -63,7 +63,13 @@ def lead_counts(
         query = query.filter(or_(Lead.nome.ilike(f"%{search}%"), Lead.telefone.ilike(f"%{search}%")))
 
     rows = query.group_by(Lead.status).all()
-    return {status: count for status, count in rows}
+    result: dict[str, int] = {}
+    for status, count in rows:
+        if status and status.endswith("_failed"):
+            result["failed"] = result.get("failed", 0) + count
+        else:
+            result[status] = count
+    return result
 
 
 @router.get("", response_model=LeadListOut)
@@ -81,7 +87,10 @@ def list_leads(
     query = db.query(Lead)
 
     if status:
-        query = query.filter(Lead.status == status)
+        if status == "failed":
+            query = query.filter(Lead.status.like("%_failed"))
+        else:
+            query = query.filter(Lead.status == status)
     if nicho:
         query = query.filter(Lead.nicho == nicho)
     if cidade:
@@ -120,6 +129,52 @@ def get_lead_lp(lead_id: int, db: Session = Depends(get_db)):
     if not lead.lp_html:
         raise HTTPException(status_code=404, detail="Landing page not generated yet")
     return Response(content=lead.lp_html, media_type="text/html")
+
+
+@router.get("/p/{public_id}/lp")
+def get_lead_lp_by_public_id(public_id: str, db: Session = Depends(get_db)):
+    lead = db.query(Lead).filter(Lead.public_id == public_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if not lead.lp_html:
+        raise HTTPException(status_code=404, detail="Landing page not generated yet")
+    return Response(content=lead.lp_html, media_type="text/html")
+
+
+@router.get("/p/{public_id}", response_model=LeadOut)
+def get_lead_by_public_id(public_id: str, db: Session = Depends(get_db)):
+    lead = db.query(Lead).filter(Lead.public_id == public_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return lead
+
+
+@router.get("/{lead_id}/landing-pages", response_model=list[LandingPageOut])
+def get_lead_landing_pages(lead_id: int, db: Session = Depends(get_db)):
+    lead = db.get(Lead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return lead.landing_pages
+
+
+@router.post("/{lead_id}/landing-pages/{lp_id}/activate", response_model=LandingPageOut)
+def activate_landing_page(lead_id: int, lp_id: int, db: Session = Depends(get_db)):
+    lp = db.query(LandingPage).filter(
+        LandingPage.id == lp_id, LandingPage.lead_id == lead_id
+    ).first()
+    if not lp:
+        raise HTTPException(status_code=404, detail="Landing page not found")
+    # Deactivate all others
+    db.query(LandingPage).filter(
+        LandingPage.lead_id == lead_id, LandingPage.id != lp_id
+    ).update({"is_active": False})
+    lp.is_active = True
+    # Sync lp_html on lead for backwards compatibility
+    lead = db.get(Lead, lead_id)
+    lead.lp_html = lp.html
+    db.commit()
+    db.refresh(lp)
+    return lp
 
 
 @router.get("/{lead_id}/messages", response_model=list[OutreachMessageOut])

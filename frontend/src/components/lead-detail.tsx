@@ -73,9 +73,21 @@ export function LeadDetail({ lead }: LeadDetailProps) {
               <span className="w-2.5 h-2.5 rounded-full bg-warning/60" />
               <span className="w-2.5 h-2.5 rounded-full bg-accent/60" />
             </div>
-            <h3 className="text-[11px] font-semibold text-text-muted uppercase tracking-wider font-[family-name:var(--font-mono)]">
+            <h3 className="text-[11px] font-semibold text-text-muted uppercase tracking-wider font-[family-name:var(--font-mono)] flex-1">
               Preview da LP
             </h3>
+            <a
+              href={`/lp/${lead.public_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[11px] text-accent hover:text-accent/80 font-[family-name:var(--font-mono)] transition-colors"
+            >
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="w-3 h-3">
+                <path d="M14 2H9m5 0v5m0-5L7 9" />
+                <path d="M13 9v4a1 1 0 01-1 1H3a1 1 0 01-1-1V4a1 1 0 011-1h4" />
+              </svg>
+              Tela cheia
+            </a>
           </div>
           <iframe
             src={getLeadLpUrl(lead.id)}

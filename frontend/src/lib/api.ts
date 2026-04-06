@@ -1,4 +1,4 @@
-import type { LeadListResponse, Lead, Job, JobListResponse, DashboardStats, Settings, OutreachMessage } from "./types";
+import type { LeadListResponse, Lead, Job, JobListResponse, DashboardStats, Settings, OutreachMessage, LandingPage } from "./types";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -38,8 +38,21 @@ export const deleteLead = (id: number) =>
 
 export const getLeadLpUrl = (id: number) => `${API}/api/leads/${id}/lp`;
 
+export const getLeadByPublicId = (publicId: string) =>
+  fetchAPI<Lead>(`/api/leads/p/${publicId}`);
+
+export const getLeadLpUrlByPublicId = (publicId: string) =>
+  `${API}/api/leads/p/${publicId}/lp`;
+
 export const getLeadMessages = (leadId: number) =>
   fetchAPI<OutreachMessage[]>(`/api/leads/${leadId}/messages`);
+
+// Landing Pages
+export const getLeadLandingPages = (leadId: number) =>
+  fetchAPI<LandingPage[]>(`/api/leads/${leadId}/landing-pages`);
+
+export const activateLandingPage = (leadId: number, lpId: number) =>
+  fetchAPI<LandingPage>(`/api/leads/${leadId}/landing-pages/${lpId}/activate`, { method: "POST" });
 
 // Dashboard
 export const getDashboardStats = () => fetchAPI<DashboardStats>("/api/dashboard/stats");
