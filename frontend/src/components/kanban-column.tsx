@@ -116,7 +116,7 @@ export function KanbanColumn({
       className={`rounded-xl border bg-surface min-w-[240px] w-[240px] flex flex-col transition-default ${
         isOver
           ? "border-accent/40 bg-accent-subtle"
-          : id === "disqualified"
+          : id === "disqualified" || id === "failed"
           ? "border-danger/20 bg-danger/[0.02]"
           : "border-border"
       }`}
@@ -128,7 +128,7 @@ export function KanbanColumn({
         </h3>
         <span
           className={`text-[11px] font-medium font-[family-name:var(--font-mono)] rounded-full px-2 py-0.5 ${
-            total > 0 && id === "disqualified"
+            total > 0 && (id === "disqualified" || id === "failed")
               ? "bg-danger/10 text-danger"
               : total > 0
               ? "bg-accent-subtle text-accent"
