@@ -1,10 +1,18 @@
+import secrets
+import string
 from datetime import datetime
 
 from sqlalchemy import (
-    Column, Integer, String, Text, Numeric,
-    DateTime, ForeignKey, Index, JSON, func
+    Boolean, Column, Integer, String, Text, Numeric,
+    DateTime, ForeignKey, Index, JSON, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
+
+_NANOID_ALPHABET = string.ascii_letters + string.digits + "-_"
+
+
+def generate_nanoid(size: int = 16) -> str:
+    return "".join(secrets.choice(_NANOID_ALPHABET) for _ in range(size))
 
 from app.database import Base
 
@@ -29,6 +37,7 @@ class Lead(Base):
     __tablename__ = "leads"
 
     id = Column(Integer, primary_key=True)
+    public_id = Column(String(16), unique=True, nullable=False, default=generate_nanoid)
     nome = Column(String(255), nullable=False)
     telefone = Column(String(50))
     website = Column(String(500))
@@ -52,12 +61,32 @@ class Lead(Base):
 
     job = relationship("Job", back_populates="leads")
     outreach_messages = relationship("OutreachMessage", back_populates="lead", cascade="all, delete-orphan")
+    landing_pages = relationship("LandingPage", back_populates="lead", cascade="all, delete-orphan", order_by="LandingPage.version.desc()")
 
     __table_args__ = (
         Index("idx_leads_status", "status"),
         Index("idx_leads_nicho", "nicho"),
         Index("idx_leads_cidade", "cidade"),
         Index("idx_leads_score", "opportunity_score"),
+    )
+
+
+class LandingPage(Base):
+    __tablename__ = "landing_pages"
+
+    id = Column(Integer, primary_key=True)
+    public_id = Column(String(16), unique=True, nullable=False, default=generate_nanoid)
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="CASCADE"), nullable=False)
+    html = Column(Text, nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=func.now())
+
+    lead = relationship("Lead", back_populates="landing_pages")
+
+    __table_args__ = (
+        Index("idx_landing_pages_lead_id", "lead_id"),
+        UniqueConstraint("lead_id", "version", name="uq_landing_pages_lead_version"),
     )
 
 
@@ -68,7 +97,7 @@ class OutreachMessage(Base):
     lead_id = Column(Integer, ForeignKey("leads.id", ondelete="CASCADE"), nullable=False)
     type = Column(String(50), nullable=False)
     message_text = Column(Text, nullable=False)
-    whatsapp_link = Column(String(500))
+    whatsapp_link = Column(Text)
     sent_at = Column(DateTime)
     response_received_at = Column(DateTime)
     created_at = Column(DateTime, default=func.now())

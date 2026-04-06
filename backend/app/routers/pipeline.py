@@ -4,11 +4,12 @@ import threading
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sse_starlette.sse import EventSourceResponse
 
 from app.database import get_db, SessionLocal
-from app.models import Lead, Job, OutreachMessage
+from app.models import LandingPage, Lead, Job, OutreachMessage
 from app.schemas import (
     ScrapeRequest, EnrichRequest, GenerateRequest, OutreachRequest,
     JobOut, JobListOut, PipelineStatusOut,
@@ -81,7 +82,7 @@ def _run_scrape(job_id: int, params: dict):
                 db.rollback()
                 errors.append(f"Lead {ld.get('nome', '?')}: {str(exc)[:120]}")
 
-        job.status = "done"
+        job.status = "done_with_errors" if errors else "done"
         job.result_summary = {"created": created, "total_scraped": len(raw_leads), "errors": errors}
         job.finished_at = datetime.utcnow()
         db.commit()
@@ -152,7 +153,7 @@ def _run_enrich(job_id: int, params: dict):
                 db.commit()
                 errors.append(f"Lead {lead.id} ({lead.nome}): {str(exc)[:120]}")
 
-        job.status = "done"
+        job.status = "done_with_errors" if errors else "done"
         job.result_summary = {"enriched": enriched, "disqualified": disqualified, "total": len(leads), "errors": errors}
         job.finished_at = datetime.utcnow()
         db.commit()
@@ -213,6 +214,22 @@ def _run_generate(job_id: int, params: dict):
                 }
                 html = generate_landing_page(lead_data)
                 if html:
+                    # Deactivate previous LPs
+                    db.query(LandingPage).filter(
+                        LandingPage.lead_id == lead.id, LandingPage.is_active.is_(True)
+                    ).update({"is_active": False})
+                    # Get next version number
+                    max_version = db.query(func.max(LandingPage.version)).filter(
+                        LandingPage.lead_id == lead.id
+                    ).scalar() or 0
+                    # Create new LP record
+                    lp = LandingPage(
+                        lead_id=lead.id,
+                        html=html,
+                        version=max_version + 1,
+                        is_active=True,
+                    )
+                    db.add(lp)
                     lead.lp_html = html
                     lead.status = "lp_generated"
                     db.commit()
@@ -228,7 +245,7 @@ def _run_generate(job_id: int, params: dict):
                 db.commit()
                 errors.append(f"Lead {lead.id} ({lead.nome}): {str(exc)[:120]}")
 
-        job.status = "done"
+        job.status = "done_with_errors" if errors else "done"
         job.result_summary = {"generated": generated, "total": len(leads), "errors": errors}
         job.finished_at = datetime.utcnow()
         db.commit()
@@ -300,7 +317,7 @@ def _run_outreach(job_id: int, params: dict):
                 db.commit()
                 errors.append(f"Lead {lead.id} ({lead.nome}): {str(exc)[:120]}")
 
-        job.status = "done"
+        job.status = "done_with_errors" if errors else "done"
         job.result_summary = {"messaged": messaged, "total": len(leads), "errors": errors}
         job.finished_at = datetime.utcnow()
         db.commit()

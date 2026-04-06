@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getDashboardStats } from "@/lib/api";
 import { StatsCard } from "@/components/stats-card";
 import type { DashboardStats } from "@/lib/types";
@@ -45,6 +46,7 @@ function ConversionIcon() {
 const STATUS_LABELS: Record<string, string> = {
   scraped: "Scrapeado",
   enriched: "Analisado",
+  disqualified: "Desqualificado",
   lp_generated: "LP Gerada",
   outreach_ready: "Msg Pronta",
   outreach_sent: "Enviada",
@@ -52,9 +54,11 @@ const STATUS_LABELS: Record<string, string> = {
   in_call: "Em Call",
   closed: "Fechado",
   delivered: "Entregue",
+  failed: "Falhou",
 };
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
 
   useEffect(() => {
@@ -99,15 +103,16 @@ export default function DashboardPage() {
         {Object.keys(stats.leads_by_status).length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {Object.entries(stats.leads_by_status).map(([status, count]) => (
-              <div
+              <button
                 key={status}
-                className="rounded-lg border border-border-subtle bg-surface-raised p-4 text-center card-glow transition-default"
+                onClick={() => router.push(`/kanban?status=${status}`)}
+                className="rounded-lg border border-border-subtle bg-surface-raised p-4 text-center card-glow transition-default hover:border-accent/40 hover:bg-surface-overlay cursor-pointer"
               >
                 <p className="text-[10px] uppercase tracking-widest text-text-muted font-[family-name:var(--font-mono)] mb-2">
                   {STATUS_LABELS[status] || status}
                 </p>
                 <p className="stat-number text-2xl font-bold">{count}</p>
-              </div>
+              </button>
             ))}
           </div>
         ) : (

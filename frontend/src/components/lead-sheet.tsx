@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getLead, getLeadLpUrl, getLeadMessages, runGenerate, runOutreach, runEnrich } from "@/lib/api";
-import type { Lead, OutreachMessage } from "@/lib/types";
+import { getLead, getLeadLpUrl, getLeadMessages, getLeadLandingPages, activateLandingPage, runGenerate, runOutreach, runEnrich } from "@/lib/api";
+import type { Lead, OutreachMessage, LandingPage } from "@/lib/types";
 import { ConfirmModal } from "./confirm-modal";
 import { DiagnosticPanel } from "./diagnostic-panel";
 
@@ -79,7 +79,9 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
   const [messages, setMessages] = useState<OutreachMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const [pendingAction, setPendingAction] = useState<"generate" | "outreach" | "re-enrich" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"enrich" | "generate" | "regenerate" | "outreach" | "re-enrich" | "retry" | null>(null);
+  const [landingPages, setLandingPages] = useState<LandingPage[]>([]);
+  const [activatingLpId, setActivatingLpId] = useState<number | null>(null);
 
   const handleClose = useCallback(() => {
     onClose();
@@ -117,8 +119,14 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
         const data = await getLead(leadId);
         if (!cancelled) {
           setLead(data);
-          const msgs = await getLeadMessages(leadId).catch(() => [] as OutreachMessage[]);
-          if (!cancelled) setMessages(msgs);
+          const [msgs, lps] = await Promise.all([
+            getLeadMessages(leadId).catch(() => [] as OutreachMessage[]),
+            getLeadLandingPages(leadId).catch(() => [] as LandingPage[]),
+          ]);
+          if (!cancelled) {
+            setMessages(msgs);
+            setLandingPages(lps);
+          }
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -227,8 +235,25 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
               <DiagnosticPanel siteAnalysis={lead.site_analysis as Record<string, unknown>} />
 
               {/* Action buttons */}
-              {(lead.status === "enriched" || lead.status === "lp_generated" || lead.status === "disqualified") && (
+              {(lead.status === "scraped" || lead.status === "enriched" || lead.status === "lp_generated" || lead.status === "outreach_ready" || lead.status === "disqualified" || lead.status.endsWith("_failed")) && (
                 <div className="flex gap-2">
+                  {lead.status === "scraped" && (
+                    <button
+                      onClick={() => setPendingAction("enrich")}
+                      disabled={actionLoading}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-accent hover:bg-accent-dim disabled:opacity-50 text-bg text-[13px] font-medium rounded-lg transition-default"
+                    >
+                      {actionLoading ? (
+                        <span className="w-3.5 h-3.5 border-2 border-bg/30 border-t-bg rounded-full animate-spin" />
+                      ) : (
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="w-4 h-4">
+                          <path d="M8 1v14M1 8h14" />
+                          <circle cx="8" cy="8" r="6" />
+                        </svg>
+                      )}
+                      Enriquecer
+                    </button>
+                  )}
                   {lead.status === "enriched" && (
                     <button
                       onClick={() => setPendingAction("generate")}
@@ -261,6 +286,40 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
                       Gerar Outreach
                     </button>
                   )}
+                  {(lead.status === "lp_generated" || lead.status === "outreach_ready") && (
+                    <button
+                      onClick={() => setPendingAction("regenerate")}
+                      disabled={actionLoading}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-surface-raised hover:bg-surface-overlay border border-border disabled:opacity-50 text-text text-[13px] font-medium rounded-lg transition-default"
+                    >
+                      {actionLoading ? (
+                        <span className="w-3.5 h-3.5 border-2 border-border border-t-text rounded-full animate-spin" />
+                      ) : (
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="w-4 h-4">
+                          <path d="M1 8a7 7 0 0113.4-2.8M15 8a7 7 0 01-13.4 2.8" />
+                          <path d="M14.4 1v4.2h-4.2M1.6 15v-4.2h4.2" />
+                        </svg>
+                      )}
+                      Regenerar LP
+                    </button>
+                  )}
+                  {lead.status.endsWith("_failed") && (
+                    <button
+                      onClick={() => setPendingAction("retry")}
+                      disabled={actionLoading}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-danger/20 hover:bg-danger/30 border border-danger/30 disabled:opacity-50 text-danger text-[13px] font-medium rounded-lg transition-default"
+                    >
+                      {actionLoading ? (
+                        <span className="w-3.5 h-3.5 border-2 border-danger/30 border-t-danger rounded-full animate-spin" />
+                      ) : (
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="w-4 h-4">
+                          <path d="M1 8a7 7 0 0113.4-2.8M15 8a7 7 0 01-13.4 2.8" />
+                          <path d="M14.4 1v4.2h-4.2M1.6 15v-4.2h4.2" />
+                        </svg>
+                      )}
+                      Reprocessar
+                    </button>
+                  )}
                   {lead.status === "disqualified" && (
                     <button
                       onClick={() => setPendingAction("re-enrich")}
@@ -290,15 +349,88 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
                       <span className="w-2.5 h-2.5 rounded-full bg-warning/60" />
                       <span className="w-2.5 h-2.5 rounded-full bg-accent/60" />
                     </div>
-                    <h3 className="text-[11px] font-semibold text-text-muted uppercase tracking-wider font-[family-name:var(--font-mono)]">
+                    <h3 className="text-[11px] font-semibold text-text-muted uppercase tracking-wider font-[family-name:var(--font-mono)] flex-1">
                       Preview da LP
                     </h3>
+                    <a
+                      href={`/lp/${lead.public_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-[11px] text-accent hover:text-accent/80 font-[family-name:var(--font-mono)] transition-colors"
+                    >
+                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="w-3 h-3">
+                        <path d="M14 2H9m5 0v5m0-5L7 9" />
+                        <path d="M13 9v4a1 1 0 01-1 1H3a1 1 0 01-1-1V4a1 1 0 011-1h4" />
+                      </svg>
+                      Tela cheia
+                    </a>
                   </div>
                   <iframe
                     src={getLeadLpUrl(lead.id)}
                     className="w-full h-[400px] bg-white"
                     title={`LP Preview — ${lead.nome}`}
                   />
+                </div>
+              )}
+
+              {/* LP version history */}
+              {landingPages.length > 1 && (
+                <div className="rounded-xl border border-border bg-surface p-4">
+                  <h3 className="text-[10px] uppercase tracking-widest font-[family-name:var(--font-mono)] text-text-muted mb-3">
+                    Versões da LP ({landingPages.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {landingPages.map((lp) => (
+                      <div
+                        key={lp.id}
+                        className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-colors ${
+                          lp.is_active
+                            ? "border-accent/30 bg-accent-subtle"
+                            : "border-border-subtle bg-surface-raised"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[12px] font-medium font-[family-name:var(--font-mono)] ${
+                            lp.is_active ? "text-accent" : "text-text-muted"
+                          }`}>
+                            v{lp.version}
+                          </span>
+                          <span className="text-[11px] text-text-secondary">
+                            {new Date(lp.created_at).toLocaleString("pt-BR", {
+                              day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
+                            })}
+                          </span>
+                          {lp.is_active && (
+                            <span className="text-[10px] text-accent font-[family-name:var(--font-mono)] uppercase">
+                              ativa
+                            </span>
+                          )}
+                        </div>
+                        {!lp.is_active && (
+                          <button
+                            onClick={async () => {
+                              setActivatingLpId(lp.id);
+                              try {
+                                await activateLandingPage(lead.id, lp.id);
+                                const [updated, lps] = await Promise.all([
+                                  getLead(lead.id),
+                                  getLeadLandingPages(lead.id),
+                                ]);
+                                setLead(updated);
+                                setLandingPages(lps);
+                              } finally {
+                                setActivatingLpId(null);
+                              }
+                            }}
+                            disabled={activatingLpId === lp.id}
+                            className="text-[11px] text-accent hover:text-accent/80 font-[family-name:var(--font-mono)] transition-colors disabled:opacity-50"
+                          >
+                            {activatingLpId === lp.id ? "..." : "Ativar"}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -355,10 +487,16 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
         <ConfirmModal
           open={pendingAction !== null}
           title={
-            pendingAction === "generate"
+            pendingAction === "enrich"
+              ? "Enriquecer Lead?"
+              : pendingAction === "generate"
               ? "Gerar Landing Page?"
+              : pendingAction === "regenerate"
+              ? "Regenerar Landing Page?"
               : pendingAction === "re-enrich"
               ? "Re-enriquecer Lead?"
+              : pendingAction === "retry"
+              ? "Reprocessar Lead?"
               : "Gerar Outreach?"
           }
           confirmLabel="Executar"
@@ -368,16 +506,29 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
             setPendingAction(null);
             setActionLoading(true);
             try {
-              if (action === "generate") {
-                await runGenerate({ lead_ids: [lead.id] });
-              } else if (action === "re-enrich") {
+              if (action === "enrich" || action === "re-enrich") {
                 await runEnrich({ lead_ids: [lead.id] });
+              } else if (action === "generate" || action === "regenerate") {
+                await runGenerate({ lead_ids: [lead.id] });
+              } else if (action === "retry") {
+                // Detect which stage failed and re-run it
+                if (lead.status === "enrich_failed") {
+                  await runEnrich({ lead_ids: [lead.id] });
+                } else if (lead.status === "generate_failed") {
+                  await runGenerate({ lead_ids: [lead.id] });
+                } else if (lead.status === "outreach_failed") {
+                  await runOutreach({ lead_ids: [lead.id] });
+                }
               } else {
                 await runOutreach({ lead_ids: [lead.id] });
               }
               // Refetch lead to get updated status
-              const updated = await getLead(lead.id);
+              const [updated, lps] = await Promise.all([
+                getLead(lead.id),
+                getLeadLandingPages(lead.id).catch(() => [] as LandingPage[]),
+              ]);
               setLead(updated);
+              setLandingPages(lps);
               if (action === "outreach") {
                 const msgs = await getLeadMessages(lead.id).catch(() => [] as OutreachMessage[]);
                 setMessages(msgs);
@@ -391,10 +542,16 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
           onCancel={() => setPendingAction(null)}
         >
           <p>
-            {pendingAction === "generate"
+            {pendingAction === "enrich"
+              ? `Enriquecer "${lead?.nome}" — análise de site, score de oportunidade e diagnóstico.`
+              : pendingAction === "generate"
               ? `Gerar uma landing page personalizada para "${lead?.nome}". Usa a Claude API (~$0.01).`
+              : pendingAction === "regenerate"
+              ? `Gerar uma nova versão da landing page para "${lead?.nome}". A versão anterior será mantida no histórico. Usa a Claude API (~$0.01).`
               : pendingAction === "re-enrich"
               ? `Re-enriquecer "${lead?.nome}" com novo diagnóstico. O lead voltará para a fila de enriquecimento.`
+              : pendingAction === "retry"
+              ? `Reprocessar "${lead?.nome}" — tentar novamente o estágio que falhou (${lead?.status?.replace("_failed", "")}).`
               : `Gerar 3 mensagens de WhatsApp para "${lead?.nome}".`}
           </p>
         </ConfirmModal>

@@ -8,6 +8,7 @@ const STATUS_CONFIG: Record<string, { label: string; dot: string; text: string }
   pending: { label: "Pendente", dot: "bg-text-muted", text: "text-text-muted" },
   running: { label: "Rodando", dot: "bg-info animate-pulse", text: "text-info" },
   done: { label: "Concluído", dot: "bg-accent", text: "text-accent" },
+  done_with_errors: { label: "Concluído com erros", dot: "bg-warning", text: "text-warning" },
   failed: { label: "Falhou", dot: "bg-danger", text: "text-danger" },
 };
 
