@@ -20,7 +20,12 @@ def get_stats(db: Session = Depends(get_db)):
         .group_by(Lead.status)
         .all()
     )
-    leads_by_status = {status: count for status, count in rows}
+    leads_by_status: dict[str, int] = {}
+    for status, count in rows:
+        if status and status.endswith("_failed"):
+            leads_by_status["failed"] = leads_by_status.get("failed", 0) + count
+        else:
+            leads_by_status[status] = count
 
     conversion_rate = None
     if total_leads > 0:
