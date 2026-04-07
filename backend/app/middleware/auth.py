@@ -6,11 +6,9 @@ table managed by Better Auth in PostgreSQL (or SQLite in tests).
 from __future__ import annotations
 
 import datetime
-from http.cookies import SimpleCookie
 from typing import Sequence
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.pool import QueuePool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -29,7 +27,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
         The ASGI application.
     database_url:
         SQLAlchemy connection string used to query the ``session`` table.
-        When *None*, falls back to ``app.state.database_url`` (set in main.py).
     public_paths:
         Path prefixes that skip authentication (e.g. ``["/api/health"]``).
     """
@@ -37,30 +34,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app,
-        database_url: str | None = None,
+        database_url: str,
         public_paths: Sequence[str] = (),
     ):
         super().__init__(app)
         self.public_paths = tuple(public_paths)
-        self._db_url = database_url
-        self._engine = None
-
-    def _get_engine(self, request: Request):
-        if self._engine is not None:
-            return self._engine
-        url = self._db_url or getattr(getattr(request, "app", None), "state", {})
-        if isinstance(url, str):
-            db_url = url
-        else:
-            db_url = getattr(url, "database_url", None)
-        if not db_url:
-            raise RuntimeError("AuthMiddleware: no database_url configured")
 
         connect_args = {}
-        if db_url.startswith("sqlite"):
+        if database_url.startswith("sqlite"):
             connect_args["check_same_thread"] = False
-        self._engine = create_engine(db_url, pool_pre_ping=True, connect_args=connect_args)
-        return self._engine
+        self._engine = create_engine(database_url, pool_pre_ping=True, connect_args=connect_args)
 
     def _is_public(self, path: str) -> bool:
         return any(path.startswith(p) for p in self.public_paths)
@@ -83,7 +66,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             )
 
         # Validate token against the session table
-        engine = self._get_engine(request)
+        engine = self._engine
         try:
             with engine.connect() as conn:
                 row = conn.execute(_VALIDATE_SQL, {"token": token}).fetchone()
