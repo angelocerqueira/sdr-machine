@@ -444,10 +444,12 @@ REGRAS CRÍTICAS:
 
         # Extrair conteúdo — suporta formato OpenAI e Anthropic
         raw = ""
-        if "choices" in data:
-            raw = (data["choices"][0].get("message", {}).get("content", "") or "").strip()
-        elif "content" in data:
-            raw = (data["content"][0].get("text", "") or "").strip()
+        choices = data.get("choices") or []
+        content = data.get("content") or []
+        if choices:
+            raw = (choices[0].get("message", {}).get("content", "") or "").strip()
+        elif content:
+            raw = (content[0].get("text", "") or "").strip()
 
         if not raw:
             logger.error("Pass 1: resposta vazia da API para %s. Response: %s",
@@ -622,10 +624,12 @@ Gere o HTML completo agora."""
 
         # Extrair conteúdo — suporta formato OpenAI e Anthropic
         html = ""
-        if "choices" in data:
-            html = (data["choices"][0].get("message", {}).get("content", "") or "").strip()
-        elif "content" in data:
-            html = (data["content"][0].get("text", "") or "").strip()
+        choices = data.get("choices") or []
+        content = data.get("content") or []
+        if choices:
+            html = (choices[0].get("message", {}).get("content", "") or "").strip()
+        elif content:
+            html = (content[0].get("text", "") or "").strip()
 
         if not html:
             logger.error("Pass 2: resposta vazia da API para %s. Response keys: %s",
