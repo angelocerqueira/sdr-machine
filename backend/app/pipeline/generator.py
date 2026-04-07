@@ -454,6 +454,9 @@ REGRAS CRÍTICAS:
                          lead_data.get("nome", "?"), json.dumps(data, ensure_ascii=False)[:500])
             return None
 
+        # Strip thinking blocks (MiniMax, DeepSeek, etc.)
+        raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+
         # Limpar possíveis backticks
         raw = re.sub(r"^```\w*\n?", "", raw)
         raw = re.sub(r"\n?```$", "", raw)
@@ -628,6 +631,9 @@ Gere o HTML completo agora."""
             logger.error("Pass 2: resposta vazia da API para %s. Response keys: %s",
                          lead_data.get("nome", "?"), list(data.keys()))
             return ""
+
+        # Strip thinking blocks (MiniMax, DeepSeek, etc.)
+        html = re.sub(r"<think>.*?</think>", "", html, flags=re.DOTALL).strip()
 
         if html.startswith("```"):
             html = re.sub(r"^```\w*\n?", "", html)
