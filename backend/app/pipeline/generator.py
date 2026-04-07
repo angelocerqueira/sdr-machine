@@ -408,19 +408,18 @@ Retorne APENAS o HTML completo. Sem markdown, sem explicação, sem ```html```. 
 
     headers = {
         "Content-Type": "application/json",
-        "x-api-key": settings.anthropic_api_key,
-        "anthropic-version": "2023-06-01",
+        "Authorization": f"Bearer {settings.llm_api_key}",
     }
 
     payload = {
-        "model": settings.claude_model,
+        "model": settings.llm_model,
         "max_tokens": 12000,
         "messages": [{"role": "user", "content": prompt}],
     }
 
     try:
         resp = requests.post(
-            "https://api.anthropic.com/v1/messages",
+            f"{settings.llm_base_url}/chat/completions",
             headers=headers,
             json=payload,
             timeout=180,
@@ -428,7 +427,7 @@ Retorne APENAS o HTML completo. Sem markdown, sem explicação, sem ```html```. 
         resp.raise_for_status()
         data = resp.json()
 
-        html = data["content"][0]["text"].strip()
+        html = data["choices"][0]["message"]["content"].strip()
 
         # Limpa caso venha com markdown wrapper
         if html.startswith("```"):
