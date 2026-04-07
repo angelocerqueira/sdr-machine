@@ -573,6 +573,8 @@ Copie EXATAMENTE o SVG correspondente ao nome. Disponíveis:
 - Testar mentalmente: o conteúdo respira no iPhone SE (375px)?
 </mobile_first>
 
+IMPORTANTE: Comece DIRETAMENTE com <!DOCTYPE html>. Nenhum texto, explicação ou markdown antes do DOCTYPE.
+
 Gere o HTML completo agora."""
 
     messages = [
@@ -601,6 +603,10 @@ Gere o HTML completo agora."""
         if html.startswith("```"):
             html = re.sub(r"^```\w*\n?", "", html)
             html = re.sub(r"\n?```$", "", html)
+
+        # Garantir DOCTYPE mesmo se o modelo não incluiu
+        if not html.lstrip().lower().startswith("<!doctype"):
+            html = "<!DOCTYPE html>\n" + html
 
         return html
 

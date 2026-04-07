@@ -1,3 +1,4 @@
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
 
 
@@ -5,7 +6,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:postgres@localhost:5432/sdr_machine"
     api_url: str = "http://localhost:8000"
     apify_token: str = ""
-    llm_api_key: str = ""
+    llm_api_key: str = Field(default="", validation_alias=AliasChoices("LLM_API_KEY", "ANTHROPIC_API_KEY"))
     llm_model: str = "MiniMax-M2.7"
     llm_base_url: str = "https://api.minimax.io/v1"
     business_name: str = "Studio Digital"
