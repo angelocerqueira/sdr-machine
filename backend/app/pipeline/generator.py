@@ -5,11 +5,14 @@ Usa system/user/prefill separation, few-shot examples, GSAP motion,
 e verificação anti-slop para output de agência real.
 """
 
+import logging
 import re
 
 import requests
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _get_theme_for_niche(niche: str) -> dict:
@@ -142,8 +145,6 @@ Exemplo: H1="De cliente insatisfeito a fã declarado" / Sub="Transforme cada vis
 
 
 # ─── Constantes do prompt otimizado ──────────────────────────────────────────
-
-GSAP_CDN = "https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5"
 
 DESIGN_EXAMPLES = """
 <examples>
@@ -735,12 +736,19 @@ def generate_landing_page(lead_data: dict) -> str:
     diagnostic_context = ""
     diag = lead_data.get("site_analysis", {}).get("diagnostico_marketing")
     if diag:
+        resumo = diag.get('resumo_executivo') or diag.get('diagnostico_resumo', '')
+        momento = diag.get('momento_funil') or diag.get('funil_predominante', '')
+        prioridades = diag.get('prioridades_top3') or diag.get('proximos_passos', [])
+        pot = diag.get('potencial_ia_automacao', {})
+        justificativa = pot.get('justificativa', '') if isinstance(pot, dict) else ''
+        justificativa = justificativa or diag.get('justificativa_qualificacao', '')
+
         diagnostic_context = f"""
 DIAGNÓSTICO DE MARKETING DO NEGÓCIO:
-- Resumo: {diag.get('resumo_executivo', '')}
-- Momento no funil: {diag.get('momento_funil', '')}
-- Prioridades: {', '.join(diag.get('prioridades_top3', []))}
-- Potencial IA: {diag.get('potencial_ia_automacao', {}).get('justificativa', '')}
+- Resumo: {resumo}
+- Momento no funil: {momento}
+- Prioridades: {', '.join(prioridades)}
+- Potencial IA: {justificativa}
 
 Ajuste o tom e foco da LP conforme o momento:
 - descoberta → LP mais educativa, explique quem é o negócio e por que confiar
@@ -793,4 +801,5 @@ Ajuste o tom e foco da LP conforme o momento:
         return html
 
     except Exception:
+        logger.exception("Falha ao gerar LP para %s", lead_data.get("nome", "?"))
         return ""
