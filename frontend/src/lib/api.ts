@@ -5,6 +5,7 @@ const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     ...options,
+    credentials: "include",
     headers: { "Content-Type": "application/json", ...options?.headers },
   });
   if (!res.ok) {
@@ -34,7 +35,7 @@ export const updateLead = (id: number, data: { status?: string }) =>
   fetchAPI<Lead>(`/api/leads/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 
 export const deleteLead = (id: number) =>
-  fetch(`${API}/api/leads/${id}`, { method: "DELETE" });
+  fetch(`${API}/api/leads/${id}`, { method: "DELETE", credentials: "include" });
 
 export const getLeadLpUrl = (id: number) => `${API}/api/leads/${id}/lp`;
 
