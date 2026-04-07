@@ -9,6 +9,12 @@ from sqlalchemy.orm import sessionmaker
 
 from app.middleware.auth import AuthMiddleware
 
+
+@pytest.fixture(autouse=True)
+def _bypass_auth():
+    """Override conftest: do NOT bypass auth in middleware-specific tests."""
+    yield
+
 # ---------------------------------------------------------------------------
 # Fixtures — isolated FastAPI app with the middleware wired to an in-memory DB
 # ---------------------------------------------------------------------------
