@@ -218,12 +218,12 @@ class TestParseDiagnosticResponse:
 # ---------------------------------------------------------------------------
 
 class TestGenerateDiagnostic:
-    def _mock_claude_response(self, diagnostic_data):
-        """Helper pra criar mock response da Claude API."""
+    def _mock_llm_response(self, diagnostic_data):
+        """Helper pra criar mock response da LLM API (OpenAI-compatible)."""
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {
-            "content": [{"text": json.dumps(diagnostic_data)}]
+            "choices": [{"message": {"content": json.dumps(diagnostic_data)}}]
         }
         return mock_resp
 
@@ -231,10 +231,11 @@ class TestGenerateDiagnostic:
     @patch("app.pipeline.enricher.requests.post")
     def test_success(self, mock_post, mock_settings):
         mock_settings.skip_ai_diagnostic = False
-        mock_settings.anthropic_api_key = "test-key"
+        mock_settings.llm_api_key = "test-key"
+        mock_settings.llm_base_url = "https://api.minimax.io/v1"
         mock_settings.diagnostic_model = ""
-        mock_settings.claude_model = "claude-sonnet-4-20250514"
-        mock_post.return_value = self._mock_claude_response(SAMPLE_DIAGNOSTIC_JSON)
+        mock_settings.llm_model = "MiniMax-M2.7"
+        mock_post.return_value = self._mock_llm_response(SAMPLE_DIAGNOSTIC_JSON)
 
         result = generate_diagnostic(
             lead_info=SAMPLE_LEAD_INFO,
@@ -253,9 +254,10 @@ class TestGenerateDiagnostic:
     @patch("app.pipeline.enricher.requests.post")
     def test_api_failure_returns_none(self, mock_post, mock_settings):
         mock_settings.skip_ai_diagnostic = False
-        mock_settings.anthropic_api_key = "test-key"
+        mock_settings.llm_api_key = "test-key"
+        mock_settings.llm_base_url = "https://api.minimax.io/v1"
         mock_settings.diagnostic_model = ""
-        mock_settings.claude_model = "claude-sonnet-4-20250514"
+        mock_settings.llm_model = "MiniMax-M2.7"
         mock_post.side_effect = Exception("API timeout")
 
         result = generate_diagnostic(
@@ -285,7 +287,7 @@ class TestGenerateDiagnostic:
     @patch("app.pipeline.enricher.settings")
     def test_skip_when_no_api_key(self, mock_settings):
         mock_settings.skip_ai_diagnostic = False
-        mock_settings.anthropic_api_key = ""
+        mock_settings.llm_api_key = ""
 
         result = generate_diagnostic(
             lead_info=SAMPLE_LEAD_INFO,
