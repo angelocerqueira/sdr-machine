@@ -67,16 +67,44 @@ export const getJobs = (params?: Record<string, string>) => {
 export const getJob = (id: number) => fetchAPI<Job>(`/api/jobs/${id}`);
 
 export const streamJob = (id: number, onEvent: (event: { type: string; message: string }) => void) => {
-  const source = new EventSource(`${API}/api/jobs/${id}/stream`);
-  source.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-    onEvent(data);
-    if (data.type === "done" || data.type === "error") {
-      source.close();
+  const controller = new AbortController();
+
+  (async () => {
+    try {
+      const res = await fetch(`${API}/api/jobs/${id}/stream`, {
+        credentials: "include",
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) return;
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const data = JSON.parse(line.slice(6));
+          onEvent(data);
+          if (data.type === "done" || data.type === "error") {
+            controller.abort();
+            return;
+          }
+        }
+      }
+    } catch {
+      // aborted or network error
     }
-  };
-  source.onerror = () => source.close();
-  return () => source.close();
+  })();
+
+  return () => controller.abort();
 };
 
 // Pipeline

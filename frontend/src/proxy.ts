@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
-const PUBLIC_PATHS = ["/login", "/lp"];
+const PUBLIC_PATHS = ["/lp"];
 
 function isPublicPath(pathname: string): boolean {
   if (pathname === "/favicon.ico") return true;
@@ -10,7 +10,7 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isPublicPath(pathname)) {
@@ -19,13 +19,17 @@ export async function middleware(request: NextRequest) {
 
   const sessionCookie = getSessionCookie(request);
 
-  if (!sessionCookie) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  // Usuário autenticado tentando acessar /login → redireciona pro dashboard
+  if (pathname === "/login") {
+    if (sessionCookie) {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
+    return NextResponse.next();
   }
 
-  // Se tem cookie e tenta acessar /login, redireciona pro dashboard
-  if (pathname === "/login") {
-    return NextResponse.redirect(new URL("/", request.url));
+  // Rotas protegidas: sem sessão → login
+  if (!sessionCookie) {
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   return NextResponse.next();

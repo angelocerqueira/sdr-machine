@@ -7,6 +7,9 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
+    signUp: {
+      enabled: false,
+    },
   },
   session: {
     cookieCache: {
