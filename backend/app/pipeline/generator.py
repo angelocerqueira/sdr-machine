@@ -429,7 +429,6 @@ REGRAS CRÍTICAS:
             headers=headers,
             json={
                 "model": settings.llm_model,
-                "max_tokens": 3000,
                 "temperature": 0.85,
                 "messages": [
                     {"role": "system", "content": system},
@@ -618,7 +617,6 @@ Gere o HTML completo agora."""
             },
             json={
                 "model": settings.llm_model,
-                "max_tokens": 16000,
                 "temperature": 0.7,
                 "messages": messages,
             },
