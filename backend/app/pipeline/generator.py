@@ -1,10 +1,20 @@
 """
-Módulo 3: Gerador de Landing Pages Personalizadas
-Gera uma LP completa pro negócio do prospect via Claude API.
-Usa system/user/prefill separation, few-shot examples, GSAP motion,
-e verificação anti-slop para output de agência real.
+Módulo 3 v2: Gerador de Landing Pages Personalizadas
+─────────────────────────────────────────────────────
+Arquitetura 2-pass:
+  Pass 1 → Creative Brief (copy, paleta, layout decisions, ícones)
+  Pass 2 → HTML completo a partir do brief
+
+Mudanças vs v1:
+  - Cores dinâmicas: Claude escolhe a paleta por negócio (não hardcoded)
+  - SVG icons premium: biblioteca inline, zero emojis
+  - 2-pass generation: pensar antes de codificar
+  - Gold standard snippet: ancora a qualidade visual
+  - Token budget adequado: 16k para HTML
+  - System prompt enxuto: exemplos no user prompt
 """
 
+import json
 import logging
 import re
 
@@ -15,711 +25,591 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-def _get_theme_for_niche(niche: str) -> dict:
-    """Retorna diretrizes de design específicas por nicho."""
-    niche_lower = (niche or "").lower()
-    themes = {
-        "dentista": {
-            "style": "Corporate Premium",
-            "bg": "#0f172a", "surface": "#1e293b", "accent": "#0d9488",
-            "heading_font": "Clash Display", "body_font": "DM Sans",
-            "tone": "confiança e modernidade clínica",
-            "copy_framework": "PAS",
-            "hero_variant": "split",
-        },
-        "clínica": {
-            "style": "Corporate Premium",
-            "bg": "#0c1222", "surface": "#162032", "accent": "#14b8a6",
-            "heading_font": "Satoshi", "body_font": "Source Sans 3",
-            "tone": "autoridade médica e acolhimento",
-            "copy_framework": "PAS",
-            "hero_variant": "centered",
-        },
-        "estética": {
-            "style": "Luxury",
-            "bg": "#1a1a2e", "surface": "#252540", "accent": "#e8b4b8",
-            "heading_font": "Playfair Display", "body_font": "DM Sans",
-            "tone": "exclusividade e sofisticação",
-            "copy_framework": "AIDA",
-            "hero_variant": "gradient",
-        },
-        "restaurante": {
-            "style": "Modern Playful",
-            "bg": "#1c1917", "surface": "#292524", "accent": "#f59e0b",
-            "heading_font": "Bricolage Grotesque", "body_font": "DM Sans",
-            "tone": "energia, sabor e experiência",
-            "copy_framework": "BAB",
-            "hero_variant": "split",
-        },
-        "pizzaria": {
-            "style": "Modern Playful",
-            "bg": "#1c1917", "surface": "#292524", "accent": "#ef4444",
-            "heading_font": "Cabinet Grotesk", "body_font": "DM Sans",
-            "tone": "artesanal e convidativo",
-            "copy_framework": "BAB",
-            "hero_variant": "centered",
-        },
-        "salão": {
-            "style": "Luxury",
-            "bg": "#18181b", "surface": "#27272a", "accent": "#d946ef",
-            "heading_font": "Fraunces", "body_font": "DM Sans",
-            "tone": "glamour e cuidado pessoal",
-            "copy_framework": "AIDA",
-            "hero_variant": "gradient",
-        },
-        "barbearia": {
-            "style": "Industrial",
-            "bg": "#0f172a", "surface": "#1e293b", "accent": "#d97706",
-            "heading_font": "Clash Display", "body_font": "JetBrains Mono",
-            "tone": "masculino, moderno e premium",
-            "copy_framework": "BAB",
-            "hero_variant": "split",
-        },
-        "pet": {
-            "style": "Solarpunk",
-            "bg": "#1a1a2e", "surface": "#252540", "accent": "#22c55e",
-            "heading_font": "Satoshi", "body_font": "DM Sans",
-            "tone": "carinhoso e confiável",
-            "copy_framework": "PAS",
-            "hero_variant": "centered",
-        },
-        "academia": {
-            "style": "Dashboard Dense",
-            "bg": "#09090b", "surface": "#18181b", "accent": "#84cc16",
-            "heading_font": "Clash Display", "body_font": "Source Sans 3",
-            "tone": "energia, resultado e performance",
-            "copy_framework": "BAB",
-            "hero_variant": "split",
-        },
-        "veterinária": {
-            "style": "Corporate Premium",
-            "bg": "#0f172a", "surface": "#1e293b", "accent": "#10b981",
-            "heading_font": "Newsreader", "body_font": "DM Sans",
-            "tone": "cuidado profissional e empatia",
-            "copy_framework": "PAS",
-            "hero_variant": "centered",
-        },
-        "loja": {
-            "style": "Editorial",
-            "bg": "#111111", "surface": "#1a1a1a", "accent": "#f97316",
-            "heading_font": "Bricolage Grotesque", "body_font": "DM Sans",
-            "tone": "moderno e curado",
-            "copy_framework": "AIDA",
-            "hero_variant": "split",
-        },
-    }
-    for key, theme in themes.items():
-        if key in niche_lower:
-            return theme
-    return {
-        "style": "Modern Playful",
-        "bg": "#18181b", "surface": "#27272a", "accent": "#34d399",
-        "heading_font": "Satoshi", "body_font": "DM Sans",
-        "tone": "profissional e acessível",
+# ═══════════════════════════════════════════════════════════════════════════════
+# SVG ICON LIBRARY — Ícones inline premium, stroke-based, viewBox 0 0 24 24
+# O modelo escolhe por nome no Pass 1, e insere o SVG real no Pass 2.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+SVG_ICONS = {
+    # ── Geral ──
+    "shield": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l7 4v5c0 5.25-3.5 9.74-7 11-3.5-1.26-7-5.75-7-11V6l7-4z"/></svg>',
+    "shield-check": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l7 4v5c0 5.25-3.5 9.74-7 11-3.5-1.26-7-5.75-7-11V6l7-4z"/><path d="M9 12l2 2 4-4"/></svg>',
+    "scale": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M4 7l8-4 8 4"/><path d="M4 7v1a4 4 0 004 4h0"/><path d="M20 7v1a4 4 0 01-4 4h0"/><circle cx="8" cy="12" r="1"/><circle cx="16" cy="12" r="1"/></svg>',
+    "gavel": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 3.5l6 6-2 2-6-6 2-2z"/><path d="M9 9l-5 5 2 2 5-5"/><path d="M6 19h12"/><path d="M10.5 6.5l-4 4"/></svg>',
+    "file-text": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>',
+    "file-search": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><circle cx="11.5" cy="14.5" r="2.5"/><line x1="13.3" y1="16.3" x2="15" y2="18"/></svg>',
+    "alert-triangle": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    "check-circle": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+    "clock": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+    "map-pin": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+    "phone": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>',
+    "star": '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+    "star-outline": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+    "users": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>',
+    "trending-up": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
+    "zap": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+    "target": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
+    "award": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>',
+    "eye": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
+    "lock": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>',
+    "refresh-cw": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>',
+    "message-circle": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>',
+    "calendar": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    "arrow-right": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>',
+    "chevron-down": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>',
+    "quote": '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.583 17.321C3.553 16.227 3 15 3 13.011c0-3.5 2.457-6.637 6.03-8.188l.893 1.378c-3.335 1.804-3.987 4.145-4.247 5.621.537-.278 1.24-.375 1.929-.311C9.591 11.7 11 13.166 11 15c0 1.933-1.567 3.5-3.5 3.5-1.182 0-2.258-.555-2.917-1.179zM14.583 17.321C13.553 16.227 13 15 13 13.011c0-3.5 2.457-6.637 6.03-8.188l.893 1.378c-3.335 1.804-3.987 4.145-4.247 5.621.537-.278 1.24-.375 1.929-.311C19.591 11.7 21 13.166 21 15c0 1.933-1.567 3.5-3.5 3.5-1.182 0-2.258-.555-2.917-1.179z"/></svg>',
+    # ── Nicho: Saúde/Dental ──
+    "tooth": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C9.5 2 7 4 7 7c0 2-.5 4-1.5 6S4 17 4 19c0 1.5 1 3 2.5 3s2.5-2 3-4c.3-1.2.8-2 1.5-2h2c.7 0 1.2.8 1.5 2 .5 2 1.5 4 3 4s2.5-1.5 2.5-3c0-2-.5-4-1.5-6S17 9 17 7c0-3-2.5-5-5-5z"/></svg>',
+    "heart-pulse": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 12.572l-7.5 7.428-7.5-7.428A5 5 0 0112 5.006a5 5 0 017.5 7.566z"/><path d="M6 12h2l2-3 3 6 2-3h3"/></svg>',
+    "stethoscope": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6a5 5 0 005 5h2a5 5 0 005-5V4"/><circle cx="19" cy="13" r="2"/><path d="M19 15v3a4 4 0 01-4 4h-2a4 4 0 01-4-4"/><line x1="4" y1="2" x2="4" y2="4"/><line x1="20" y1="2" x2="20" y2="4"/></svg>',
+    # ── Nicho: Food ──
+    "utensils": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 002-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 00-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></svg>',
+    "flame": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12c2-2.96 0-7-1-8 0 3.038-1.773 4.741-3 6-1.226 1.26-2 3.24-2 5a6 6 0 1012 0c0-1.532-1.056-3.94-2-5-1.786 3-2 2-4 2z"/></svg>',
+    # ── Nicho: Beauty ──
+    "scissors": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
+    "sparkles": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/><path d="M19 13l.75 2.25L22 16l-2.25.75L19 19l-.75-2.25L16 16l2.25-.75L19 13z"/><path d="M5 17l.5 1.5L7 19l-1.5.5L5 21l-.5-1.5L3 19l1.5-.5L5 17z"/></svg>',
+    # ── Nicho: Pet/Vet ──
+    "paw": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="8" cy="6" rx="2" ry="2.5"/><ellipse cx="16" cy="6" rx="2" ry="2.5"/><ellipse cx="5" cy="11" rx="2" ry="2.5"/><ellipse cx="19" cy="11" rx="2" ry="2.5"/><path d="M12 18c-2.5 0-5-1.5-5-4s2.5-4 5-4 5 1.5 5 4-2.5 4-5 4z"/></svg>',
+    # ── Nicho: Fitness ──
+    "dumbbell": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5h11v11h-11z" transform="rotate(45 12 12)"/><line x1="3" y1="21" x2="7" y2="17"/><line x1="17" y1="7" x2="21" y2="3"/></svg>',
+    # ── Nicho: Imóveis/Construção ──
+    "building": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="9" y1="6" x2="9" y2="6.01"/><line x1="15" y1="6" x2="15" y2="6.01"/><line x1="9" y1="10" x2="9" y2="10.01"/><line x1="15" y1="10" x2="15" y2="10.01"/><line x1="9" y1="14" x2="9" y2="14.01"/><line x1="15" y1="14" x2="15" y2="14.01"/><path d="M9 22v-4h6v4"/></svg>',
+    "hard-hat": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18h20"/><path d="M4 18v-3a8 8 0 0116 0v3"/><path d="M12 3v4"/><path d="M8 18v-7"/><path d="M16 18v-7"/></svg>',
+    # ── Misc ──
+    "dollar-sign": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>',
+    "handshake": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17l-1.5 1.5a2.12 2.12 0 01-3 0L4 16a2.12 2.12 0 010-3L8.5 8.5"/><path d="M13 7l1.5-1.5a2.12 2.12 0 013 0L20 8a2.12 2.12 0 010 3L15.5 15.5"/><path d="M8.5 8.5L13 13"/><path d="M11 13l4 4"/></svg>',
+    "leaf": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L3 21l.34-.82C8.17 18.1 14 15.92 16 7"/><path d="M20.8 3.2S19 8 14 12"/><path d="M3 21l4-4"/></svg>',
+    "wrench": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>',
+}
+
+# String formatada da biblioteca pra incluir no prompt
+def _format_icon_library() -> str:
+    """Gera string listando ícones disponíveis com seus nomes."""
+    icons_list = ", ".join(sorted(SVG_ICONS.keys()))
+    return f"Ícones disponíveis (usar pelo nome entre {{{{icon:nome}}}}): {icons_list}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NICHE PERSONALITY — Guias de personalidade, NÃO paletas hardcoded.
+# Claude escolhe as cores no Pass 1.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+NICHE_GUIDES = {
+    "advocacia": {
+        "mood": "autoridade, confiança institucional, gravidade profissional",
+        "color_direction": "azuis profundos, verdes-escuros ou slate — accent sóbrio mas assertivo (dourado, cobre, teal). NUNCA verde-neon ou cores vibrantes demais.",
+        "typography_direction": "Serif para headings (Newsreader, Fraunces, Instrument Serif) ou grotesk pesada (General Sans, Satoshi). Body clean (DM Sans, Manrope).",
+        "visual_metaphors": "escudo, coluna, balança, linhas firmes, formas geométricas estáveis",
         "copy_framework": "PAS",
-        "hero_variant": "centered",
+        "icon_suggestions": ["shield-check", "scale", "gavel", "file-text", "file-search", "alert-triangle", "lock", "handshake"],
+    },
+    "dentista": {
+        "mood": "confiança clínica, modernidade, cuidado acessível",
+        "color_direction": "dark base com accent em teal, aqua ou mint. Evitar branco hospitalar. Profundidade com tons de slate/zinc.",
+        "typography_direction": "Sans-serif moderna para headings (Outfit, Plus Jakarta Sans, Cabinet Grotesk). Body legível (DM Sans, Figtree).",
+        "visual_metaphors": "sorriso, precisão, tecnologia, limpeza, transformação",
+        "copy_framework": "PAS",
+        "icon_suggestions": ["tooth", "sparkles", "check-circle", "clock", "award", "heart-pulse"],
+    },
+    "clínica": {
+        "mood": "autoridade médica, acolhimento, segurança",
+        "color_direction": "base escura sofisticada + accent em teal, verde-saúde ou azul-confiança. Temperatura fria mas não gelada.",
+        "typography_direction": "Humanista para headings (Satoshi, General Sans). Body com boa legibilidade (Source Sans 3, DM Sans).",
+        "visual_metaphors": "cuidado, ciência, resultado, acolhimento, excelência",
+        "copy_framework": "PAS",
+        "icon_suggestions": ["heart-pulse", "stethoscope", "shield-check", "users", "award", "check-circle"],
+    },
+    "estética": {
+        "mood": "luxo acessível, desejo, transformação pessoal",
+        "color_direction": "dark luxuoso (wine, charcoal, onyx) + accent em rose gold, champagne, blush ou lilac. Dourado sutil nos detalhes.",
+        "typography_direction": "Serif elegante para headings (Playfair Display, Cormorant, Bodoni Moda). Body delicada (DM Sans, Outfit).",
+        "visual_metaphors": "espelho, luz, transformação, curvas suaves, brilho",
+        "copy_framework": "AIDA",
+        "icon_suggestions": ["sparkles", "eye", "award", "star", "heart-pulse", "calendar"],
+    },
+    "restaurante": {
+        "mood": "experiência sensorial, calor humano, apetite",
+        "color_direction": "tons quentes escuros (stone, warm-gray, espresso) + accent em amber, terracotta, warm-orange ou vermelho-queimado.",
+        "typography_direction": "Display com personalidade (Bricolage Grotesque, Syne, Fraunces). Body calorosa (DM Sans, Manrope).",
+        "visual_metaphors": "fogo, mesa, convívio, artesanal, origem",
+        "copy_framework": "BAB",
+        "icon_suggestions": ["utensils", "flame", "star", "clock", "map-pin", "users"],
+    },
+    "pizzaria": {
+        "mood": "artesanal, convidativo, tradição com energia",
+        "color_direction": "dark quente + accent em vermelho-tomate ou laranja-forno. Detalhes em cream/wheat nos textos.",
+        "typography_direction": "Bold e expressiva (Cabinet Grotesk, Clash Display). Body amigável (DM Sans).",
+        "visual_metaphors": "forno, massa, calor, comunidade, tradição",
+        "copy_framework": "BAB",
+        "icon_suggestions": ["flame", "utensils", "star", "clock", "map-pin", "phone"],
+    },
+    "salão": {
+        "mood": "glamour, autocuidado, empoderamento",
+        "color_direction": "dark elegante (charcoal, deep-purple) + accent em fuchsia, violet ou rose. Toques metálicos sutis.",
+        "typography_direction": "Elegante com atitude (Fraunces, Syne, Clash Display). Body clean (DM Sans, Outfit).",
+        "visual_metaphors": "espelho, reflexo, transformação, brilho, estilo",
+        "copy_framework": "AIDA",
+        "icon_suggestions": ["scissors", "sparkles", "star", "calendar", "award", "eye"],
+    },
+    "barbearia": {
+        "mood": "masculino premium, craft, irmandade",
+        "color_direction": "dark industrial (charcoal, gunmetal) + accent em amber, whiskey-gold ou copper. Texturas brutas.",
+        "typography_direction": "Industrial/bold (Clash Display, Space Grotesk). Body com peso (JetBrains Mono para detalhes, DM Sans para corpo).",
+        "visual_metaphors": "lâmina, precisão, tradição, clube, ofício",
+        "copy_framework": "BAB",
+        "icon_suggestions": ["scissors", "award", "star", "clock", "users", "target"],
+    },
+    "pet": {
+        "mood": "carinhoso, confiável, alegre",
+        "color_direction": "base escura amigável + accent em verde-natureza, coral ou turquesa. Nunca frio demais.",
+        "typography_direction": "Friendly e arredondada (Outfit, Plus Jakarta Sans, Nunito Sans). Body suave (DM Sans, Figtree).",
+        "visual_metaphors": "pata, coração, natureza, companhia, proteção",
+        "copy_framework": "PAS",
+        "icon_suggestions": ["paw", "heart-pulse", "shield-check", "star", "clock", "phone"],
+    },
+    "academia": {
+        "mood": "energia, resultado, disciplina premium",
+        "color_direction": "dark potente (near-black, graphite) + accent em lime, electric-green, ou orange-energia. Alto contraste.",
+        "typography_direction": "Impactante e condensada (Clash Display, Unbounded, Syne). Body atlética (DM Sans, Source Sans 3).",
+        "visual_metaphors": "força, progressão, meta, superação, performance",
+        "copy_framework": "BAB",
+        "icon_suggestions": ["dumbbell", "target", "trending-up", "zap", "award", "clock"],
+    },
+    "veterinária": {
+        "mood": "cuidado profissional, empatia, competência",
+        "color_direction": "base escura acolhedora + accent em verde-saúde ou teal-confiança. Calor nos neutros.",
+        "typography_direction": "Profissional mas acessível (Satoshi, Outfit). Body clean (DM Sans, Figtree).",
+        "visual_metaphors": "pata, estetoscópio, coração, proteção, vida",
+        "copy_framework": "PAS",
+        "icon_suggestions": ["paw", "heart-pulse", "stethoscope", "shield-check", "clock", "phone"],
+    },
+    "loja": {
+        "mood": "curadoria, descoberta, estilo",
+        "color_direction": "dark editorial (ink, charcoal) + accent vibrante que contrasta (coral, amber, electric-blue). Um accent principal + um secundário sutil.",
+        "typography_direction": "Editorial com peso (Bricolage Grotesque, General Sans). Body elegante (DM Sans, Manrope).",
+        "visual_metaphors": "vitrine, seleção, qualidade, estilo, descoberta",
+        "copy_framework": "AIDA",
+        "icon_suggestions": ["eye", "sparkles", "star", "trending-up", "award", "arrow-right"],
+    },
+    "imobiliária": {
+        "mood": "aspiracional, confiança, patrimônio",
+        "color_direction": "dark sofisticado (navy, charcoal) + accent em dourado, champagne ou teal-premium.",
+        "typography_direction": "Elegante e séria (Newsreader, Instrument Serif, General Sans). Body clean (DM Sans, Source Sans 3).",
+        "visual_metaphors": "chave, lar, horizonte, investimento, fundação",
+        "copy_framework": "AIDA",
+        "icon_suggestions": ["building", "lock", "star", "map-pin", "trending-up", "handshake"],
+    },
+    "construção": {
+        "mood": "solidez, competência, resultado tangível",
+        "color_direction": "dark industrial (slate, graphite) + accent em amber, safety-orange ou yellow-construção.",
+        "typography_direction": "Robusta e direta (Clash Display, Space Grotesk). Body sólida (DM Sans, Source Sans 3).",
+        "visual_metaphors": "fundação, estrutura, progresso, ferramenta, planta",
+        "copy_framework": "BAB",
+        "icon_suggestions": ["hard-hat", "wrench", "building", "check-circle", "shield-check", "trending-up"],
+    },
+}
+
+
+def _get_niche_guide(niche: str) -> dict:
+    """Retorna guia de personalidade para o nicho. Fallback genérico."""
+    niche_lower = (niche or "").lower()
+    for key, guide in NICHE_GUIDES.items():
+        if key in niche_lower:
+            return guide
+    return {
+        "mood": "profissional, confiável, moderno",
+        "color_direction": "dark base sofisticada + accent com personalidade. Escolha cores que reflitam a identidade do negócio, NUNCA verde-menta genérico.",
+        "typography_direction": "Heading expressiva (Satoshi, Outfit, Cabinet Grotesk, General Sans). Body legível (DM Sans, Manrope, Figtree).",
+        "visual_metaphors": "confiança, resultado, qualidade, proximidade",
+        "copy_framework": "PAS",
+        "icon_suggestions": ["check-circle", "star", "shield-check", "zap", "users", "clock"],
     }
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# COPY FRAMEWORKS
+# ═══════════════════════════════════════════════════════════════════════════════
 
 _COPY_FRAMEWORKS = {
-    "PAS": """Framework PAS (Problem-Agitate-Solution):
-- HERO H1: Descreva o PROBLEMA que o cliente enfrenta (não o produto)
-- Sub-headline: AGITE — mostre a consequência de não resolver
-- CTA: Apresente a SOLUÇÃO — o negócio como resposta
-Exemplo: H1="Cansado de esperar semanas por uma consulta?" / Sub="Cada dia sem cuidar do sorriso é um dia a mais de desconforto" / CTA="Agendar minha consulta hoje"
-""",
-    "AIDA": """Framework AIDA (Attention-Interest-Desire-Action):
-- HERO H1: Declaração BOLD que captura ATENÇÃO imediata
-- Sub-headline: Fato INTERESSANTE que desperta curiosidade
-- Seções: Construa DESEJO com provas e benefícios
-- CTA: AÇÃO clara e específica
-Exemplo: H1="O sorriso que você sempre quis, em uma única visita" / Sub="Mais de 500 pacientes transformados com tecnologia 3D" / CTA="Quero meu sorriso novo"
-""",
-    "BAB": """Framework BAB (Before-After-Bridge):
-- HERO H1: Descreva o estado ANTES (dor/frustração do cliente)
-- Sub-headline: Pinte o DEPOIS (resultado desejado)
-- CTA: O negócio é a PONTE entre os dois
-Exemplo: H1="De cliente insatisfeito a fã declarado" / Sub="Transforme cada visita em uma experiência que seus clientes vão recomendar" / CTA="Começar minha transformação"
-""",
+    "PAS": "PAS (Problema→Agitação→Solução): H1 descreve o PROBLEMA, sub agita a consequência, CTA apresenta a solução.",
+    "AIDA": "AIDA (Atenção→Interesse→Desejo→Ação): H1 bold captura atenção, sub desperta curiosidade, seções constroem desejo, CTA é ação clara.",
+    "BAB": "BAB (Antes→Depois→Ponte): H1 descreve o estado antes, sub pinta o depois, negócio é a ponte.",
 }
 
 
-# ─── Constantes do prompt otimizado ──────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# GOLD STANDARD — Snippet HTML que demonstra o nível de qualidade esperado.
+# NÃO é template — é referência de craft.
+# ═══════════════════════════════════════════════════════════════════════════════
 
-DESIGN_EXAMPLES = """
-<examples>
+GOLD_STANDARD = """
+<gold_standard_reference>
+Este snippet demonstra o NÍVEL de qualidade visual esperado. NÃO copie — use como referência de craft.
 
-<example type="hero_magnetico" descricao="Hero com gradient mesh animado + text reveal staggered + floating elements">
-<code_snippet>
-/* Gradient mesh vivo — NÃO é um linear-gradient genérico */
-.hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 80% 50% at 20% 80%, rgba(120, 0, 255, 0.15) 0%, transparent 70%),
-    radial-gradient(ellipse 60% 40% at 80% 20%, rgba(255, 107, 53, 0.12) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 80% at 50% 50%, rgba(0, 200, 150, 0.08) 0%, transparent 50%);
-  animation: meshShift 12s ease-in-out infinite alternate;
-}
-@keyframes meshShift {
-  0% { transform: scale(1) rotate(0deg); }
-  100% { transform: scale(1.15) rotate(3deg); }
-}
+<!-- Hero com gradient mesh real + text reveal + floating orb -->
+<section id="inicio" class="hero" style="min-height:100svh;position:relative;display:flex;align-items:center;overflow:hidden;">
+  <!-- Gradient mesh: 3 radial-gradients sobrepostos, animados -->
+  <div class="hero-mesh" style="position:absolute;inset:0;background:
+    radial-gradient(ellipse 70% 50% at 25% 75%, rgba(var(--accent-rgb),0.12) 0%, transparent 65%),
+    radial-gradient(ellipse 55% 45% at 80% 25%, rgba(var(--accent-rgb),0.08) 0%, transparent 55%),
+    radial-gradient(ellipse 40% 70% at 50% 50%, rgba(var(--accent-rgb),0.05) 0%, transparent 50%);
+    animation: meshShift 14s ease-in-out infinite alternate;"></div>
 
-/* Text reveal com clip-path — NÃO é um fade-in genérico */
-.hero-title span {
-  display: inline-block;
-  clip-path: inset(100% 0 0 0);
-  animation: textReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-.hero-title span:nth-child(2) { animation-delay: 0.12s; }
-.hero-title span:nth-child(3) { animation-delay: 0.24s; }
-@keyframes textReveal {
-  to { clip-path: inset(0 0 0 0); }
-}
+  <!-- Orb flutuante: border-radius morph + blur -->
+  <div class="hero-orb" style="position:absolute;right:10%;top:20%;width:clamp(180px,28vw,360px);aspect-ratio:1;
+    border-radius:30% 70% 70% 30%/30% 30% 70% 70%;
+    background:linear-gradient(135deg,var(--accent) 0%,transparent 60%);
+    opacity:0.1;filter:blur(50px);animation:orbFloat 9s ease-in-out infinite alternate;"></div>
 
-/* Floating decorative element — NÃO é um circle estático */
-.hero-orb {
-  position: absolute;
-  width: clamp(200px, 30vw, 400px);
-  height: clamp(200px, 30vw, 400px);
-  border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
-  background: linear-gradient(135deg, var(--accent) 0%, transparent 60%);
-  opacity: 0.12;
-  filter: blur(60px);
-  animation: orbFloat 8s ease-in-out infinite alternate;
-}
-@keyframes orbFloat {
-  0% { transform: translate(0, 0) rotate(0deg); border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%; }
-  100% { transform: translate(30px, -40px) rotate(15deg); border-radius: 50% 50% 30% 70% / 60% 40% 60% 40%; }
-}
-</code_snippet>
-</example>
+  <div style="position:relative;z-index:2;max-width:720px;margin:0 auto;padding:0 24px;text-align:center;">
+    <!-- Text reveal com clip-path staggered -->
+    <h1 class="hero-title" style="font-family:var(--font-heading);font-size:clamp(2.4rem,5.5vw,4rem);
+      font-weight:800;line-height:1.08;letter-spacing:-0.03em;color:var(--text);">
+      <span style="display:inline-block;clip-path:inset(100% 0 0 0);animation:textReveal .8s cubic-bezier(.16,1,.3,1) .2s forwards;">
+        Proteja o futuro
+      </span><br>
+      <span style="display:inline-block;clip-path:inset(100% 0 0 0);animation:textReveal .8s cubic-bezier(.16,1,.3,1) .35s forwards;">
+        do <em style="color:var(--accent);font-style:normal;">seu patrimônio</em>
+      </span>
+    </h1>
 
-<example type="card_premium" descricao="Card com borda gradient animada + inner glow + tilt 3D no hover">
-<code_snippet>
-.card {
-  position: relative;
-  background: var(--surface);
-  border-radius: 16px;
-  padding: 2rem;
-  overflow: hidden;
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
-}
-/* Borda gradient animada — NÃO é um border: 1px solid genérico */
-.card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  padding: 1px;
-  border-radius: inherit;
-  background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.03), rgba(255,255,255,0.08));
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-/* Inner spotlight que segue o mouse */
-.card::after {
-  content: '';
-  position: absolute;
-  width: 200px;
-  height: 200px;
-  background: radial-gradient(circle, var(--accent-alpha-10) 0%, transparent 70%);
-  border-radius: 50%;
-  transform: translate(var(--mouse-x, 50%), var(--mouse-y, 50%)) translate(-50%, -50%);
-  opacity: 0;
-  transition: opacity 0.4s;
-  pointer-events: none;
-}
-.card:hover { transform: translateY(-6px) scale(1.02); box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
-.card:hover::after { opacity: 1; }
-</code_snippet>
-</example>
+    <!-- CTA com shimmer + glow pulsante -->
+    <a href="#" class="cta-primary" style="display:inline-flex;align-items:center;gap:10px;margin-top:2rem;
+      padding:18px 36px;font-size:clamp(1rem,2vw,1.15rem);font-weight:700;color:#fff;
+      background:var(--accent);border:none;border-radius:14px;text-decoration:none;position:relative;overflow:hidden;
+      box-shadow:0 0 0 0 rgba(var(--accent-rgb),0.3),0 8px 32px rgba(0,0,0,0.2);
+      animation:ctaPulse 3s ease-in-out infinite;">
+      <!-- WhatsApp SVG inline, NÃO emoji -->
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.625.846 5.059 2.284 7.034L.789 23.492a.5.5 0 00.611.611l4.458-1.495A11.96 11.96 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22a9.94 9.94 0 01-5.39-1.582l-.386-.238-3.205 1.074 1.074-3.205-.238-.386A9.94 9.94 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+      Falar com especialista agora
+    </a>
+    <p style="margin-top:12px;font-size:13px;color:var(--text-muted);">Sem compromisso · Resposta em minutos</p>
+  </div>
+</section>
 
-<example type="cta_irresistivel" descricao="CTA com ripple effect + glow pulsante + micro-copy animado">
-<code_snippet>
-.cta-primary {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 18px 36px;
-  font-size: clamp(1rem, 2vw, 1.15rem);
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: #fff;
-  background: var(--accent);
-  border: none;
-  border-radius: 14px;
-  cursor: pointer;
-  overflow: hidden;
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
-  /* Glow pulsante — sutil, NÃO neon */
-  box-shadow:
-    0 0 0 0 var(--accent-alpha-30),
-    0 8px 32px rgba(0,0,0,0.2);
-  animation: ctaPulse 3s ease-in-out infinite;
-}
-@keyframes ctaPulse {
-  0%, 100% { box-shadow: 0 0 0 0 var(--accent-alpha-30), 0 8px 32px rgba(0,0,0,0.2); }
-  50% { box-shadow: 0 0 0 8px var(--accent-alpha-0), 0 12px 40px rgba(0,0,0,0.25); }
-}
-.cta-primary:hover {
-  transform: translateY(-2px) scale(1.04);
-  box-shadow: 0 0 0 0 var(--accent-alpha-0), 0 16px 48px rgba(0,0,0,0.3);
-}
-/* Shimmer sweep no texto */
-.cta-primary::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.15) 50%, transparent 60%);
-  transform: translateX(-100%);
-  animation: shimmer 4s ease-in-out infinite;
-}
-@keyframes shimmer { 0%,100% { transform: translateX(-100%); } 50% { transform: translateX(100%); } }
-</code_snippet>
-</example>
-
-<example type="scroll_animation_gsap" descricao="Setup GSAP+ScrollTrigger para reveal de seções">
-<code_snippet>
-/* Inclua no final do body: */
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-<script>
-gsap.registerPlugin(ScrollTrigger);
-// Respeita preferência do usuário
-if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-  // Reveal de seções com stagger
-  gsap.utils.toArray('section').forEach(section => {
-    const els = section.querySelectorAll('.reveal');
-    gsap.fromTo(els,
-      { y: 40, opacity: 0, filter: 'blur(4px)' },
-      { y: 0, opacity: 1, filter: 'blur(0px)', duration: 0.8,
-        stagger: 0.1, ease: 'power3.out',
-        scrollTrigger: { trigger: section, start: 'top 80%', once: true }
-      }
-    );
-  });
-  // Parallax sutil em elementos decorativos
-  gsap.utils.toArray('.parallax').forEach(el => {
-    gsap.to(el, {
-      y: -60, ease: 'none',
-      scrollTrigger: { trigger: el, start: 'top bottom', end: 'bottom top', scrub: 1.5 }
-    });
-  });
-  // Counter animado nos números de prova social
-  gsap.utils.toArray('.stat-number').forEach(el => {
-    const target = parseFloat(el.dataset.value);
-    gsap.fromTo(el, { textContent: 0 },
-      { textContent: target, duration: 1.8, ease: 'power2.out', snap: { textContent: target % 1 === 0 ? 1 : 0.1 },
-        scrollTrigger: { trigger: el, start: 'top 85%', once: true }
-      }
-    );
-  });
-}
-</script>
-</code_snippet>
-</example>
-
-</examples>
-"""
-
-ANTI_PATTERNS = """
-<anti_patterns>
-
-NÃO FAÇA — "AI SLOP" (design genérico de IA):
-╔═══════════════════════════════════════════════════════════════╗
-║  ❌ linear-gradient(135deg, #667eea, #764ba2)               ║
-║  ❌ background: #f5f5f5 (cinza genérico)                    ║
-║  ❌ font-family: Inter, Roboto, Arial, system-ui            ║
-║  ❌ border-radius: 8px em TUDO (monotonia)                  ║
-║  ❌ box-shadow: 0 2px 8px rgba(0,0,0,0.1) (sombra morta)   ║
-║  ❌ opacity: 0 → 1 como ÚNICA animação                     ║
-║  ❌ Cards todos iguais, simétricos, grid perfeito           ║
-║  ❌ Cores pastel sem personalidade (#e0e7ff, #f0fdf4)       ║
-║  ❌ "Welcome to X" / "About Us" / "Our Services"           ║
-║  ❌ Hero com imagem stock + overlay gradient                 ║
-║  ❌ Espaçamento uniforme entre TODAS as seções              ║
-║  ❌ @keyframes fadeIn { to { opacity: 1 } } como animação   ║
-╚═══════════════════════════════════════════════════════════════╝
-
-FAÇA ISTO — DESIGN REAL DE AGÊNCIA:
-╔═══════════════════════════════════════════════════════════════╗
-║  ✅ Gradient meshes com 3+ radial-gradients sobrepostos     ║
-║  ✅ Dark themes com profundidade (3+ tons de dark)          ║
-║  ✅ Google Fonts expressivas: Satoshi, Cabinet Grotesk,     ║
-║     Space Grotesk, Outfit, Syne, Unbounded, Plus Jakarta    ║
-║  ✅ border-radius VARIADO: 4px, 16px, 24px, 50% (proposit.)║
-║  ✅ Sombras em camadas: 2-3 box-shadows sobrepostas        ║
-║  ✅ clip-path reveals, translateY+blur combo, text split    ║
-║  ✅ Cards com tamanhos DIFERENTES, grid irregular           ║
-║  ✅ Cores com PERSONALIDADE: accent forte + neutrals deep   ║
-║  ✅ Headlines = benefício transformador, nunca descritivo   ║
-║  ✅ Hero com gradient mesh vivo OU tipografia oversized     ║
-║  ✅ Ritmo visual: seções densas alternando com respiros     ║
-║  ✅ GSAP ScrollTrigger: blur+y+opacity combo, parallax     ║
-║  ✅ Micro-interações: card spotlight, button ripple, glow   ║
-╚═══════════════════════════════════════════════════════════════╝
-
-</anti_patterns>
-"""
-
-MOTION_SPECS = """
-<motion_system>
-
-BIBLIOTECA: GSAP 3.12 + ScrollTrigger (CDN cloudflare)
-Scripts no final do <body>, APÓS todo o HTML.
-
-EASING CURVES (usar em TUDO):
-  - Entradas: cubic-bezier(0.16, 1, 0.3, 1) — "power3.out" no GSAP
-  - Saídas: cubic-bezier(0.7, 0, 0.84, 0) — "power3.in" no GSAP
-  - Hover: cubic-bezier(0.34, 1.56, 0.64, 1) — overshoot bounce
-  - NUNCA use "ease", "ease-in-out", ou "linear" sozinhos
-
-SCROLL ANIMATIONS (via GSAP ScrollTrigger):
-  1. Section reveal: y:40 + opacity:0 + filter:blur(4px) → y:0 + opacity:1 + blur:0
-     - stagger: 0.1s entre elementos filhos com classe .reveal
-     - trigger: 'top 80%', once: true
-  2. Parallax decorativo: elementos .parallax movem y:-60 com scrub:1.5
-  3. Counter animado: .stat-number com data-value="4.8" anima de 0 ao valor
-  4. Text split: headlines de seção com chars animados individualmente (opcional, alto impacto)
-
-CSS ANIMATIONS (carregam sem JS):
-  1. Hero text reveal: clip-path: inset(100% 0 0 0) → inset(0) com stagger via animation-delay
-  2. CTA glow: box-shadow pulsante 3s infinite com var(--accent) alpha
-  3. CTA shimmer: sweep de luz diagonal 4s infinite
-  4. Gradient mesh: transform scale + rotate suave 12s alternate
-  5. Floating orbs: translateY + border-radius morph 8s alternate
-  6. Navbar shadow: transição de box-shadow via classe .scrolled (IntersectionObserver mínimo)
-
-REGRA DE OURO: @media (prefers-reduced-motion: reduce) desliga TODAS as animações.
-
-IMPORTANTE — ORDEM NO HTML:
-  1. Todo o HTML semântico
-  2. <script src="gsap.min.js"> (CDN cloudflare)
-  3. <script src="ScrollTrigger.min.js"> (CDN cloudflare)
-  4. <script> inline com setup (max 40 linhas)
-
-</motion_system>
+<!-- Card com borda gradient animada + inner spotlight -->
+<div class="card" style="position:relative;background:var(--surface);border-radius:16px;padding:2rem;overflow:hidden;
+  transition:transform .4s cubic-bezier(.16,1,.3,1),box-shadow .4s ease;">
+  <!-- Borda gradient via mask composite -->
+  <div style="position:absolute;inset:0;padding:1px;border-radius:inherit;
+    background:linear-gradient(135deg,rgba(255,255,255,0.1),rgba(255,255,255,0.03),rgba(255,255,255,0.08));
+    -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+    -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;"></div>
+  <!-- Ícone SVG inline, NÃO emoji -->
+  <div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;
+    border-radius:12px;background:rgba(var(--accent-rgb),0.1);color:var(--accent);margin-bottom:1rem;">
+    {{icon:shield-check}}
+  </div>
+  <h3 style="font-family:var(--font-heading);font-size:1.15rem;font-weight:700;color:var(--text);margin-bottom:8px;">
+    Defesa preventiva completa
+  </h3>
+  <p style="font-size:0.9rem;color:var(--text-muted);line-height:1.6;">
+    Identificamos riscos antes que se tornem multas, protegendo suas operações com monitoramento contínuo.
+  </p>
+</div>
+</gold_standard_reference>
 """
 
 
-def _build_prompt_messages(
-    lead_data: dict,
-    niche: str,
-    theme: dict,
-    reviews_text: str,
-    gaps_text: str,
-    diagnostic_context: str,
-    phone_clean: str,
-    copy_fw: str,
-) -> tuple[str, list[dict]]:
+# ═══════════════════════════════════════════════════════════════════════════════
+# PASS 1 — Creative Brief
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _generate_creative_brief(lead_data: dict, niche: str, guide: dict, reviews_text: str, gaps_text: str, diagnostic_context: str) -> dict | None:
     """
-    Constrói system prompt e lista de mensagens (user + assistant prefill)
-    para gerar uma landing page de alta conversão.
+    Pass 1: Gera um creative brief estruturado em JSON.
+    Claude decide paleta, tipografia, copy e ícones.
+    """
+    copy_fw = _COPY_FRAMEWORKS.get(guide["copy_framework"], _COPY_FRAMEWORKS["PAS"])
 
-    Retorna (system_prompt, messages) onde messages inclui o prefill
-    "<!DOCTYPE html>" para forçar output direto em HTML.
+    system = f"""Você é um diretor criativo de agência digital brasileira com 15 anos de experiência.
+Sua tarefa: criar um BRIEF CRIATIVO completo para uma landing page de um negócio local.
+
+Retorne APENAS JSON válido. Nenhum texto antes ou depois. Sem markdown backticks.
+
+O JSON deve seguir EXATAMENTE esta estrutura:
+{{
+  "palette": {{
+    "bg": "#hex (tom mais escuro, background principal)",
+    "bg_deep": "#hex (ainda mais escuro que bg, para footer)",
+    "bg_soft": "#hex (levemente mais claro que bg, para seções alternadas)",
+    "surface": "#hex (cards, claramente diferente de bg)",
+    "accent": "#hex (cor de ação, CTAs, destaques)",
+    "accent_rgb": "r,g,b (mesma cor accent em RGB para alphas)"
+  }},
+  "typography": {{
+    "heading": "Nome da Google Font (NUNCA Inter, Roboto, Arial)",
+    "body": "Nome da Google Font complementar"
+  }},
+  "hero": {{
+    "headline": "≤10 palavras, benefício/transformação",
+    "subheadline": "1 frase complementar, max 20 palavras",
+    "cta_text": "CTA em 1ª pessoa, ex: Agendar minha consulta",
+    "micro_copy": "Sem compromisso · Resposta imediata",
+    "cta_secondary": "Texto do CTA secundário, ex: Conheça nossos serviços ↓"
+  }},
+  "sections": {{
+    "problems": [
+      {{"title": "...", "description": "1 frase", "icon": "nome-do-icone"}},
+      {{"title": "...", "description": "1 frase", "icon": "nome-do-icone"}},
+      {{"title": "...", "description": "1 frase", "icon": "nome-do-icone"}},
+      {{"title": "...", "description": "1 frase", "icon": "nome-do-icone"}}
+    ],
+    "solution_headline": "headline de benefício",
+    "solution_bullets": ["bullet 1 com bold", "bullet 2", "bullet 3"],
+    "services": [
+      {{"title": "...", "description": "1-2 frases de benefício", "icon": "nome-do-icone", "featured": true}},
+      {{"title": "...", "description": "...", "icon": "...", "featured": false}},
+      {{"title": "...", "description": "...", "icon": "...", "featured": false}},
+      {{"title": "...", "description": "...", "icon": "...", "featured": false}},
+      {{"title": "...", "description": "...", "icon": "...", "featured": false}}
+    ],
+    "steps": [
+      {{"title": "...", "description": "1 frase"}},
+      {{"title": "...", "description": "1 frase"}},
+      {{"title": "...", "description": "1 frase"}}
+    ],
+    "faq": [
+      {{"question": "pergunta real do nicho?", "answer": "resposta ≤50 palavras"}},
+      {{"question": "...", "answer": "..."}},
+      {{"question": "...", "answer": "..."}},
+      {{"question": "...", "answer": "..."}},
+      {{"question": "...", "answer": "..."}}
+    ],
+    "cta_final_headline": "headline com urgência contextual (NÃO falsa escassez)"
+  }},
+  "design_decisions": {{
+    "hero_variant": "split|centered|gradient (qual layout de hero)",
+    "grid_break": "descrição de onde quebrar simetria (ex: 1 card featured grande + 4 menores)",
+    "accent_usage": "como usar accent: só CTAs e destaques, ou também backgrounds?"
+  }}
+}}"""
+
+    user = f"""Negócio: {lead_data.get('nome', 'N/A')}
+Categoria: {niche}
+Cidade: {lead_data.get('cidade', '')}
+Nota Google: {lead_data.get('rating', '')} ({lead_data.get('reviews_count', '')} avaliações)
+Website atual: {lead_data.get('website', 'NÃO TEM')}
+
+Avaliações reais:
+{reviews_text or 'Nenhuma disponível — NÃO invente depoimentos.'}
+
+Problemas do site atual:
+{gaps_text or 'Sem análise'}
+
+{diagnostic_context}
+
+Direção do nicho:
+- Mood: {guide['mood']}
+- Cores: {guide['color_direction']}
+- Tipografia: {guide['typography_direction']}
+- Metáforas visuais: {guide['visual_metaphors']}
+- Framework de copy: {copy_fw}
+
+Ícones SVG disponíveis (usar APENAS estes nomes):
+{', '.join(sorted(SVG_ICONS.keys()))}
+
+Ícones sugeridos para este nicho: {', '.join(guide['icon_suggestions'])}
+
+REGRAS CRÍTICAS:
+- Headlines = BENEFÍCIO/TRANSFORMAÇÃO, nunca descritivas ("Nossos Serviços" é PROIBIDO)
+- CTAs em 1ª pessoa: "Agendar MINHA consulta", nunca "Saiba mais"
+- Cores com PERSONALIDADE: não use verde-menta #34d399 genérico
+- A paleta deve ter pelo menos 4 tons de dark para profundidade
+- As fontes devem ter PERSONALIDADE e ser específicas para este negócio"""
+
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": settings.anthropic_api_key,
+        "anthropic-version": "2023-06-01",
+    }
+
+    try:
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers=headers,
+            json={
+                "model": settings.claude_model,
+                "max_tokens": 3000,
+                "temperature": 0.85,
+                "system": system,
+                "messages": [{"role": "user", "content": user}],
+            },
+            timeout=60,
+        )
+        resp.raise_for_status()
+        raw = resp.json()["content"][0]["text"].strip()
+
+        # Limpar possíveis backticks
+        raw = re.sub(r"^```\w*\n?", "", raw)
+        raw = re.sub(r"\n?```$", "", raw)
+
+        return json.loads(raw)
+
+    except Exception:
+        logger.exception("Pass 1 falhou para %s", lead_data.get("nome", "?"))
+        return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PASS 2 — HTML Generation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _generate_html(lead_data: dict, niche: str, brief: dict, phone_clean: str, reviews_text: str) -> str:
+    """
+    Pass 2: Gera HTML completo usando o creative brief como fundação.
+    System prompt enxuto. Brief como contexto estruturado.
     """
 
-    system_prompt = f"""<role>
-Você é o VITOR — um design engineer de elite que trabalha na interseção de
-brand design, motion design e engenharia frontend. Você tem 12 anos de experiência
-criando landing pages que convertem para negócios locais brasileiros.
+    # Serializar ícones disponíveis pro modelo usar
+    icons_block = "\n".join(
+        f'  "{name}": \'{svg}\'' for name, svg in SVG_ICONS.items()
+    )
 
-Seu trabalho é reconhecido por:
-- NUNCA parecer "feito por IA" — cada LP tem personalidade única e memorável
-- Motion design cinematográfico com GSAP ScrollTrigger (scroll reveals, parallax, counters animados)
-- Tipografia expressiva com Google Fonts que ninguém mais usa
-- Dark themes com profundidade real (3-4 tons, não flat)
-- Layouts que quebram a previsibilidade (assimetria intencional, grid breaking, overlaps)
-- Micro-interações que encantam (card spotlight, button shimmer, gradient morphing)
-- Código production-ready: semântico, acessível, performático
-
-Suas ferramentas:
-- HTML5 semântico + CSS moderno (container queries, has(), nesting)
-- GSAP 3.12 + ScrollTrigger para scroll animations
-- Google Fonts (NUNCA Inter, Roboto, Arial)
-- SVG inline para ícones e formas
-- CSS Houdini-inspired techniques (gradient meshes, morphing shapes)
+    system = f"""<role>
+Você é VITOR — design engineer de elite, 12 anos criando LPs premium para negócios brasileiros.
+Seu código é reconhecido por nunca parecer "feito por IA".
 </role>
 
-<filosofia_design>
-PRINCÍPIO #1 — ANTI-SLOP:
-Todo elemento deve justificar sua existência. Se parece genérico, reescreva.
-Se outra IA geraria igual, mude. O teste: um designer humano olharia e diria "isso é bom".
+<regras>
+1. Continue DIRETO do DOCTYPE fornecido. ZERO texto antes ou depois do HTML.
+2. Use APENAS os SVG icons fornecidos na biblioteca — ZERO emojis como ícones.
+3. Cada ícone deve estar dentro de um container estilizado (background accent alpha, border-radius, padding).
+4. NUNCA invente depoimentos. Use APENAS reviews reais ou omita a seção.
+5. NUNCA use Inter, Roboto, Arial, system-ui como fonte.
+6. TODA animação respeita prefers-reduced-motion.
+7. GSAP + ScrollTrigger via CDN cloudflare no final do body. Max 40 linhas JS.
+8. Links: APENAS wa.me, âncoras internas, tel:, Google Fonts.
+9. Ícones: SVG inline da biblioteca. PROIBIDO emojis, FontAwesome, CDN de ícones.
+10. PROIBIDO imagens externas — gradientes, SVG, formas CSS apenas.
+11. Cards devem ter borda gradient via mask-composite + inner spotlight hover.
+12. Grid de serviços: 1 card featured (span 2 cols ou maior) + cards menores = ASSIMETRIA.
+13. Pelo menos 1 seção com layout assimétrico ou grid irregular.
+14. 4+ tons de escuro no background system (--bg, --bg-deep, --bg-soft, --surface).
+15. CTA com shimmer sweep + glow pulsante (não estático).
+</regras>
 
-PRINCÍPIO #2 — MOTION COM PROPÓSITO:
-Animação não é decoração, é storytelling. Cada animação guia o olho,
-revela informação progressivamente, ou cria sensação de premium.
+<icon_library>
+Copie EXATAMENTE o SVG correspondente ao nome. Disponíveis:
+{icons_block}
+</icon_library>
 
-PRINCÍPIO #3 — DARK ≠ ESCURO:
-Dark themes têm PROFUNDIDADE. Mínimo 4 tons de escuro no background system.
-Surface cards flutuam SOBRE o background, não se fundem nele.
+{GOLD_STANDARD}"""
 
-PRINCÍPIO #4 — OBJETIVO ÚNICO:
-A LP tem UM destino: WhatsApp. Sem escape routes. Sem links externos.
-Sem distrações. Cada pixel empurra para o CTA.
-</filosofia_design>
+    # Formatar brief como contexto estruturado
+    brief_json = json.dumps(brief, ensure_ascii=False, indent=2)
 
-<regras_absolutas>
-1. JAMAIS gere texto antes do HTML. Continue DIRETO do DOCTYPE fornecido.
-2. NUNCA invente depoimentos. Use APENAS reviews reais fornecidos ou omita.
-3. NUNCA use Inter, Roboto, Arial, system-ui, sans-serif genérico como fonte.
-4. NUNCA use gradientes roxo-azul genéricos (#667eea → #764ba2).
-5. TODA animação respeita prefers-reduced-motion.
-6. O hero DEVE ter CTA visível above the fold com WhatsApp link.
-7. Cada <section> TEM id para navegação por âncoras.
-8. Links: APENAS wa.me, âncoras internas (#xxx), tel:, Google Fonts. NADA MAIS.
-9. GSAP carrega via CDN cloudflare no final do body. Max 40 linhas de JS.
-10. Código LIMPO: sem comentários óbvios, sem CSS redundante, sem divs wrapper desnecessários.
-</regras_absolutas>
+    user = f"""Gere a LP completa para:
 
-{DESIGN_EXAMPLES}
+<negocio>
+  Nome: {lead_data.get('nome', 'N/A')}
+  Categoria: {niche}
+  Endereço: {lead_data.get('endereco', '')}
+  Telefone: {lead_data.get('telefone', '')}
+  WhatsApp: https://wa.me/{phone_clean}
+  Nota: {lead_data.get('rating', '')} ({lead_data.get('reviews_count', '')} avaliações)
+</negocio>
 
-{ANTI_PATTERNS}
-
-{MOTION_SPECS}"""
-
-    user_prompt = f"""Crie a landing page completa para o negócio abaixo.
-
-<dados_negocio>
-  <nome>{lead_data.get('nome', 'N/A')}</nome>
-  <categoria>{niche}</categoria>
-  <endereco>{lead_data.get('endereco', '')}</endereco>
-  <telefone>{lead_data.get('telefone', '')}</telefone>
-  <whatsapp_link>https://wa.me/{phone_clean}</whatsapp_link>
-  <nota_google>{lead_data.get('rating', '')}</nota_google>
-  <total_avaliacoes>{lead_data.get('reviews_count', '')}</total_avaliacoes>
-  <website_atual>{lead_data.get('website', 'NÃO TEM')}</website_atual>
-</dados_negocio>
+<creative_brief>
+{brief_json}
+</creative_brief>
 
 <avaliacoes_reais>
-{reviews_text or 'Nenhuma disponível — use APENAS nota e número como proof. NÃO invente depoimentos.'}
+{reviews_text or 'Nenhuma — NÃO invente. Use nota/número como social proof.'}
 </avaliacoes_reais>
 
-<problemas_site_atual>
-{gaps_text or 'Sem análise disponível'}
-</problemas_site_atual>
+<banner>
+  Texto: "Preview criada por {settings.business_name} — {settings.your_website}"
+  Fino (28-32px), background accent, z-index acima da navbar.
+</banner>
 
-<contexto_diagnostico>
-{diagnostic_context}
-</contexto_diagnostico>
+<footer_credito>
+  "© 2025 {lead_data.get('nome', '')} · Site por {settings.business_name}"
+</footer_credito>
 
-<design_tokens>
-  <estilo>{theme["style"]}</estilo>
-  <bg>{theme["bg"]}</bg>
-  <surface>{theme["surface"]}</surface>
-  <accent>{theme["accent"]}</accent>
-  <tom>{theme["tone"]}</tom>
-  <heading_font>{theme["heading_font"]}</heading_font>
-  <body_font>{theme["body_font"]}</body_font>
-  <hero_variant>{theme["hero_variant"]}</hero_variant>
-  <copy_framework>{theme["copy_framework"]}</copy_framework>
-</design_tokens>
-
-<copy_framework_detalhado>
-{copy_fw}
-Aplique este framework em TODA a LP, não apenas no hero.
-</copy_framework_detalhado>
-
-<banner_info>
-  <business_name>{settings.business_name}</business_name>
-  <website>{settings.your_website}</website>
-  <cidade>{lead_data.get('cidade', 'sua cidade')}</cidade>
-</banner_info>
-
-<processo_criativo>
-Antes de escrever código, tome estas decisões mentalmente (NÃO inclua no output):
-
-PASSO 1 — IDENTIDADE: Qual a personalidade visual deste negócio?
-  - Um restaurante sofisticado ≠ uma clínica odontológica ≠ uma academia
-  - Que EMOÇÃO o visitante deve sentir? Confiança? Desejo? Urgência? Acolhimento?
-
-PASSO 2 — TIPOGRAFIA: Escolha 2 fontes do Google Fonts que NÃO sejam Inter/Roboto/Arial.
-  - Heading: expressiva, com personalidade (Satoshi, Cabinet Grotesk, Syne, Outfit, Space Grotesk, Unbounded, Plus Jakarta Sans, Clash Display, General Sans)
-  - Body: legível, complementar (DM Sans, Manrope, Figtree, Geist, Onest)
-  - O PAR deve criar tensão harmoniosa — não duas fontes iguais
-
-PASSO 3 — PALETA: Monte o color system completo:
-  - --bg: tom mais escuro (background principal)
-  - --bg-deep: 1 tom mais escuro que bg (footer, seções alternadas)
-  - --bg-soft: 1 tom mais claro que bg (variação de seções)
-  - --surface: card/modal background (claramente diferente de bg)
-  - --accent: cor de ação (CTAs, destaques, links)
-  - --accent-soft: accent com 10-15% opacity (hover states, glows)
-  - --text: rgba(255,255,255,0.92)
-  - --text-muted: rgba(255,255,255,0.55)
-  - --border: rgba(255,255,255,0.06)
-
-PASSO 4 — HERO IMPACT: O hero é a primeira impressão.
-  - Qual headline comunica a TRANSFORMAÇÃO em ≤10 palavras?
-  - Que elemento visual diferencia: gradient mesh? tipografia oversized? forma orgânica?
-  - O CTA está GRANDE e IMPOSSÍVEL de ignorar?
-
-PASSO 5 — MOTION PLAN: Quais animações vão guiar o storytelling?
-  - Hero: text reveal com clip-path + orb flutuante + gradient shift
-  - Scroll: GSAP reveals com blur+y combo, parallax em elementos decorativos
-  - Interação: card spotlight (mouse follow), CTA shimmer, hover lifts
-  - Counters: números de prova social animados quando entram na viewport
-
-PASSO 6 — LAYOUT BREAKING: Onde vou quebrar a previsibilidade?
-  - Pelo menos 1 seção com layout assimétrico (grid irregular ou offset)
-  - Cards com tamanhos diferentes (1 featured + 2 menores)
-  - Overlap intencional de pelo menos 1 elemento entre seções
-  - Espaçamento RITMADO: seções densas → respiro → densa → respiro
-
-PASSO 7 — VERIFICAÇÃO ANTI-SLOP:
-  - Remova QUALQUER coisa que outra IA geraria igual
-  - As fontes são expressivas? (não Inter/Roboto)
-  - As cores têm personalidade? (não pastel genérico)
-  - As animações são cinematográficas? (não fade-in básico)
-  - Os cards têm micro-interação? (não hover:scale(1.05) morto)
-  - A LP parece feita por uma AGÊNCIA, não por um template?
-</processo_criativo>
-
-<secoes_obrigatorias>
-
-Cada seção DEVE ter id para funcionar com a navbar de âncoras.
-Adicione classe "reveal" nos elementos que devem animar com GSAP.
-
-1. BANNER TOPO (não é seção):
-   - Fino (28-32px), background accent, z-index acima da navbar
-   - "Preview criada por {settings.business_name} — {settings.your_website}"
-   - font-size: 11-12px, centralizado
-
-2. NAVBAR (sticky, backdrop-filter: blur(16px)):
-   - Desktop: logo/nome esquerda → links âncora centro → CTA WhatsApp direita
-   - Mobile: nome + CTA compacto. SEM hamburger.
-   - Shadow on scroll via IntersectionObserver mínimo
-   - Links: "Serviços", "Como Funciona", "Depoimentos", "FAQ"
-
-3. HERO (id="inicio", min-height: 100svh):
-   - H1: benefício/transformação ≤10 palavras. Framework: {theme["copy_framework"]}
-   - Sub-headline: 1 frase complementar (max 20 palavras)
-   - CTA primário: "Agendar pelo WhatsApp" → wa.me/{phone_clean}
-     - Ícone WhatsApp SVG inline, glow pulsante, shimmer sweep
-   - Micro-copy: "Sem compromisso · Resposta imediata"
-   - CTA secundário sutil: "Conheça nossos serviços ↓" → #servicos
-   - Proof: "{lead_data.get('rating', '')}★ · {lead_data.get('reviews_count', '')} avaliações"
-   - Visual: gradient mesh animado + orb flutuante + formas decorativas
-   - ANIMAÇÃO: text reveal clip-path staggered, orb float, gradient shift
-
-4. BARRA DE CONFIANÇA:
-   - 3-4 stats em row (nota Google, anos, clientes atendidos, etc.)
-   - Números com classe .stat-number + data-value para counter animado GSAP
-   - Scroll horizontal suave no mobile
-
-5. PROBLEMA (id="problema"):
-   - "Você já passou por isso?" — headline empática
-   - 3-4 dores ESPECÍFICAS do nicho em cards ou lista com ícones
-   - Linguagem emocional, identificável. Tom: "isso sou eu"
-   - NUNCA mencione o negócio nesta seção
-
-6. SOLUÇÃO (id="solucao"):
-   - Transição: "E se existisse um lugar onde..."
-   - {lead_data.get('nome', '')} como resposta para cada dor
-   - 2-3 bullets com bold + descrição
-   - Mini CTA: "Conheça nossos serviços ↓"
-
-7. SERVIÇOS (id="servicos"):
-   - Headline = benefício, NÃO "Nossos Serviços"
-   - 4-6 cards em grid responsivo (layout IRREGULAR: 1 featured grande + menores)
-   - Cada card: ícone SVG/emoji + título bold + 1-2 linhas benefício
-   - Cards com: borda gradient, inner spotlight (mouse follow via CSS var), hover lift
-
-8. COMO FUNCIONA (id="como-funciona"):
-   - 3 steps em timeline visual
-   - Número grande (accent, 48-64px) + título + 1 frase
-   - Linha ou path SVG conectando steps
-   - Desktop: horizontal. Mobile: vertical
-
-   CTA MID-PAGE (após "Como Funciona"):
-   - "Pronto para começar?" + botão WhatsApp + micro-copy com cidade
-
-9. DEPOIMENTOS (id="depoimentos"):
-   - COM reviews reais: cards com aspas decorativas (accent), texto, nome/iniciais
-   - SEM reviews: "Reconhecido no Google" com nota 72-96px + estrelas + total avaliações
-   - NUNCA invente depoimentos fictícios
-   - Layout: carousel overflow-x no mobile, grid no desktop
-
-10. FAQ (id="faq"):
-    - 5-6 perguntas via <details>/<summary>
-    - Summary estilizado: cursor pointer, padding, seta que rotaciona via CSS
-    - Respostas ≤50 palavras
-    - Perguntas REAIS do nicho
-
-11. CTA FINAL (id="contato"):
-    - Background accent/gradient
-    - Headline com urgência contextual (NÃO falsa escassez)
-    - Botão WhatsApp GRANDE invertido
-    - Proof: cidade + "Resposta em minutos" + "Sem compromisso"
-
-12. FOOTER:
-    - Background --bg-deep (mais escuro que bg principal)
-    - Endereço, tel: link, horários estimados
-    - Copyright: "© 2025 {lead_data.get('nome', '')} · Site por {settings.business_name}"
-    - ZERO links externos
-
-CTA FLUTUANTE MOBILE (fora das seções):
-  - position: fixed, bottom: 0, width: 100%, z-index: 99
-  - "Agendar pelo WhatsApp" + ícone WhatsApp SVG
-  - Background accent, padding 16px, safe-area-inset-bottom
-  - box-shadow: 0 -4px 20px rgba(0,0,0,0.3)
-  - VISÍVEL apenas em max-width: 768px
-
-</secoes_obrigatorias>
-
-<copywriting_rules>
-- Headlines = BENEFÍCIO/TRANSFORMAÇÃO, nunca descritivas
-- PROIBIDO: "Bem-vindo", "Conheça", "Sobre nós", "Nossos serviços" como headlines
-- CTAs em primeira pessoa: "Agendar MINHA consulta", "Garantir MINHA vaga"
-- NUNCA: "Saiba mais", "Clique aqui", "Entre em contato", "Submit"
-- Micro-copy ABAIXO de cada CTA sem exceção
-- Parágrafos: máximo 3 linhas. Prefira bullets a blocos.
-- Bold nos termos-chave para scannability
-- PROIBIDO superlativos vazios: "revolucionário", "o melhor", "líder de mercado"
-- Português brasileiro natural — coloquial mas profissional
-- Cada H2 comunica benefício, não nomeia seção
-</copywriting_rules>
+<estrutura_obrigatoria>
+1. BANNER TOPO (preview {settings.business_name})
+2. NAVBAR (sticky, blur, links âncora: Serviços, Como Funciona, Avaliações, FAQ + CTA WhatsApp)
+3. HERO (id="inicio", 100svh, gradient mesh, text reveal clip-path, CTA com shimmer+glow, orb flutuante)
+4. BARRA DE CONFIANÇA (stats com .stat-number + data-value para counter GSAP)
+5. PROBLEMA (id="problema", dores do cliente, cards com ícones SVG)
+6. SOLUÇÃO (id="solucao", negócio como resposta)
+7. SERVIÇOS (id="servicos", grid IRREGULAR: 1 featured + menores, ícones SVG, borda gradient, spotlight hover)
+8. COMO FUNCIONA (id="como-funciona", 3 steps timeline, números grandes accent)
+9. CTA MID-PAGE (WhatsApp + micro-copy)
+10. DEPOIMENTOS (id="depoimentos", reviews reais OU nota grande + estrelas)
+11. FAQ (id="faq", <details>/<summary>, 5 perguntas, seta CSS animada)
+12. CTA FINAL (id="contato", background accent/gradient, botão grande invertido)
+13. FOOTER (--bg-deep, endereço, tel, copyright)
+14. CTA FLUTUANTE MOBILE (fixed bottom, só max-width:768px)
+</estrutura_obrigatoria>
 
 <requisitos_tecnicos>
-- <!DOCTYPE html>, <html lang="pt-BR">, meta viewport + charset + title
-- Semantic HTML: header, nav, main, section[id], footer
-- CSS em <style> no <head>. ZERO CSS externo (exceto Google Fonts)
-- Google Fonts via <link> no <head> com display=swap
+- DOCTYPE, lang="pt-BR", meta viewport/charset/title
+- Google Fonts via <link> display=swap — USAR as fontes do brief
+- CSS em <style> no head. CSS Variables: --bg, --bg-deep, --bg-soft, --surface, --accent, --accent-rgb, --text, --text-muted, --border, --font-heading, --font-body
 - html {{ scroll-behavior: smooth }}
-- Ícones: emojis ou SVG inline. PROIBIDO FontAwesome ou CDN de ícones
-- PROIBIDO imagens externas — use gradientes, SVG, formas CSS, emojis
-- GSAP + ScrollTrigger via CDN cloudflare no FINAL do body
-- JS inline max 40 linhas (GSAP setup + navbar scroll)
-- Accessibility: contrast WCAG AA, focus-visible, aria-hidden em SVGs decorativos
-- Meta title (50-60 chars): nome + cidade + nicho
-- Meta description (150-160 chars): benefício + CTA
-- padding-bottom no body: 80px no mobile para CTA flutuante
-- PROIBIDO: animações com mais de 4 properties simultâneas (performance)
-- PROIBIDO: filter: blur() em elementos visíveis durante scroll (jank)
+- GSAP 3.12 + ScrollTrigger CDN cloudflare no final do body
+- Section reveals: y:40 + opacity:0 + blur:4px → limpo, stagger .1s, once:true
+- Parallax em elementos decorativos: y:-60, scrub:1.5
+- Counter animado: .stat-number[data-value] anima de 0 ao valor
+- Navbar scroll shadow via classe .scrolled
+- @media (prefers-reduced-motion: reduce) desliga tudo
+- padding-bottom body 80px mobile para CTA flutuante
+- Meta title ≤60 chars, meta description ≤160 chars
 </requisitos_tecnicos>
 
-Gere o HTML completo agora. Continue DIRETO do DOCTYPE já fornecido, sem texto antes ou depois."""
+Gere o HTML completo agora."""
 
     messages = [
-        {"role": "user", "content": user_prompt},
+        {"role": "user", "content": user},
         {"role": "assistant", "content": "<!DOCTYPE html>"},
     ]
 
-    return system_prompt, messages
+    try:
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": settings.anthropic_api_key,
+                "anthropic-version": "2023-06-01",
+            },
+            json={
+                "model": settings.claude_model,
+                "max_tokens": 16000,
+                "temperature": 0.7,
+                "system": system,
+                "messages": messages,
+            },
+            timeout=240,
+        )
+        resp.raise_for_status()
+        html = resp.json()["content"][0]["text"].strip()
 
+        if html.startswith("```"):
+            html = re.sub(r"^```\w*\n?", "", html)
+            html = re.sub(r"\n?```$", "", html)
+
+        return "<!DOCTYPE html>" + html
+
+    except Exception:
+        logger.exception("Pass 2 falhou para %s", lead_data.get("nome", "?"))
+        return ""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MAIN — Orquestra os 2 passes
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def generate_landing_page(lead_data: dict) -> str:
     """
-    Gera HTML completo de uma landing page personalizada pro negócio do lead.
-    Usa Claude API com system/user/prefill separation para output de alta qualidade.
-    Retorna o HTML completo ou string vazia em caso de falha.
+    Gera HTML completo de uma landing page personalizada em 2 passes:
+    1. Creative Brief (copy, cores, ícones, layout)
+    2. HTML completo a partir do brief
+
+    Retorna HTML ou string vazia em caso de falha.
     """
+    # ── Preparar dados ──
     reviews_text = ""
     if lead_data.get("top_reviews"):
         reviews_text = "\n".join(f'- "{r}"' for r in lead_data["top_reviews"][:5])
@@ -729,77 +619,67 @@ def generate_landing_page(lead_data: dict) -> str:
         gaps_text = "\n".join(f"- {r}" for r in lead_data["opportunity_reasons"])
 
     phone_clean = (lead_data.get("telefone") or "").replace("+", "").replace("-", "").replace(" ", "")
-    niche = lead_data.get('categoria', lead_data.get('nicho', ''))
-    theme = _get_theme_for_niche(niche)
-    copy_fw = _COPY_FRAMEWORKS[theme["copy_framework"]]
+    niche = lead_data.get("categoria", lead_data.get("nicho", ""))
+    guide = _get_niche_guide(niche)
 
+    # Contexto de diagnóstico
     diagnostic_context = ""
     diag = lead_data.get("site_analysis", {}).get("diagnostico_marketing")
     if diag:
-        resumo = diag.get('resumo_executivo') or diag.get('diagnostico_resumo', '')
-        momento = diag.get('momento_funil') or diag.get('funil_predominante', '')
-        prioridades = diag.get('prioridades_top3') or diag.get('proximos_passos', [])
-        pot = diag.get('potencial_ia_automacao', {})
-        justificativa = pot.get('justificativa', '') if isinstance(pot, dict) else ''
-        justificativa = justificativa or diag.get('justificativa_qualificacao', '')
+        resumo = diag.get("resumo_executivo") or diag.get("diagnostico_resumo", "")
+        momento = diag.get("momento_funil") or diag.get("funil_predominante", "")
+        prioridades = diag.get("prioridades_top3") or diag.get("proximos_passos", [])
+        pot = diag.get("potencial_ia_automacao", {})
+        justificativa = pot.get("justificativa", "") if isinstance(pot, dict) else ""
+        justificativa = justificativa or diag.get("justificativa_qualificacao", "")
 
-        diagnostic_context = f"""
-DIAGNÓSTICO DE MARKETING DO NEGÓCIO:
+        diagnostic_context = f"""Diagnóstico de marketing:
 - Resumo: {resumo}
-- Momento no funil: {momento}
-- Prioridades: {', '.join(prioridades)}
+- Momento funil: {momento}
+- Prioridades: {', '.join(prioridades) if prioridades else 'N/A'}
 - Potencial IA: {justificativa}
+Ajuste tom conforme momento: descoberta→educativa, atração→diferenciação, ação→CTA direto."""
 
-Ajuste o tom e foco da LP conforme o momento:
-- descoberta → LP mais educativa, explique quem é o negócio e por que confiar
-- atracao/consideracao → LP focada em diferenciação e prova social
-- acao → LP direta, CTA forte e urgência"""
-
-    system_prompt, messages = _build_prompt_messages(
+    # ── Pass 1: Creative Brief ──
+    logger.info("Pass 1: Gerando creative brief para %s", lead_data.get("nome", "?"))
+    brief = _generate_creative_brief(
         lead_data=lead_data,
         niche=niche,
-        theme=theme,
+        guide=guide,
         reviews_text=reviews_text,
         gaps_text=gaps_text,
         diagnostic_context=diagnostic_context,
-        phone_clean=phone_clean,
-        copy_fw=copy_fw,
     )
 
-    headers = {
-        "Content-Type": "application/json",
-        "x-api-key": settings.anthropic_api_key,
-        "anthropic-version": "2023-06-01",
-    }
-
-    payload = {
-        "model": settings.claude_model,
-        "max_tokens": 12000,
-        "system": system_prompt,
-        "messages": messages,
-    }
-
-    try:
-        resp = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers=headers,
-            json=payload,
-            timeout=180,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-        html = data["content"][0]["text"].strip()
-
-        if html.startswith("```"):
-            html = re.sub(r"^```\w*\n?", "", html)
-            html = re.sub(r"\n?```$", "", html)
-
-        # Prepend o prefill que o modelo continuou
-        html = "<!DOCTYPE html>" + html
-
-        return html
-
-    except Exception:
-        logger.exception("Falha ao gerar LP para %s", lead_data.get("nome", "?"))
+    if not brief:
+        logger.error("Creative brief falhou — abortando geração")
         return ""
+
+    logger.info("Pass 1 OK. Paleta: %s | Fonts: %s + %s",
+                brief.get("palette", {}).get("accent", "?"),
+                brief.get("typography", {}).get("heading", "?"),
+                brief.get("typography", {}).get("body", "?"))
+
+    # ── Pass 2: HTML ──
+    logger.info("Pass 2: Gerando HTML para %s", lead_data.get("nome", "?"))
+    html = _generate_html(
+        lead_data=lead_data,
+        niche=niche,
+        brief=brief,
+        phone_clean=phone_clean,
+        reviews_text=reviews_text,
+    )
+
+    if not html:
+        logger.error("HTML generation falhou para %s", lead_data.get("nome", "?"))
+        return ""
+
+    # ── Post-processing: substituir placeholders de ícone por SVG real ──
+    def _replace_icon(match):
+        name = match.group(1).strip()
+        return SVG_ICONS.get(name, f'<!-- icon "{name}" not found -->')
+
+    html = re.sub(r'\{\{icon:([^}]+)\}\}', _replace_icon, html)
+
+    logger.info("LP gerada com sucesso para %s (%d chars)", lead_data.get("nome", "?"), len(html))
+    return html
