@@ -439,7 +439,20 @@ REGRAS CRÍTICAS:
             timeout=60,
         )
         resp.raise_for_status()
-        raw = resp.json()["choices"][0]["message"]["content"].strip()
+        data = resp.json()
+        logger.debug("Pass 1 raw response keys: %s", list(data.keys()))
+
+        # Extrair conteúdo — suporta formato OpenAI e Anthropic
+        raw = ""
+        if "choices" in data:
+            raw = (data["choices"][0].get("message", {}).get("content", "") or "").strip()
+        elif "content" in data:
+            raw = (data["content"][0].get("text", "") or "").strip()
+
+        if not raw:
+            logger.error("Pass 1: resposta vazia da API para %s. Response: %s",
+                         lead_data.get("nome", "?"), json.dumps(data, ensure_ascii=False)[:500])
+            return None
 
         # Limpar possíveis backticks
         raw = re.sub(r"^```\w*\n?", "", raw)
@@ -447,6 +460,10 @@ REGRAS CRÍTICAS:
 
         return json.loads(raw)
 
+    except json.JSONDecodeError:
+        logger.error("Pass 1: JSON inválido para %s. Raw (500 chars): %s",
+                     lead_data.get("nome", "?"), raw[:500] if raw else "(vazio)")
+        return None
     except Exception:
         logger.exception("Pass 1 falhou para %s", lead_data.get("nome", "?"))
         return None
@@ -598,7 +615,19 @@ Gere o HTML completo agora."""
             timeout=240,
         )
         resp.raise_for_status()
-        html = resp.json()["choices"][0]["message"]["content"].strip()
+        data = resp.json()
+
+        # Extrair conteúdo — suporta formato OpenAI e Anthropic
+        html = ""
+        if "choices" in data:
+            html = (data["choices"][0].get("message", {}).get("content", "") or "").strip()
+        elif "content" in data:
+            html = (data["content"][0].get("text", "") or "").strip()
+
+        if not html:
+            logger.error("Pass 2: resposta vazia da API para %s. Response keys: %s",
+                         lead_data.get("nome", "?"), list(data.keys()))
+            return ""
 
         if html.startswith("```"):
             html = re.sub(r"^```\w*\n?", "", html)
