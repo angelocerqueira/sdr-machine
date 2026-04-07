@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -17,6 +18,16 @@ def setup_db():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def _bypass_auth():
+    """Bypass AuthMiddleware for all existing tests so they don't need a session cookie."""
+    async def _passthrough(self, request, call_next):
+        return await call_next(request)
+
+    with patch("app.middleware.auth.AuthMiddleware.dispatch", _passthrough):
+        yield
 
 
 @pytest.fixture

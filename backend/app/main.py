@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings as app_settings
+from app.middleware import AuthMiddleware
 from app.routers import dashboard, leads, pipeline, settings
 
 app = FastAPI(title="SDR Machine API", version="1.0.0")
@@ -16,6 +17,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+app.add_middleware(
+    AuthMiddleware,
+    database_url=app_settings.database_url,
+    public_paths=["/api/health", "/api/leads/p/", "/docs", "/openapi.json"],
 )
 
 app.include_router(leads.router)
