@@ -34,7 +34,7 @@ def _generate_ai_message(lead_data: dict, lp_url: str, msg_type: str) -> str | N
     Gera mensagem via Claude API baseada no diagnóstico.
     Retorna None se a API falhar (fallback pra template).
     """
-    if not settings.anthropic_api_key:
+    if not settings.llm_api_key:
         return None
 
     diag = _get_diagnostic(lead_data)
@@ -128,11 +128,10 @@ Retorne APENAS o texto da mensagem."""
     else:
         return None
 
-    model = settings.diagnostic_model or settings.claude_model
+    model = settings.diagnostic_model or settings.llm_model
     headers = {
         "Content-Type": "application/json",
-        "x-api-key": settings.anthropic_api_key,
-        "anthropic-version": "2023-06-01",
+        "Authorization": f"Bearer {settings.llm_api_key}",
     }
     payload = {
         "model": model,
@@ -142,14 +141,14 @@ Retorne APENAS o texto da mensagem."""
 
     try:
         resp = requests.post(
-            "https://api.anthropic.com/v1/messages",
+            f"{settings.llm_base_url}/chat/completions",
             headers=headers,
             json=payload,
             timeout=30,
         )
         resp.raise_for_status()
         data = resp.json()
-        text = data["content"][0]["text"].strip()
+        text = data["choices"][0]["message"]["content"].strip()
         # Remove aspas se a resposta vier envolvida
         if text.startswith('"') and text.endswith('"'):
             text = text[1:-1]

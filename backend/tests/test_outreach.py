@@ -105,36 +105,37 @@ class TestGetDiagnostic:
 class TestGenerateAiMessage:
     @patch("app.pipeline.outreach.settings")
     def test_returns_none_without_api_key(self, mock_settings):
-        mock_settings.anthropic_api_key = ""
+        mock_settings.llm_api_key = ""
         result = _generate_ai_message(SAMPLE_LEAD_DATA, "http://lp.url", "initial")
         assert result is None
 
     @patch("app.pipeline.outreach.settings")
     def test_returns_none_without_diagnostic(self, mock_settings):
-        mock_settings.anthropic_api_key = "test-key"
+        mock_settings.llm_api_key = "test-key"
         result = _generate_ai_message(SAMPLE_LEAD_DATA_NO_DIAG, "http://lp.url", "initial")
         assert result is None
 
     @patch("app.pipeline.outreach.settings")
     def test_returns_none_for_unknown_type(self, mock_settings):
-        mock_settings.anthropic_api_key = "test-key"
+        mock_settings.llm_api_key = "test-key"
         result = _generate_ai_message(SAMPLE_LEAD_DATA, "http://lp.url", "unknown_type")
         assert result is None
 
     @patch("app.pipeline.outreach.settings")
     @patch("app.pipeline.outreach.requests.post")
     def test_success_initial(self, mock_post, mock_settings):
-        mock_settings.anthropic_api_key = "test-key"
+        mock_settings.llm_api_key = "test-key"
+        mock_settings.llm_base_url = "https://api.minimax.io/v1"
         mock_settings.your_name = "João"
         mock_settings.business_name = "Studio Digital"
         mock_settings.your_website = "https://studio.com"
         mock_settings.diagnostic_model = ""
-        mock_settings.claude_model = "claude-sonnet-4-20250514"
+        mock_settings.llm_model = "MiniMax-M2.7"
 
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {
-            "content": [{"text": "Oi! Tudo bem? Vi a Odonto Sorriso no Google Maps..."}]
+            "choices": [{"message": {"content": "Oi! Tudo bem? Vi a Odonto Sorriso no Google Maps..."}}]
         }
         mock_post.return_value = mock_resp
 
@@ -146,17 +147,18 @@ class TestGenerateAiMessage:
     @patch("app.pipeline.outreach.settings")
     @patch("app.pipeline.outreach.requests.post")
     def test_strips_quotes_from_response(self, mock_post, mock_settings):
-        mock_settings.anthropic_api_key = "test-key"
+        mock_settings.llm_api_key = "test-key"
+        mock_settings.llm_base_url = "https://api.minimax.io/v1"
         mock_settings.your_name = "João"
         mock_settings.business_name = "Studio"
         mock_settings.your_website = "https://studio.com"
         mock_settings.diagnostic_model = ""
-        mock_settings.claude_model = "claude-sonnet-4-20250514"
+        mock_settings.llm_model = "MiniMax-M2.7"
 
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {
-            "content": [{"text": '"Oi! Mensagem com aspas"'}]
+            "choices": [{"message": {"content": '"Oi! Mensagem com aspas"'}}]
         }
         mock_post.return_value = mock_resp
 
@@ -167,9 +169,10 @@ class TestGenerateAiMessage:
     @patch("app.pipeline.outreach.settings")
     @patch("app.pipeline.outreach.requests.post")
     def test_api_failure_returns_none(self, mock_post, mock_settings):
-        mock_settings.anthropic_api_key = "test-key"
+        mock_settings.llm_api_key = "test-key"
+        mock_settings.llm_base_url = "https://api.minimax.io/v1"
         mock_settings.diagnostic_model = ""
-        mock_settings.claude_model = "claude-sonnet-4-20250514"
+        mock_settings.llm_model = "MiniMax-M2.7"
         mock_post.side_effect = Exception("API timeout")
 
         result = _generate_ai_message(SAMPLE_LEAD_DATA, "http://lp.url", "initial")
@@ -179,12 +182,13 @@ class TestGenerateAiMessage:
     @patch("app.pipeline.outreach.requests.post")
     def test_handles_missing_nome_gracefully(self, mock_post, mock_settings):
         """lead_data without 'nome' key should not crash."""
-        mock_settings.anthropic_api_key = "test-key"
+        mock_settings.llm_api_key = "test-key"
+        mock_settings.llm_base_url = "https://api.minimax.io/v1"
         mock_settings.your_name = "João"
         mock_settings.business_name = "Studio"
         mock_settings.your_website = "https://studio.com"
         mock_settings.diagnostic_model = ""
-        mock_settings.claude_model = "claude-sonnet-4-20250514"
+        mock_settings.llm_model = "MiniMax-M2.7"
 
         lead_data = {
             "site_analysis": SAMPLE_LEAD_DATA["site_analysis"],
@@ -193,7 +197,7 @@ class TestGenerateAiMessage:
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {
-            "content": [{"text": "Oi! Tudo bem?"}]
+            "choices": [{"message": {"content": "Oi! Tudo bem?"}}]
         }
         mock_post.return_value = mock_resp
 

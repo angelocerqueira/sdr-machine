@@ -539,19 +539,18 @@ def generate_diagnostic(
     if settings.skip_ai_diagnostic:
         return None
 
-    if not settings.anthropic_api_key:
-        logger.warning("Diagnóstico: ANTHROPIC_API_KEY não configurada")
+    if not settings.llm_api_key:
+        logger.warning("Diagnóstico: LLM_API_KEY não configurada")
         return None
 
     visible_text = _extract_visible_text(html)
     prompt = _build_diagnostic_prompt(lead_info, site_data, html_analysis, pagespeed, visible_text)
 
-    model = settings.diagnostic_model or settings.claude_model
+    model = settings.diagnostic_model or settings.llm_model
 
     headers = {
         "Content-Type": "application/json",
-        "x-api-key": settings.anthropic_api_key,
-        "anthropic-version": "2023-06-01",
+        "Authorization": f"Bearer {settings.llm_api_key}",
     }
 
     payload = {
@@ -562,18 +561,18 @@ def generate_diagnostic(
 
     try:
         resp = requests.post(
-            "https://api.anthropic.com/v1/messages",
+            f"{settings.llm_base_url}/chat/completions",
             headers=headers,
             json=payload,
             timeout=90,
         )
         resp.raise_for_status()
         data = resp.json()
-        text = data["content"][0]["text"].strip()
+        text = data["choices"][0]["message"]["content"].strip()
         return _parse_diagnostic_response(text)
 
     except Exception as exc:
-        logger.error("Diagnóstico: erro na API Claude: %s", str(exc)[:200])
+        logger.error("Diagnóstico: erro na API LLM: %s", str(exc)[:200])
         return None
 
 

@@ -420,25 +420,26 @@ REGRAS CRÍTICAS:
 
     headers = {
         "Content-Type": "application/json",
-        "x-api-key": settings.anthropic_api_key,
-        "anthropic-version": "2023-06-01",
+        "Authorization": f"Bearer {settings.llm_api_key}",
     }
 
     try:
         resp = requests.post(
-            "https://api.anthropic.com/v1/messages",
+            f"{settings.llm_base_url}/chat/completions",
             headers=headers,
             json={
-                "model": settings.claude_model,
+                "model": settings.llm_model,
                 "max_tokens": 3000,
                 "temperature": 0.85,
-                "system": system,
-                "messages": [{"role": "user", "content": user}],
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
             },
             timeout=60,
         )
         resp.raise_for_status()
-        raw = resp.json()["content"][0]["text"].strip()
+        raw = resp.json()["choices"][0]["message"]["content"].strip()
 
         # Limpar possíveis backticks
         raw = re.sub(r"^```\w*\n?", "", raw)
@@ -572,38 +573,42 @@ Copie EXATAMENTE o SVG correspondente ao nome. Disponíveis:
 - Testar mentalmente: o conteúdo respira no iPhone SE (375px)?
 </mobile_first>
 
+IMPORTANTE: Comece DIRETAMENTE com <!DOCTYPE html>. Nenhum texto, explicação ou markdown antes do DOCTYPE.
+
 Gere o HTML completo agora."""
 
     messages = [
+        {"role": "system", "content": system},
         {"role": "user", "content": user},
-        {"role": "assistant", "content": "<!DOCTYPE html>"},
     ]
 
     try:
         resp = requests.post(
-            "https://api.anthropic.com/v1/messages",
+            f"{settings.llm_base_url}/chat/completions",
             headers={
                 "Content-Type": "application/json",
-                "x-api-key": settings.anthropic_api_key,
-                "anthropic-version": "2023-06-01",
+                "Authorization": f"Bearer {settings.llm_api_key}",
             },
             json={
-                "model": settings.claude_model,
+                "model": settings.llm_model,
                 "max_tokens": 16000,
                 "temperature": 0.7,
-                "system": system,
                 "messages": messages,
             },
             timeout=240,
         )
         resp.raise_for_status()
-        html = resp.json()["content"][0]["text"].strip()
+        html = resp.json()["choices"][0]["message"]["content"].strip()
 
         if html.startswith("```"):
             html = re.sub(r"^```\w*\n?", "", html)
             html = re.sub(r"\n?```$", "", html)
 
-        return "<!DOCTYPE html>" + html
+        # Garantir DOCTYPE mesmo se o modelo não incluiu
+        if not html.lstrip().lower().startswith("<!doctype"):
+            html = "<!DOCTYPE html>\n" + html
+
+        return html
 
     except Exception:
         logger.exception("Pass 2 falhou para %s", lead_data.get("nome", "?"))
