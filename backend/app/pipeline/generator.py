@@ -452,8 +452,13 @@ REGRAS CRÍTICAS:
             raw = (content[0].get("text", "") or "").strip()
 
         if not raw:
-            logger.error("Pass 1: resposta vazia da API para %s. Response: %s",
-                         lead_data.get("nome", "?"), json.dumps(data, ensure_ascii=False)[:500])
+            base_resp = data.get("base_resp", {})
+            sensitive = data.get("output_sensitive_type")
+            finish = (data.get("choices") or [{}])[0].get("finish_reason") if data.get("choices") else None
+            logger.error("Pass 1: resposta vazia da API para %s. finish_reason=%s, "
+                         "output_sensitive_type=%s, base_resp=%s",
+                         lead_data.get("nome", "?"), finish, sensitive,
+                         json.dumps(base_resp, ensure_ascii=False)[:300] if base_resp else "N/A")
             return None
 
         # Strip thinking blocks (MiniMax, DeepSeek, etc.)
@@ -632,8 +637,13 @@ Gere o HTML completo agora."""
             html = (content[0].get("text", "") or "").strip()
 
         if not html:
-            logger.error("Pass 2: resposta vazia da API para %s. Response keys: %s",
-                         lead_data.get("nome", "?"), list(data.keys()))
+            base_resp = data.get("base_resp", {})
+            sensitive = data.get("output_sensitive_type")
+            finish = (data.get("choices") or [{}])[0].get("finish_reason") if data.get("choices") else None
+            logger.error("Pass 2: resposta vazia da API para %s. finish_reason=%s, "
+                         "output_sensitive_type=%s, base_resp=%s",
+                         lead_data.get("nome", "?"), finish, sensitive,
+                         json.dumps(base_resp, ensure_ascii=False)[:300] if base_resp else "N/A")
             return ""
 
         # Strip thinking blocks (MiniMax, DeepSeek, etc.)
