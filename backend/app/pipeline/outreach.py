@@ -3,6 +3,7 @@ Módulo 4: Outreach via WhatsApp
 Gera mensagens personalizadas para cada lead usando o diagnóstico de marketing.
 """
 
+import re
 import time
 import urllib.parse
 
@@ -148,7 +149,14 @@ Retorne APENAS o texto da mensagem."""
         )
         resp.raise_for_status()
         data = resp.json()
-        text = data["choices"][0]["message"]["content"].strip()
+        choices = data.get("choices") or []
+        if not choices:
+            return None
+        text = (choices[0].get("message", {}).get("content", "") or "").strip()
+        # Strip thinking blocks (MiniMax, DeepSeek, etc.)
+        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        if not text:
+            return None
         # Remove aspas se a resposta vier envolvida
         if text.startswith('"') and text.endswith('"'):
             text = text[1:-1]

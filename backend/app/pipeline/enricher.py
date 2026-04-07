@@ -568,7 +568,15 @@ def generate_diagnostic(
         )
         resp.raise_for_status()
         data = resp.json()
-        text = data["choices"][0]["message"]["content"].strip()
+        choices = data.get("choices") or []
+        if not choices:
+            logger.error("Diagnóstico: resposta sem choices. Keys: %s", list(data.keys()))
+            return None
+        text = (choices[0].get("message", {}).get("content", "") or "").strip()
+        # Strip thinking blocks (MiniMax, DeepSeek, etc.)
+        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        if not text:
+            return None
         return _parse_diagnostic_response(text)
 
     except Exception as exc:
