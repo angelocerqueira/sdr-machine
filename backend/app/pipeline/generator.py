@@ -487,6 +487,9 @@ Seu código é reconhecido por nunca parecer "feito por IA".
 13. Pelo menos 1 seção com layout assimétrico ou grid irregular.
 14. 4+ tons de escuro no background system (--bg, --bg-deep, --bg-soft, --surface).
 15. CTA com shimmer sweep + glow pulsante (não estático).
+16. CSS MOBILE-FIRST: escreva estilos base para mobile (320-480px), depois @media (min-width: 768px) para tablet e (min-width: 1024px) para desktop. NUNCA max-width. Touch targets ≥48px. Font-size base 16px mobile, clamp() para headings.
+17. RESPIRO VERTICAL: sections com padding: clamp(4rem, 10vw, 7rem) 0. Gap entre cards ≥1.5rem. Headings com margin-bottom ≥1rem. Parágrafos com line-height ≥1.7. Nunca mais que 3 elementos sem whitespace visual separando-os.
+18. GRID MOBILE: grids colapsam para 1 coluna em mobile. Card featured ocupa 100% width. Stats em 2x2 grid no mobile, não 4 colunas. FAQ full-width sempre.
 </regras>
 
 <icon_library>
@@ -558,6 +561,16 @@ Copie EXATAMENTE o SVG correspondente ao nome. Disponíveis:
 - padding-bottom body 80px mobile para CTA flutuante
 - Meta title ≤60 chars, meta description ≤160 chars
 </requisitos_tecnicos>
+
+<mobile_first>
+- Thumb zone: CTAs e nav items com min-height 48px e padding generoso
+- Hero: h1 clamp(1.8rem, 6vw, 4rem), sub clamp(1rem, 2.5vw, 1.25rem)
+- Containers: max-width 1200px desktop, padding 20px mobile / 40px tablet / 0 desktop
+- Seções: padding-block clamp(4rem, 10vw, 7rem) — GENEROSO, nunca menos que 4rem
+- Cards: padding clamp(1.5rem, 4vw, 2.5rem), gap entre cards clamp(1rem, 3vw, 1.5rem)
+- Stack vertical em mobile: tudo 1 coluna abaixo de 768px
+- Testar mentalmente: o conteúdo respira no iPhone SE (375px)?
+</mobile_first>
 
 Gere o HTML completo agora."""
 
