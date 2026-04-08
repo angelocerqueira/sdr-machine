@@ -13,7 +13,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+# Better Auth uses __Secure- prefix on HTTPS, plain name on HTTP
 COOKIE_NAME = "better-auth.session_token"
+COOKIE_NAME_SECURE = "__Secure-better-auth.session_token"
 
 _VALIDATE_SQL = text('SELECT "expiresAt" FROM "session" WHERE "token" = :token')
 
@@ -57,13 +59,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if self._is_public(request.url.path):
             return await call_next(request)
 
-        # Extract session token from cookie
-        token = request.cookies.get(COOKIE_NAME)
-        if not token:
+        # Extract session token from cookie (try __Secure- prefix first, then plain)
+        raw_token = request.cookies.get(COOKIE_NAME_SECURE) or request.cookies.get(COOKIE_NAME)
+        if not raw_token:
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Nao autenticado"},
             )
+
+        # Better Auth cookie format: "token.signature" — extract token part only
+        token = raw_token.split(".")[0] if "." in raw_token else raw_token
 
         # Validate token against the session table
         engine = self._engine
