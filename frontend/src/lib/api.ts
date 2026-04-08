@@ -11,7 +11,7 @@ function getSessionToken(): string | null {
       try {
         const val = decodeURIComponent(c.split("=").slice(1).join("="));
         const data = JSON.parse(atob(val));
-        return data?.session?.token || null;
+        return data?.session?.session?.token || null;
       } catch { /* ignore parse errors */ }
     }
   }
