@@ -136,7 +136,6 @@ Retorne APENAS o texto da mensagem."""
     }
     payload = {
         "model": model,
-        "max_tokens": 500,
         "messages": [{"role": "user", "content": prompt}],
     }
 
