@@ -87,6 +87,26 @@ export interface LandingPage {
   created_at: string;
 }
 
+export interface NivelScore {
+  score: number;
+  sinais: string[];
+  oportunidades: string[];
+  justificativa: string;
+}
+
+export type NivelKey = "lp" | "automacao_basica" | "mapa_automacoes" | "vertical_os";
+
+export interface ServiceLevels {
+  lp: NivelScore;
+  automacao_basica: NivelScore;
+  mapa_automacoes: NivelScore;
+  vertical_os: NivelScore;
+  nivel_recomendado: NivelKey;
+  qualificado: boolean;
+  motivo_desqualificacao: string | null;
+  resumo_executivo: string;
+}
+
 export const KANBAN_COLUMNS = [
   { id: "scraped", label: "Scrapeado" },
   { id: "enriched", label: "Analisado" },
