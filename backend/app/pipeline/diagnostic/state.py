@@ -26,6 +26,14 @@ class NivelScore(BaseModel):
         return max(0, min(100, v))
 
 
+FALLBACK_NIVEL = NivelScore(
+    score=0,
+    sinais=["Análise indisponível"],
+    oportunidades=[],
+    justificativa="Falha na análise — resultado indisponível.",
+)
+
+
 class ServiceLevelAnalysis(BaseModel):
     """Consolidated result from all 4 service level analyzers."""
 

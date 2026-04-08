@@ -1,6 +1,7 @@
 """LangGraph diagnostic graph — parallel fan-out to 4 analyzers, fan-in to qualifier."""
 
 import logging
+import os
 from typing import Annotated
 
 from langgraph.graph import StateGraph, START, END
@@ -17,6 +18,12 @@ from app.pipeline.diagnostic.nodes.analyzers import (
 from app.pipeline.diagnostic.nodes.qualify import qualify
 
 logger = logging.getLogger(__name__)
+
+# Configure LangSmith tracing once at module level
+if settings.langsmith_tracing and settings.langsmith_api_key:
+    os.environ["LANGSMITH_API_KEY"] = settings.langsmith_api_key
+    os.environ["LANGSMITH_PROJECT"] = settings.langsmith_project
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
 
 
 def _build_graph() -> StateGraph:
@@ -70,15 +77,6 @@ def run_diagnostic(
     Run the full diagnostic graph for a single lead.
     Returns ServiceLevelAnalysis or None if disabled/no API key.
     """
-    # Configure LangSmith tracing via env vars (LangGraph auto-instruments)
-    import os
-    if settings.langsmith_tracing and settings.langsmith_api_key:
-        os.environ["LANGSMITH_API_KEY"] = settings.langsmith_api_key
-        os.environ["LANGSMITH_PROJECT"] = settings.langsmith_project
-        os.environ["LANGCHAIN_TRACING_V2"] = "true"
-    else:
-        os.environ.pop("LANGCHAIN_TRACING_V2", None)
-
     if settings.skip_service_level_analysis:
         return None
 

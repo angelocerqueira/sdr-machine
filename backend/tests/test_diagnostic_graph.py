@@ -29,12 +29,17 @@ def _mock_nivel(score: int) -> NivelScore:
 class TestRunDiagnostic:
     @patch("app.pipeline.diagnostic.nodes.analyzers._run_analyzer")
     def test_returns_service_level_analysis(self, mock_analyzer):
-        mock_analyzer.side_effect = [
-            {"lp_result": _mock_nivel(80)},
-            {"automacao_result": _mock_nivel(60)},
-            {"advanced_result": _mock_nivel(40)},
-            {"os_result": _mock_nivel(15)},
-        ]
+        score_map = {
+            "lp_result": 80,
+            "automacao_result": 60,
+            "advanced_result": 40,
+            "os_result": 15,
+        }
+
+        def side_effect(state, system_prompt, build_prompt_fn, result_key):
+            return {result_key: _mock_nivel(score_map[result_key])}
+
+        mock_analyzer.side_effect = side_effect
 
         result = run_diagnostic(
             lead_info=SAMPLE_LEAD_INFO,

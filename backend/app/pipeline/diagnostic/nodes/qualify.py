@@ -7,13 +7,7 @@ from app.pipeline.diagnostic.state import (
     ServiceLevelAnalysis,
     NivelKey,
     NIVEL_KEYS,
-)
-
-FALLBACK_NIVEL = NivelScore(
-    score=0,
-    sinais=["Análise indisponível"],
-    oportunidades=[],
-    justificativa="Falha na análise — resultado indisponível.",
+    FALLBACK_NIVEL,
 )
 
 _RESULT_MAP: list[tuple[str, NivelKey]] = [

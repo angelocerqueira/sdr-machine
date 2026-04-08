@@ -1,9 +1,6 @@
 """Tests para o módulo de enriquecimento (enricher.py)."""
 
-import json
 from unittest.mock import patch, MagicMock
-
-import pytest
 
 from app.pipeline.enricher import (
     analyze_html,
@@ -11,7 +8,6 @@ from app.pipeline.enricher import (
     _extract_visible_text,
     _extract_social_urls,
     _is_profile_url,
-    _parse_diagnostic_response,
     _scrape_instagram_profile,
     scrape_social_profiles,
     enrich_lead_data,
@@ -41,32 +37,6 @@ SAMPLE_HTML = """
 </body>
 </html>
 """
-
-SAMPLE_DIAGNOSTIC_JSON = {
-    "qualificado": True,
-    "motivo_desqualificacao": None,
-    "potencial_ia_automacao": {
-        "score": 75,
-        "oportunidades": ["Chatbot IA para agendamento", "Automação de follow-up"],
-        "justificativa": "Clínica odontológica com alto volume de agendamentos.",
-    },
-    "momento_funil": "descoberta",
-    "funil": {
-        "descoberta": {
-            "diagnostico": "Presença digital limitada.",
-            "acoes_top2": [
-                {"acao": "Otimizar GMN", "resultado_esperado": "+40% views", "kpi": "Views GMN"},
-                {"acao": "Google Ads local", "resultado_esperado": "10 leads/mês", "kpi": "CPL"},
-            ],
-        },
-        "atracao": {"diagnostico": "...", "acoes_top2": [{"acao": "a", "resultado_esperado": "b", "kpi": "c"}, {"acao": "d", "resultado_esperado": "e", "kpi": "f"}]},
-        "consideracao": {"diagnostico": "...", "acoes_top2": [{"acao": "a", "resultado_esperado": "b", "kpi": "c"}, {"acao": "d", "resultado_esperado": "e", "kpi": "f"}]},
-        "acao": {"diagnostico": "...", "acoes_top2": [{"acao": "a", "resultado_esperado": "b", "kpi": "c"}, {"acao": "d", "resultado_esperado": "e", "kpi": "f"}]},
-        "apologia": {"diagnostico": "...", "acoes_top2": [{"acao": "a", "resultado_esperado": "b", "kpi": "c"}, {"acao": "d", "resultado_esperado": "e", "kpi": "f"}]},
-    },
-    "resumo_executivo": "Clínica com boa reputação mas presença digital fraca.",
-    "prioridades_top3": ["Otimizar GMN", "Criar site", "Chatbot WhatsApp"],
-}
 
 SAMPLE_LEAD_INFO = {
     "nome": "Odonto Sorriso",
@@ -175,131 +145,6 @@ class TestExtractVisibleText:
     def test_truncates(self):
         big_html = "<p>" + "x" * 5000 + "</p>"
         assert len(_extract_visible_text(big_html)) <= 2000
-
-
-# ---------------------------------------------------------------------------
-# Tests: _parse_diagnostic_response
-# ---------------------------------------------------------------------------
-
-class TestParseDiagnosticResponse:
-    def test_valid_json(self):
-        result = _parse_diagnostic_response(json.dumps(SAMPLE_DIAGNOSTIC_JSON))
-        assert result is not None
-        assert result["qualificado"] is True
-        assert result["momento_funil"] == "descoberta"
-        assert result["potencial_ia_automacao"]["score"] == 75
-
-    def test_json_with_markdown_fences(self):
-        text = "```json\n" + json.dumps(SAMPLE_DIAGNOSTIC_JSON) + "\n```"
-        result = _parse_diagnostic_response(text)
-        assert result is not None
-        assert result["qualificado"] is True
-
-    def test_invalid_json(self):
-        assert _parse_diagnostic_response("not json at all") is None
-
-    def test_missing_keys(self):
-        incomplete = {"qualificado": True}
-        assert _parse_diagnostic_response(json.dumps(incomplete)) is None
-
-    def test_invalid_momento_funil(self):
-        bad = {**SAMPLE_DIAGNOSTIC_JSON, "momento_funil": "invalid_stage"}
-        assert _parse_diagnostic_response(json.dumps(bad)) is None
-
-    def test_invalid_score(self):
-        bad = {**SAMPLE_DIAGNOSTIC_JSON}
-        bad["potencial_ia_automacao"] = {**bad["potencial_ia_automacao"], "score": 150}
-        assert _parse_diagnostic_response(json.dumps(bad)) is None
-
-
-# ---------------------------------------------------------------------------
-# Tests: generate_diagnostic
-# ---------------------------------------------------------------------------
-
-from app.pipeline.enricher import generate_diagnostic  # still exists, no longer called by enrich_lead_data
-
-
-class TestGenerateDiagnostic:
-    def _mock_llm_response(self, diagnostic_data):
-        """Helper pra criar mock response da LLM API (OpenAI-compatible)."""
-        mock_resp = MagicMock()
-        mock_resp.raise_for_status = MagicMock()
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": json.dumps(diagnostic_data)}}]
-        }
-        return mock_resp
-
-    @patch("app.pipeline.enricher.settings")
-    @patch("app.pipeline.enricher.requests.post")
-    def test_success(self, mock_post, mock_settings):
-        mock_settings.skip_ai_diagnostic = False
-        mock_settings.llm_api_key = "test-key"
-        mock_settings.llm_base_url = "https://api.minimax.io/v1"
-        mock_settings.diagnostic_model = ""
-        mock_settings.llm_model = "MiniMax-M2.7"
-        mock_post.return_value = self._mock_llm_response(SAMPLE_DIAGNOSTIC_JSON)
-
-        result = generate_diagnostic(
-            lead_info=SAMPLE_LEAD_INFO,
-            site_data={"status": "ok", "has_ssl": True},
-            html_analysis={"has_responsive_meta": True},
-            pagespeed={"performance_score": 70},
-            html=SAMPLE_HTML,
-        )
-
-        assert result is not None
-        assert result["qualificado"] is True
-        assert result["potencial_ia_automacao"]["score"] == 75
-        mock_post.assert_called_once()
-
-    @patch("app.pipeline.enricher.settings")
-    @patch("app.pipeline.enricher.requests.post")
-    def test_api_failure_returns_none(self, mock_post, mock_settings):
-        mock_settings.skip_ai_diagnostic = False
-        mock_settings.llm_api_key = "test-key"
-        mock_settings.llm_base_url = "https://api.minimax.io/v1"
-        mock_settings.diagnostic_model = ""
-        mock_settings.llm_model = "MiniMax-M2.7"
-        mock_post.side_effect = Exception("API timeout")
-
-        result = generate_diagnostic(
-            lead_info=SAMPLE_LEAD_INFO,
-            site_data={"status": "ok"},
-            html_analysis={},
-            pagespeed={},
-            html="",
-        )
-
-        assert result is None
-
-    @patch("app.pipeline.enricher.settings")
-    def test_skip_when_disabled(self, mock_settings):
-        mock_settings.skip_ai_diagnostic = True
-
-        result = generate_diagnostic(
-            lead_info=SAMPLE_LEAD_INFO,
-            site_data={},
-            html_analysis={},
-            pagespeed={},
-            html="",
-        )
-
-        assert result is None
-
-    @patch("app.pipeline.enricher.settings")
-    def test_skip_when_no_api_key(self, mock_settings):
-        mock_settings.skip_ai_diagnostic = False
-        mock_settings.llm_api_key = ""
-
-        result = generate_diagnostic(
-            lead_info=SAMPLE_LEAD_INFO,
-            site_data={},
-            html_analysis={},
-            pagespeed={},
-            html="",
-        )
-
-        assert result is None
 
 
 # ---------------------------------------------------------------------------

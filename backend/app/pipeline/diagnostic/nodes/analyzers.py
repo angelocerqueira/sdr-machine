@@ -5,7 +5,7 @@ import logging
 from langchain_openai import ChatOpenAI
 
 from app.config import settings
-from app.pipeline.diagnostic.state import GraphState, NivelScore
+from app.pipeline.diagnostic.state import GraphState, NivelScore, FALLBACK_NIVEL
 from app.pipeline.diagnostic.prompts.shared import format_lead_context
 from app.pipeline.diagnostic.prompts.lp import LP_SYSTEM_PROMPT, build_lp_prompt
 from app.pipeline.diagnostic.prompts.automation import AUTOMATION_SYSTEM_PROMPT, build_automation_prompt
@@ -14,13 +14,6 @@ from app.pipeline.diagnostic.prompts.os import OS_SYSTEM_PROMPT, build_os_prompt
 from app.pipeline.html_utils import _extract_visible_text
 
 logger = logging.getLogger(__name__)
-
-FALLBACK_NIVEL = NivelScore(
-    score=0,
-    sinais=["Análise indisponível"],
-    oportunidades=[],
-    justificativa="Falha na análise — resultado indisponível.",
-)
 
 
 def _get_llm() -> ChatOpenAI:
