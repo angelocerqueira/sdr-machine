@@ -1658,7 +1658,80 @@ git commit -m "feat: integrate ServiceLevelTabs into lead sheet and detail views
 
 ---
 
-### Task 10: Run full test suite and final commit
+### Task 10: Integrar LangSmith (observabilidade)
+
+**Files:**
+- Modify: `backend/requirements.txt`
+- Modify: `backend/app/config.py`
+- Modify: `backend/app/pipeline/diagnostic/graph.py`
+- Modify: `backend/.env.example`
+
+- [ ] **Step 1: Add langsmith dependency**
+
+Add to `backend/requirements.txt` after `langchain-core`:
+
+```
+langsmith>=0.3
+```
+
+- [ ] **Step 2: Add config vars**
+
+In `backend/app/config.py`, add after `skip_service_level_analysis`:
+
+```python
+    langsmith_api_key: str = ""
+    langsmith_project: str = "sdr-machine"
+    langsmith_tracing: bool = False
+```
+
+- [ ] **Step 3: Add env vars to .env.example**
+
+Add to `backend/.env.example`:
+
+```bash
+# LangSmith (observabilidade do grafo de diagnóstico)
+# LANGSMITH_API_KEY=ls__...
+# LANGSMITH_PROJECT=sdr-machine
+# LANGSMITH_TRACING=false
+```
+
+- [ ] **Step 4: Configure tracing in graph.py**
+
+In `backend/app/pipeline/diagnostic/graph.py`, add this setup at the top of `run_diagnostic()`, before the guard clauses:
+
+```python
+    # Configure LangSmith tracing via env vars (LangGraph auto-instruments)
+    import os
+    if settings.langsmith_tracing and settings.langsmith_api_key:
+        os.environ["LANGSMITH_API_KEY"] = settings.langsmith_api_key
+        os.environ["LANGSMITH_PROJECT"] = settings.langsmith_project
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    else:
+        os.environ.pop("LANGCHAIN_TRACING_V2", None)
+```
+
+This is all that's needed — LangGraph auto-sends traces to LangSmith when `LANGCHAIN_TRACING_V2=true`. Each graph execution appears as a trace with:
+- Nós individuais (analyze_lp, analyze_automation, etc.)
+- Input/output de cada nó
+- Latência por nó e total
+- Tokens consumidos por chamada LLM
+- Erros capturados
+
+- [ ] **Step 5: Install dependency**
+
+Run: `cd backend && pip install -r requirements.txt`
+Expected: `langsmith` installs successfully
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add backend/requirements.txt backend/app/config.py backend/app/pipeline/diagnostic/graph.py backend/.env.example
+git commit -m "feat: add LangSmith tracing for diagnostic graph observability"
+```
+
+---
+
+### Task 11: Run full test suite and final commit
 
 **Files:** None (verification only)
 
