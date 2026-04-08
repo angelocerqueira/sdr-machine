@@ -1,9 +1,11 @@
 import type { LeadListResponse, Lead, Job, JobListResponse, DashboardStats, Settings, OutreachMessage, LandingPage } from "./types";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// All /api/* calls go through Next.js rewrites (same-origin), so cookies travel automatically.
+// Only LP iframe URLs need the direct backend URL.
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
+  const res = await fetch(path, {
     ...options,
     credentials: "include",
     headers: { "Content-Type": "application/json", ...options?.headers },
@@ -35,15 +37,15 @@ export const updateLead = (id: number, data: { status?: string }) =>
   fetchAPI<Lead>(`/api/leads/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 
 export const deleteLead = (id: number) =>
-  fetch(`${API}/api/leads/${id}`, { method: "DELETE", credentials: "include" });
+  fetch(`/api/leads/${id}`, { method: "DELETE", credentials: "include" });
 
-export const getLeadLpUrl = (id: number) => `${API}/api/leads/${id}/lp`;
+export const getLeadLpUrl = (id: number) => `${BACKEND_URL}/api/leads/${id}/lp`;
 
 export const getLeadByPublicId = (publicId: string) =>
   fetchAPI<Lead>(`/api/leads/p/${publicId}`);
 
 export const getLeadLpUrlByPublicId = (publicId: string) =>
-  `${API}/api/leads/p/${publicId}/lp`;
+  `${BACKEND_URL}/api/leads/p/${publicId}/lp`;
 
 export const getLeadMessages = (leadId: number) =>
   fetchAPI<OutreachMessage[]>(`/api/leads/${leadId}/messages`);
@@ -71,7 +73,7 @@ export const streamJob = (id: number, onEvent: (event: { type: string; message: 
 
   (async () => {
     try {
-      const res = await fetch(`${API}/api/jobs/${id}/stream`, {
+      const res = await fetch(`/api/jobs/${id}/stream`, {
         credentials: "include",
         signal: controller.signal,
       });
