@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { getLead, getLeadLpUrl, getLeadMessages, getLeadLandingPages, activateLandingPage, runGenerate, runOutreach, runEnrich } from "@/lib/api";
-import type { Lead, OutreachMessage, LandingPage } from "@/lib/types";
+import type { Lead, OutreachMessage, LandingPage, ServiceLevels } from "@/lib/types";
 import { ConfirmModal } from "./confirm-modal";
 import { DiagnosticPanel } from "./diagnostic-panel";
+import { ServiceLevelTabs } from "./service-level-tabs";
 
 interface LeadSheetProps {
   leadId: number | null;
@@ -231,8 +232,14 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
                 </div>
               )}
 
-              {/* Marketing Diagnostic */}
-              <DiagnosticPanel siteAnalysis={lead.site_analysis as Record<string, unknown>} />
+              {/* Service Level Tabs or legacy DiagnosticPanel */}
+              {(lead.site_analysis as Record<string, unknown>)?.service_levels ? (
+                <ServiceLevelTabs
+                  serviceLevels={(lead.site_analysis as Record<string, unknown>).service_levels as ServiceLevels}
+                />
+              ) : (
+                <DiagnosticPanel siteAnalysis={lead.site_analysis as Record<string, unknown>} />
+              )}
 
               {/* Action buttons */}
               {(lead.status === "scraped" || lead.status === "enriched" || lead.status === "lp_generated" || lead.status === "outreach_ready" || lead.status === "disqualified" || lead.status.endsWith("_failed")) && (

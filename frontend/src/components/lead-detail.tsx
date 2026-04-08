@@ -1,8 +1,9 @@
 "use client";
 
-import type { Lead } from "@/lib/types";
+import type { Lead, ServiceLevels } from "@/lib/types";
 import { getLeadLpUrl } from "@/lib/api";
 import { DiagnosticPanel } from "./diagnostic-panel";
+import { ServiceLevelTabs } from "./service-level-tabs";
 
 interface LeadDetailProps {
   lead: Lead;
@@ -61,8 +62,14 @@ export function LeadDetail({ lead }: LeadDetailProps) {
         </div>
       )}
 
-      {/* Marketing Diagnostic */}
-      <DiagnosticPanel siteAnalysis={lead.site_analysis as Record<string, unknown>} compact />
+      {/* Service Level Tabs or legacy DiagnosticPanel */}
+      {(lead.site_analysis as Record<string, unknown>)?.service_levels ? (
+        <ServiceLevelTabs
+          serviceLevels={(lead.site_analysis as Record<string, unknown>).service_levels as ServiceLevels}
+        />
+      ) : (
+        <DiagnosticPanel siteAnalysis={lead.site_analysis as Record<string, unknown>} compact />
+      )}
 
       {/* LP Preview */}
       {lead.lp_html && (
