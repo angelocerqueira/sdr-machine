@@ -1,14 +1,44 @@
 import type { LeadListResponse, Lead, Job, JobListResponse, DashboardStats, Settings, OutreachMessage, LandingPage } from "./types";
 
-// All /api/* calls go through Next.js rewrites (same-origin), so cookies travel automatically.
-// Only LP iframe URLs need the direct backend URL.
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+function getSessionToken(): string | null {
+  // Better Auth stores token in cookie — read client-side
+  // __Secure- prefix on HTTPS, plain on HTTP
+  const cookies = document.cookie.split("; ");
+  for (const c of cookies) {
+    if (c.startsWith("__Secure-better-auth.session_token=") || c.startsWith("better-auth.session_token=")) {
+      const val = decodeURIComponent(c.split("=").slice(1).join("="));
+      // Format: "token.signature" — return full value
+      return val.split(".")[0];
+    }
+  }
+  // Also check session_data cookie which contains the token
+  for (const c of cookies) {
+    if (c.startsWith("__Secure-better-auth.session_data=") || c.startsWith("better-auth.session_data=")) {
+      try {
+        const val = decodeURIComponent(c.split("=").slice(1).join("="));
+        const data = JSON.parse(atob(val));
+        return data?.session?.session?.token || null;
+      } catch { /* ignore parse errors */ }
+    }
+  }
+  return null;
+}
 
 async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const token = getSessionToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...options?.headers as Record<string, string>,
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API}${path}`, {
     ...options,
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...options?.headers },
+    headers,
   });
   if (!res.ok) {
     const error = await res.text();
@@ -36,16 +66,20 @@ export const getLead = (id: number) => fetchAPI<Lead>(`/api/leads/${id}`);
 export const updateLead = (id: number, data: { status?: string }) =>
   fetchAPI<Lead>(`/api/leads/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 
-export const deleteLead = (id: number) =>
-  fetch(`/api/leads/${id}`, { method: "DELETE", credentials: "include" });
+export const deleteLead = (id: number) => {
+  const token = getSessionToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return fetch(`${API}/api/leads/${id}`, { method: "DELETE", headers });
+};
 
-export const getLeadLpUrl = (id: number) => `${BACKEND_URL}/api/leads/${id}/lp`;
+export const getLeadLpUrl = (id: number) => `${API}/api/leads/${id}/lp`;
 
 export const getLeadByPublicId = (publicId: string) =>
   fetchAPI<Lead>(`/api/leads/p/${publicId}`);
 
 export const getLeadLpUrlByPublicId = (publicId: string) =>
-  `${BACKEND_URL}/api/leads/p/${publicId}/lp`;
+  `${API}/api/leads/p/${publicId}/lp`;
 
 export const getLeadMessages = (leadId: number) =>
   fetchAPI<OutreachMessage[]>(`/api/leads/${leadId}/messages`);
@@ -73,8 +107,11 @@ export const streamJob = (id: number, onEvent: (event: { type: string; message: 
 
   (async () => {
     try {
-      const res = await fetch(`/api/jobs/${id}/stream`, {
-        credentials: "include",
+      const token = getSessionToken();
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch(`${API}/api/jobs/${id}/stream`, {
+        headers,
         signal: controller.signal,
       });
       if (!res.ok || !res.body) return;
