@@ -59,8 +59,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if self._is_public(request.url.path):
             return await call_next(request)
 
-        # Extract session token from cookie (try __Secure- prefix first, then plain)
-        raw_token = request.cookies.get(COOKIE_NAME_SECURE) or request.cookies.get(COOKIE_NAME)
+        # Extract session token: try Authorization header first, then cookies
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            raw_token = auth_header[7:]
+        else:
+            raw_token = request.cookies.get(COOKIE_NAME_SECURE) or request.cookies.get(COOKIE_NAME)
+
         if not raw_token:
             return JSONResponse(
                 status_code=401,
