@@ -3,24 +3,23 @@ import type { LeadListResponse, Lead, Job, JobListResponse, DashboardStats, Sett
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 function getSessionToken(): string | null {
-  // Better Auth stores token in cookie — read client-side
-  // __Secure- prefix on HTTPS, plain on HTTP
+  // Better Auth session_token cookie is HttpOnly — document.cookie can't read it.
+  // The cookieCache option creates a non-HttpOnly session_data cookie we CAN read.
   const cookies = document.cookie.split("; ");
-  for (const c of cookies) {
-    if (c.startsWith("__Secure-better-auth.session_token=") || c.startsWith("better-auth.session_token=")) {
-      const val = decodeURIComponent(c.split("=").slice(1).join("="));
-      // Format: "token.signature" — return full value
-      return val.split(".")[0];
-    }
-  }
-  // Also check session_data cookie which contains the token
   for (const c of cookies) {
     if (c.startsWith("__Secure-better-auth.session_data=") || c.startsWith("better-auth.session_data=")) {
       try {
         const val = decodeURIComponent(c.split("=").slice(1).join("="));
         const data = JSON.parse(atob(val));
-        return data?.session?.session?.token || null;
+        return data?.session?.token || null;
       } catch { /* ignore parse errors */ }
+    }
+  }
+  // Fallback: try session_token in case httpOnly was disabled
+  for (const c of cookies) {
+    if (c.startsWith("__Secure-better-auth.session_token=") || c.startsWith("better-auth.session_token=")) {
+      const val = decodeURIComponent(c.split("=").slice(1).join("="));
+      return val.split(".")[0];
     }
   }
   return null;
