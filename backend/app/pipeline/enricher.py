@@ -14,6 +14,8 @@ import requests
 from bs4 import BeautifulSoup
 
 from app.config import settings
+from app.pipeline.html_utils import _extract_visible_text  # noqa: F401 — re-exported for diagnostic nodes
+from app.pipeline.diagnostic import run_diagnostic
 
 logger = logging.getLogger(__name__)
 
@@ -378,17 +380,6 @@ DIAGNOSTIC_JSON_SCHEMA = """{
 }"""
 
 
-def _extract_visible_text(html: str) -> str:
-    """Extrai texto visível do HTML, limitado a 2000 chars pra economizar tokens."""
-    if not html:
-        return ""
-    soup = BeautifulSoup(html, "html.parser")
-    for tag in soup(["script", "style", "noscript"]):
-        tag.decompose()
-    text = soup.get_text(separator=" ", strip=True)
-    return text[:2000]
-
-
 def _format_social_context(lead_info: dict) -> str:
     """Formata dados de redes sociais pro prompt de diagnóstico."""
     profiles = lead_info.get("social_profiles", {})
@@ -619,32 +610,22 @@ def enrich_lead_data(website: str, lead_info: dict | None = None, skip_pagespeed
     if lead_info and settings.apify_token and not settings.skip_social_scraping:
         social_profiles = scrape_social_profiles(lead_info, social_urls)
 
-    # 6. Diagnóstico de marketing via IA
+    # 6. Service Level Analysis via LangGraph
     qualified = True
-    diagnostic = None
     if lead_info:
-        # Incluir dados sociais no lead_info pro diagnóstico
         lead_info_with_social = {**lead_info, "social_profiles": social_profiles}
-        diagnostic = generate_diagnostic(
+        service_levels = run_diagnostic(
             lead_info=lead_info_with_social,
             site_data=site_data,
             html_analysis=html_analysis,
             pagespeed=pagespeed,
             html=site_data.get("html", ""),
+            social_profiles=social_profiles,
         )
 
-    if diagnostic:
-        site_analysis["diagnostico_marketing"] = diagnostic
-
-        # Qualificação baseada no score de potencial IA
-        ai_score = diagnostic.get("potencial_ia_automacao", {}).get("score", 0)
-        if not diagnostic.get("qualificado") or ai_score < settings.ai_potential_threshold:
-            qualified = False
-
-        # Adicionar razões do diagnóstico às opportunity_reasons
-        prioridades = diagnostic.get("prioridades_top3") or []
-        if prioridades:
-            reasons.extend(prioridades)
+        if service_levels:
+            site_analysis["service_levels"] = service_levels.model_dump()
+            qualified = service_levels.qualificado
 
     return {
         "opportunity_score": score,

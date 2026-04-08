@@ -1,7 +1,6 @@
 """Collector node — assembles context from raw enrichment data."""
 
 from app.pipeline.diagnostic.state import GraphState
-from app.pipeline.enricher import _extract_visible_text
 
 
 def collect_context(

@@ -14,7 +14,6 @@ from app.pipeline.enricher import (
     _parse_diagnostic_response,
     _scrape_instagram_profile,
     scrape_social_profiles,
-    generate_diagnostic,
     enrich_lead_data,
 )
 from bs4 import BeautifulSoup
@@ -217,6 +216,9 @@ class TestParseDiagnosticResponse:
 # Tests: generate_diagnostic
 # ---------------------------------------------------------------------------
 
+from app.pipeline.enricher import generate_diagnostic  # still exists, no longer called by enrich_lead_data
+
+
 class TestGenerateDiagnostic:
     def _mock_llm_response(self, diagnostic_data):
         """Helper pra criar mock response da LLM API (OpenAI-compatible)."""
@@ -305,54 +307,126 @@ class TestGenerateDiagnostic:
 # ---------------------------------------------------------------------------
 
 class TestEnrichLeadData:
-    @patch("app.pipeline.enricher.generate_diagnostic")
+    @patch("app.pipeline.enricher.run_diagnostic")
     @patch("app.pipeline.enricher.check_pagespeed")
     @patch("app.pipeline.enricher.fetch_website")
     def test_with_diagnostic_qualified(self, mock_fetch, mock_pagespeed, mock_diag):
+        from app.pipeline.diagnostic.state import NivelScore, ServiceLevelAnalysis
+
         mock_fetch.return_value = {"status": "ok", "html": SAMPLE_HTML, "has_ssl": True}
         mock_pagespeed.return_value = {"performance_score": 70}
-        mock_diag.return_value = SAMPLE_DIAGNOSTIC_JSON
+        sla = ServiceLevelAnalysis(
+            lp=NivelScore(score=80, sinais=["s"], oportunidades=["o"], justificativa="j"),
+            automacao_basica=NivelScore(score=60, sinais=["s"], oportunidades=["o"], justificativa="j"),
+            mapa_automacoes=NivelScore(score=40, sinais=["s"], oportunidades=["o"], justificativa="j"),
+            vertical_os=NivelScore(score=15, sinais=["s"], oportunidades=["o"], justificativa="j"),
+            nivel_recomendado="lp",
+            qualificado=True,
+            motivo_desqualificacao=None,
+            resumo_executivo="Resumo.",
+        )
+        mock_diag.return_value = sla
 
         result = enrich_lead_data("http://example.com", lead_info=SAMPLE_LEAD_INFO)
 
         assert result["qualified"] is True
-        assert "diagnostico_marketing" in result["site_analysis"]
-        assert result["site_analysis"]["diagnostico_marketing"]["momento_funil"] == "descoberta"
+        assert "service_levels" in result["site_analysis"]
 
     @patch("app.pipeline.enricher.settings")
-    @patch("app.pipeline.enricher.generate_diagnostic")
+    @patch("app.pipeline.enricher.run_diagnostic")
     @patch("app.pipeline.enricher.check_pagespeed")
     @patch("app.pipeline.enricher.fetch_website")
     def test_with_diagnostic_disqualified(self, mock_fetch, mock_pagespeed, mock_diag, mock_settings):
+        from app.pipeline.diagnostic.state import NivelScore, ServiceLevelAnalysis
+
         mock_settings.ai_potential_threshold = 25
+        mock_settings.skip_social_scraping = True
+        mock_settings.apify_token = ""
         mock_fetch.return_value = {"status": "ok", "html": SAMPLE_HTML, "has_ssl": True}
         mock_pagespeed.return_value = {"performance_score": 70}
-        disqualified_diag = {
-            **SAMPLE_DIAGNOSTIC_JSON,
-            "qualificado": False,
-            "motivo_desqualificacao": "Negócio muito informal",
-            "potencial_ia_automacao": {**SAMPLE_DIAGNOSTIC_JSON["potencial_ia_automacao"], "score": 10},
-        }
-        mock_diag.return_value = disqualified_diag
+        sla = ServiceLevelAnalysis(
+            lp=NivelScore(score=10, sinais=["s"], oportunidades=[], justificativa="j"),
+            automacao_basica=NivelScore(score=5, sinais=["s"], oportunidades=[], justificativa="j"),
+            mapa_automacoes=NivelScore(score=8, sinais=["s"], oportunidades=[], justificativa="j"),
+            vertical_os=NivelScore(score=3, sinais=["s"], oportunidades=[], justificativa="j"),
+            nivel_recomendado="lp",
+            qualificado=False,
+            motivo_desqualificacao="Sem potencial",
+            resumo_executivo="Desqualificado.",
+        )
+        mock_diag.return_value = sla
 
         result = enrich_lead_data("http://example.com", lead_info=SAMPLE_LEAD_INFO)
 
         assert result["qualified"] is False
-        assert "diagnostico_marketing" in result["site_analysis"]
+        assert "service_levels" in result["site_analysis"]
 
-    @patch("app.pipeline.enricher.generate_diagnostic")
+    @patch("app.pipeline.enricher.run_diagnostic")
     @patch("app.pipeline.enricher.check_pagespeed")
     @patch("app.pipeline.enricher.fetch_website")
     def test_diagnostic_failure_still_enriches(self, mock_fetch, mock_pagespeed, mock_diag):
         mock_fetch.return_value = {"status": "ok", "html": SAMPLE_HTML, "has_ssl": True}
         mock_pagespeed.return_value = {"performance_score": 70}
-        mock_diag.return_value = None  # API failure
+        mock_diag.return_value = None  # Graph failure
 
         result = enrich_lead_data("http://example.com", lead_info=SAMPLE_LEAD_INFO)
 
-        assert result["qualified"] is True  # Default: qualified when no diagnostic
-        assert "diagnostico_marketing" not in result["site_analysis"]
+        assert result["qualified"] is True
+        assert "service_levels" not in result["site_analysis"]
         assert result["opportunity_score"] is not None
+
+    @patch("app.pipeline.enricher.run_diagnostic")
+    @patch("app.pipeline.enricher.check_pagespeed")
+    @patch("app.pipeline.enricher.fetch_website")
+    def test_with_service_levels(self, mock_fetch, mock_pagespeed, mock_run_diag):
+        from app.pipeline.diagnostic.state import NivelScore, ServiceLevelAnalysis
+
+        mock_fetch.return_value = {"status": "ok", "html": SAMPLE_HTML, "has_ssl": True}
+        mock_pagespeed.return_value = {"performance_score": 70}
+
+        sla = ServiceLevelAnalysis(
+            lp=NivelScore(score=80, sinais=["Sem site"], oportunidades=["LP"], justificativa="j"),
+            automacao_basica=NivelScore(score=60, sinais=["s"], oportunidades=["o"], justificativa="j"),
+            mapa_automacoes=NivelScore(score=40, sinais=["s"], oportunidades=["o"], justificativa="j"),
+            vertical_os=NivelScore(score=15, sinais=["s"], oportunidades=["o"], justificativa="j"),
+            nivel_recomendado="lp",
+            qualificado=True,
+            motivo_desqualificacao=None,
+            resumo_executivo="Resumo.",
+        )
+        mock_run_diag.return_value = sla
+
+        result = enrich_lead_data("http://example.com", lead_info=SAMPLE_LEAD_INFO)
+
+        assert result["qualified"] is True
+        assert "service_levels" in result["site_analysis"]
+        assert result["site_analysis"]["service_levels"]["lp"]["score"] == 80
+        assert result["site_analysis"]["service_levels"]["nivel_recomendado"] == "lp"
+
+    @patch("app.pipeline.enricher.run_diagnostic")
+    @patch("app.pipeline.enricher.check_pagespeed")
+    @patch("app.pipeline.enricher.fetch_website")
+    def test_with_service_levels_disqualified(self, mock_fetch, mock_pagespeed, mock_run_diag):
+        from app.pipeline.diagnostic.state import NivelScore, ServiceLevelAnalysis
+
+        mock_fetch.return_value = {"status": "ok", "html": SAMPLE_HTML, "has_ssl": True}
+        mock_pagespeed.return_value = {"performance_score": 70}
+
+        sla = ServiceLevelAnalysis(
+            lp=NivelScore(score=10, sinais=["s"], oportunidades=[], justificativa="j"),
+            automacao_basica=NivelScore(score=5, sinais=["s"], oportunidades=[], justificativa="j"),
+            mapa_automacoes=NivelScore(score=8, sinais=["s"], oportunidades=[], justificativa="j"),
+            vertical_os=NivelScore(score=3, sinais=["s"], oportunidades=[], justificativa="j"),
+            nivel_recomendado="lp",
+            qualificado=False,
+            motivo_desqualificacao="Sem potencial",
+            resumo_executivo="Desqualificado.",
+        )
+        mock_run_diag.return_value = sla
+
+        result = enrich_lead_data("http://example.com", lead_info=SAMPLE_LEAD_INFO)
+
+        assert result["qualified"] is False
 
     @patch("app.pipeline.enricher.fetch_website")
     def test_without_lead_info(self, mock_fetch):
@@ -365,7 +439,7 @@ class TestEnrichLeadData:
         assert "diagnostico_marketing" not in result["site_analysis"]
 
     @patch("app.pipeline.enricher.settings")
-    @patch("app.pipeline.enricher.generate_diagnostic")
+    @patch("app.pipeline.enricher.run_diagnostic")
     @patch("app.pipeline.enricher.fetch_website")
     def test_skip_social_scraping(self, mock_fetch, mock_diag, mock_settings):
         """Social scraping should be skipped when skip_social_scraping=True."""
