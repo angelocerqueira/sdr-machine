@@ -15,4 +15,13 @@ export const auth = betterAuth({
       maxAge: 60 * 5, // 5 min
     },
   },
+  advanced: {
+    cookies: {
+      session_data: {
+        attributes: {
+          httpOnly: false, // JS precisa ler este cookie para enviar Bearer token ao backend cross-origin
+        },
+      },
+    },
+  },
 });
