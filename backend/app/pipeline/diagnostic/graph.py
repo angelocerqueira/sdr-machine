@@ -70,6 +70,15 @@ def run_diagnostic(
     Run the full diagnostic graph for a single lead.
     Returns ServiceLevelAnalysis or None if disabled/no API key.
     """
+    # Configure LangSmith tracing via env vars (LangGraph auto-instruments)
+    import os
+    if settings.langsmith_tracing and settings.langsmith_api_key:
+        os.environ["LANGSMITH_API_KEY"] = settings.langsmith_api_key
+        os.environ["LANGSMITH_PROJECT"] = settings.langsmith_project
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    else:
+        os.environ.pop("LANGCHAIN_TRACING_V2", None)
+
     if settings.skip_service_level_analysis:
         return None
 

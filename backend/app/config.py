@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     ai_potential_threshold: int = 25
     disqualify_threshold: int = 25
     skip_service_level_analysis: bool = False
+    langsmith_api_key: str = ""
+    langsmith_project: str = "sdr-machine"
+    langsmith_tracing: bool = False
     frontend_url: str = "http://localhost:3000"
 
     model_config = {"env_file": ".env"}
