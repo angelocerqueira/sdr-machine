@@ -7,9 +7,7 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
-    signUp: {
-      enabled: false,
-    },
+    // signUp temporariamente habilitado para criar primeiro usuario
   },
   session: {
     cookieCache: {
