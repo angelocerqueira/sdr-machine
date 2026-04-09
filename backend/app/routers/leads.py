@@ -14,6 +14,7 @@ ORDER_MAP = {
     "score_asc": Lead.opportunity_score.asc().nulls_last(),
     "name_asc": Lead.nome.asc(),
     "created_desc": Lead.created_at.desc(),
+    "updated_desc": Lead.updated_at.desc(),
 }
 
 VALID_STATUSES = {
@@ -79,7 +80,7 @@ def list_leads(
     cidade: str | None = None,
     score_min: int | None = None,
     search: str | None = None,
-    order_by: str = Query("score_desc", pattern="^(score_desc|score_asc|name_asc|created_desc)$"),
+    order_by: str = Query("score_desc", pattern="^(score_desc|score_asc|name_asc|created_desc|updated_desc)$"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
