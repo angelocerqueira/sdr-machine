@@ -2,6 +2,21 @@ import type { LeadListResponse, Lead, Job, JobListResponse, DashboardStats, Sett
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+let redirectingToLogin = false;
+
+function forceLogout() {
+  if (redirectingToLogin) return;
+  redirectingToLogin = true;
+  // Limpa cookies de sessão para que o middleware também redirecione
+  document.cookie.split("; ").forEach((c) => {
+    const name = c.split("=")[0];
+    if (name.includes("better-auth")) {
+      document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    }
+  });
+  window.location.replace("/login");
+}
+
 function getSessionToken(): string | null {
   // Better Auth session_token cookie is HttpOnly — document.cookie can't read it.
   // The cookieCache option creates a non-HttpOnly session_data cookie we CAN read.
@@ -40,7 +55,7 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
     headers,
   });
   if (res.status === 401) {
-    window.location.href = "/login";
+    forceLogout();
     throw new Error("Sessão expirada");
   }
   if (!res.ok) {
@@ -69,11 +84,13 @@ export const getLead = (id: number) => fetchAPI<Lead>(`/api/leads/${id}`);
 export const updateLead = (id: number, data: { status?: string }) =>
   fetchAPI<Lead>(`/api/leads/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 
-export const deleteLead = (id: number) => {
+export const deleteLead = async (id: number) => {
   const token = getSessionToken();
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  return fetch(`${API}/api/leads/${id}`, { method: "DELETE", headers });
+  const res = await fetch(`${API}/api/leads/${id}`, { method: "DELETE", headers });
+  if (res.status === 401) { forceLogout(); throw new Error("Sessão expirada"); }
+  return res;
 };
 
 export const getLeadLpUrl = (id: number) => `${API}/api/leads/${id}/lp`;
@@ -117,6 +134,7 @@ export const streamJob = (id: number, onEvent: (event: { type: string; message: 
         headers,
         signal: controller.signal,
       });
+      if (res.status === 401) { forceLogout(); return; }
       if (!res.ok || !res.body) return;
 
       const reader = res.body.getReader();
