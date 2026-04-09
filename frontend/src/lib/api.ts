@@ -39,6 +39,10 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
     headers,
   });
+  if (res.status === 401) {
+    window.location.href = "/login";
+    throw new Error("Sessão expirada");
+  }
   if (!res.ok) {
     const error = await res.text();
     throw new Error(`API error ${res.status}: ${error}`);
