@@ -1,6 +1,8 @@
 """LLM analyzer nodes — one per service level, run in parallel."""
 
+import json
 import logging
+import re
 
 from langchain_openai import ChatOpenAI
 
@@ -15,6 +17,14 @@ from app.pipeline.html_utils import _extract_visible_text
 
 logger = logging.getLogger(__name__)
 
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+_JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
+
+JSON_INSTRUCTION = """
+
+IMPORTANTE: Responda APENAS com JSON válido neste formato exato, sem texto adicional:
+{"score": <int>, "sinais": [<strings>], "oportunidades": [<strings>], "justificativa": "<string>"}"""
+
 
 def _get_llm() -> ChatOpenAI:
     """Create a ChatOpenAI instance pointing at the configured LLM provider."""
@@ -23,8 +33,18 @@ def _get_llm() -> ChatOpenAI:
         model=model,
         base_url=settings.llm_base_url,
         api_key=settings.llm_api_key,
+        max_tokens=4096,
         timeout=60,
     )
+
+
+def _parse_response(text: str) -> NivelScore:
+    """Parse LLM response into NivelScore, stripping <think> blocks and markdown fences."""
+    cleaned = _THINK_RE.sub("", text).strip()
+    match = _JSON_BLOCK_RE.search(cleaned)
+    if match:
+        cleaned = match.group(1).strip()
+    return NivelScore(**json.loads(cleaned))
 
 
 def _build_context(state: GraphState) -> str:
@@ -46,18 +66,19 @@ def _run_analyzer(
     build_prompt_fn,
     result_key: str,
 ) -> dict:
-    """Generic analyzer runner. Calls LLM with structured output and returns state update."""
+    """Generic analyzer runner. Calls LLM and parses JSON response manually."""
     try:
-        llm = _get_llm().with_structured_output(NivelScore)
+        llm = _get_llm()
         context = _build_context(state)
-        user_prompt = build_prompt_fn(context)
-        result = llm.invoke([
+        user_prompt = build_prompt_fn(context) + JSON_INSTRUCTION
+        response = llm.invoke([
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ])
+        result = _parse_response(response.content)
         return {result_key: result}
-    except Exception as exc:
-        logger.error("Analyzer %s failed: %s", result_key, str(exc)[:200])
+    except Exception:
+        logger.exception("Analyzer %s failed", result_key)
         return {result_key: FALLBACK_NIVEL}
 
 
