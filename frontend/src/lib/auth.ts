@@ -10,6 +10,8 @@ export const auth = betterAuth({
     // signUp temporariamente habilitado para criar primeiro usuario
   },
   session: {
+    expiresIn: 60 * 60 * 24 * 30, // 30 dias
+    updateAge: 60 * 60 * 24, // renova a cada 1 dia de uso
     cookieCache: {
       enabled: true,
       maxAge: 60 * 5, // 5 min
