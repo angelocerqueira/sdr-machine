@@ -1,6 +1,6 @@
 "use client";
 
-import { useSortable } from "@dnd-kit/sortable";
+import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import type { Lead } from "@/lib/types";
 
@@ -10,14 +10,13 @@ interface KanbanCardProps {
 }
 
 export function KanbanCard({ lead, onSelect }: KanbanCardProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: lead.id,
     data: { lead },
   });
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
   };
 
   const hasError = lead.status.endsWith("_failed");

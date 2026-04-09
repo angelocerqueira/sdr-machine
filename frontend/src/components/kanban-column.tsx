@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useDroppable } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { KanbanCard } from "./kanban-card";
 import { getLeads } from "@/lib/api";
 import type { Lead } from "@/lib/types";
@@ -140,45 +139,40 @@ export function KanbanColumn({
       </div>
 
       {/* Cards with scroll */}
-      <SortableContext
-        items={leads.map((l) => l.id)}
-        strategy={verticalListSortingStrategy}
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex flex-col gap-2 p-2 flex-1 min-h-[120px] max-h-[calc(100vh-320px)] overflow-y-auto"
       >
-        <div
-          ref={scrollRef}
-          onScroll={handleScroll}
-          className="flex flex-col gap-2 p-2 flex-1 min-h-[120px] max-h-[calc(100vh-320px)] overflow-y-auto"
-        >
-          {loading ? (
-            <div className="space-y-2">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="rounded-lg border border-border-subtle p-3 space-y-2">
-                  <div className="skeleton h-3.5 w-3/4" />
-                  <div className="flex justify-between">
-                    <div className="skeleton h-3 w-16" />
-                    <div className="skeleton h-3 w-8" />
-                  </div>
+        {loading ? (
+          <div className="space-y-2">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="rounded-lg border border-border-subtle p-3 space-y-2">
+                <div className="skeleton h-3.5 w-3/4" />
+                <div className="flex justify-between">
+                  <div className="skeleton h-3 w-16" />
+                  <div className="skeleton h-3 w-8" />
                 </div>
-              ))}
-            </div>
-          ) : leads.length === 0 ? (
-            <p className="text-[11px] text-text-muted text-center py-8 font-[family-name:var(--font-mono)]">
-              Nenhum lead
-            </p>
-          ) : (
-            <>
-              {leads.map((lead) => (
-                <KanbanCard key={lead.id} lead={lead} onSelect={onSelectLead} />
-              ))}
-              {loadingMore && (
-                <div className="flex items-center justify-center py-2">
-                  <span className="w-3 h-3 border-2 border-text-muted border-t-accent rounded-full animate-spin" />
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </SortableContext>
+              </div>
+            ))}
+          </div>
+        ) : leads.length === 0 ? (
+          <p className="text-[11px] text-text-muted text-center py-8 font-[family-name:var(--font-mono)]">
+            Nenhum lead
+          </p>
+        ) : (
+          <>
+            {leads.map((lead) => (
+              <KanbanCard key={lead.id} lead={lead} onSelect={onSelectLead} />
+            ))}
+            {loadingMore && (
+              <div className="flex items-center justify-center py-2">
+                <span className="w-3 h-3 border-2 border-text-muted border-t-accent rounded-full animate-spin" />
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

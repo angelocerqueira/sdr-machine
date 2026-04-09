@@ -20,6 +20,7 @@ export function KanbanBoard() {
   const [filterCidade, setFilterCidade] = useState("");
   const [filterScoreMin, setFilterScoreMin] = useState("");
   const [search, setSearch] = useState("");
+  const [orderBy, setOrderBy] = useState("score_desc");
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
 
   // Per-column refresh triggers: bump to make a column refetch
@@ -146,6 +147,17 @@ export function KanbanBoard() {
           onChange={(e) => setFilterScoreMin(e.target.value)}
           className={inputClass}
         />
+        <select
+          value={orderBy}
+          onChange={(e) => setOrderBy(e.target.value)}
+          className={selectClass}
+        >
+          <option value="score_desc">Maior score</option>
+          <option value="score_asc">Menor score</option>
+          <option value="created_desc">Mais recente</option>
+          <option value="updated_desc">Atualizado recente</option>
+          <option value="name_asc">Nome A-Z</option>
+        </select>
       </div>
 
       {/* Board */}
@@ -162,7 +174,7 @@ export function KanbanBoard() {
               filterCidade={filterCidade || undefined}
               filterScoreMin={filterScoreMin || undefined}
               search={search || undefined}
-              orderBy="score_desc"
+              orderBy={orderBy}
               onSelectLead={setSelectedLeadId}
             />
           ))}
