@@ -406,3 +406,21 @@ def enrich_lead_data(website: str, lead_info: dict | None = None, skip_pagespeed
         "social_profiles": social_profiles,
         "qualified": qualified,
     }
+
+
+def enrich_lead_via_orchestrator(
+    lead,
+    skip_providers: list[str] | None = None,
+    force_providers: list[str] | None = None,
+) -> dict:
+    """New entry point — uses the orchestrator.
+
+    Takes a Lead-like object directly (not the legacy website+lead_info dict).
+    Returns a dict compatible with what _run_enrich applies to the Lead row.
+    """
+    # Lazy import to avoid circular dependency:
+    # enricher -> orchestrator -> website_crawler -> enricher
+    from app.pipeline.enrichment.orchestrator import EnrichmentOrchestrator
+
+    orch = EnrichmentOrchestrator()
+    return orch.run(lead, skip_providers=skip_providers, force_providers=force_providers)

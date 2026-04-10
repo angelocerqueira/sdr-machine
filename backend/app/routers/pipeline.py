@@ -102,7 +102,7 @@ def _run_scrape(job_id: int, params: dict):
 
 
 def _run_enrich(job_id: int, params: dict):
-    from app.pipeline.enricher import enrich_lead_data
+    from app.pipeline.enricher import enrich_lead_via_orchestrator
 
     db = SessionLocal()
     try:
@@ -114,37 +114,54 @@ def _run_enrich(job_id: int, params: dict):
         _emit(job_id, {"type": "started", "job_id": job_id})
 
         lead_ids = params.get("lead_ids", [])
+        skip_providers = params.get("skip_providers", []) or []
+        force_providers = params.get("force_providers", []) or []
+
         if lead_ids:
             leads = db.query(Lead).filter(Lead.id.in_(lead_ids)).all()
         else:
             leads = db.query(Lead).filter(Lead.status == "scraped").all()
 
         enriched = 0
-        disqualified = 0
         errors: list[str] = []
         for idx, lead in enumerate(leads):
             try:
-                lead_info = {
-                    "nome": lead.nome,
-                    "nicho": lead.nicho,
-                    "categoria": lead.categoria,
-                    "cidade": lead.cidade,
-                    "rating": float(lead.rating) if lead.rating else None,
-                    "reviews_count": lead.reviews_count,
-                    "top_reviews": lead.top_reviews or [],
-                }
-                result = enrich_lead_data(lead.website or "", lead_info=lead_info)
-                lead.opportunity_score = result["opportunity_score"]
-                lead.opportunity_reasons = result["opportunity_reasons"]
-                lead.site_analysis = result["site_analysis"]
-                social = result.get("social_profiles", {})
+                result = enrich_lead_via_orchestrator(
+                    lead,
+                    skip_providers=skip_providers,
+                    force_providers=force_providers,
+                )
+                # NOTE: The orchestrator already applies data-precedence rules
+                # (existing lead fields are never overwritten). The result dict
+                # only contains fields that are safe to apply.
+                lead.opportunity_score = result.get("opportunity_score")
+                lead.opportunity_reasons = result.get("opportunity_reasons") or []
+                lead.site_analysis = result.get("site_analysis") or {}
+                social = result.get("social_profiles") or {}
                 lead.social_profiles = social if isinstance(social, dict) else {}
-                if result.get("qualified", True):
-                    lead.status = "enriched"
-                    enriched += 1
-                else:
-                    lead.status = "disqualified"
-                    disqualified += 1
+                lead.tech_stack = result.get("tech_stack") or []
+                lead.enrichment_sources = result.get("enrichment_sources") or []
+                if result.get("email"):
+                    lead.email = result["email"]
+                if result.get("cnpj"):
+                    lead.cnpj = result["cnpj"]
+                if result.get("razao_social"):
+                    lead.razao_social = result["razao_social"]
+                if result.get("porte"):
+                    lead.porte = result["porte"]
+                if result.get("cnae"):
+                    lead.cnae = result["cnae"]
+                if result.get("data_fundacao"):
+                    try:
+                        lead.data_fundacao = datetime.fromisoformat(result["data_fundacao"]).date()
+                    except (ValueError, TypeError):
+                        pass
+                if result.get("socios"):
+                    lead.socios = result["socios"]
+                if result.get("website") and not lead.website:
+                    lead.website = result["website"]
+                lead.status = "enriched"
+                enriched += 1
                 db.commit()
                 _emit(job_id, {"type": "progress", "current": idx + 1, "total": len(leads)})
             except Exception as exc:
@@ -154,7 +171,7 @@ def _run_enrich(job_id: int, params: dict):
                 errors.append(f"Lead {lead.id} ({lead.nome}): {str(exc)[:120]}")
 
         job.status = "done_with_errors" if errors else "done"
-        job.result_summary = {"enriched": enriched, "disqualified": disqualified, "total": len(leads), "errors": errors}
+        job.result_summary = {"enriched": enriched, "total": len(leads), "errors": errors}
         job.finished_at = datetime.utcnow()
         db.commit()
         _emit(job_id, {"type": "done", "summary": job.result_summary})

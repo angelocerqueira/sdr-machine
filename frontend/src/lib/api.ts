@@ -1,4 +1,4 @@
-import type { LeadListResponse, Lead, Job, JobListResponse, DashboardStats, Settings, OutreachMessage, LandingPage } from "./types";
+import type { LeadListResponse, Lead, Job, JobListResponse, DashboardStats, Settings, OutreachMessage, LandingPage, EnrichRequest } from "./types";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -171,7 +171,7 @@ export const streamJob = (id: number, onEvent: (event: { type: string; message: 
 export const runScrape = (params: { nichos?: string[]; cidades?: string[]; max_results?: number }) =>
   fetchAPI<Job>("/api/pipeline/scrape", { method: "POST", body: JSON.stringify(params) });
 
-export const runEnrich = (params: { lead_ids?: number[] }) =>
+export const runEnrich = (params: EnrichRequest) =>
   fetchAPI<Job>("/api/pipeline/enrich", { method: "POST", body: JSON.stringify(params) });
 
 export const runGenerate = (params: { lead_ids?: number[]; max_count?: number }) =>

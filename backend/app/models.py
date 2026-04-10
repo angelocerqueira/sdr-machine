@@ -4,7 +4,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean, Column, Integer, String, Text, Numeric,
-    DateTime, ForeignKey, Index, JSON, UniqueConstraint, func
+    DateTime, Date, ForeignKey, Index, JSON, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
 
@@ -54,6 +54,15 @@ class Lead(Base):
     opportunity_reasons = Column(JSON, default=list)
     site_analysis = Column(JSON, default=dict)
     social_profiles = Column(JSON, default=dict)
+    email = Column(String(255))
+    cnpj = Column(String(18))
+    razao_social = Column(String(255))
+    porte = Column(String(50))
+    cnae = Column(String(100))
+    data_fundacao = Column(Date)
+    socios = Column(JSON, default=list)
+    tech_stack = Column(JSON, default=list)
+    enrichment_sources = Column(JSON, default=list)
     lp_html = Column(Text)
     job_id = Column(Integer, ForeignKey("jobs.id", ondelete="SET NULL"))
     created_at = Column(DateTime, default=func.now())
@@ -68,6 +77,8 @@ class Lead(Base):
         Index("idx_leads_nicho", "nicho"),
         Index("idx_leads_cidade", "cidade"),
         Index("idx_leads_score", "opportunity_score"),
+        Index("idx_leads_email", "email"),
+        Index("idx_leads_cnpj", "cnpj"),
     )
 
 

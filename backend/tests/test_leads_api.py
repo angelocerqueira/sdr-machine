@@ -41,6 +41,22 @@ class TestGetLead:
         resp = client.get("/api/leads/9999")
         assert resp.status_code == 404
 
+    def test_lead_response_includes_enrichment_fields(self, client, sample_lead):
+        """Verify the new smart-enrichment fields are serialized in lead responses."""
+        resp = client.get(f"/api/leads/{sample_lead.id}")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        # Nullable string/date fields default to None
+        for field in ("email", "cnpj", "razao_social", "porte", "cnae", "data_fundacao"):
+            assert field in data, f"missing field: {field}"
+            assert data[field] is None, f"expected {field} to be None, got {data[field]!r}"
+
+        # List fields default to empty list
+        for field in ("socios", "tech_stack", "enrichment_sources"):
+            assert field in data, f"missing field: {field}"
+            assert data[field] == [], f"expected {field} to be [], got {data[field]!r}"
+
 
 class TestGetLeadLp:
     def test_lp_html(self, client, db, sample_lead):

@@ -18,6 +18,20 @@ export interface Lead {
   site_analysis: Record<string, unknown>;
   social_profiles: Record<string, unknown>;
   lp_html: string | null;
+  email: string | null;
+  cnpj: string | null;
+  razao_social: string | null;
+  porte: string | null;
+  cnae: string | null;
+  data_fundacao: string | null;
+  socios: Array<{ nome: string }>;
+  tech_stack: Array<{ name: string; category: string }>;
+  enrichment_sources: Array<{
+    provider: string;
+    status: string;
+    timestamp: string;
+    error?: string;
+  }>;
   job_id: number | null;
   created_at: string;
   updated_at: string;
@@ -105,6 +119,27 @@ export interface ServiceLevels {
   qualificado: boolean;
   motivo_desqualificacao: string | null;
   resumo_executivo: string;
+}
+
+export interface EnrichProvider {
+  name: string;
+  display_name: string;
+  cost: "free" | "freemium";
+}
+
+export const ENRICH_PROVIDERS: EnrichProvider[] = [
+  { name: "website_crawler", display_name: "Website Crawler", cost: "free" },
+  { name: "schema_extractor", display_name: "Schema.org Extractor", cost: "free" },
+  { name: "tech_stack", display_name: "Tech Stack Detector", cost: "free" },
+  { name: "cnpj_enricher", display_name: "CNPJ (BrasilAPI)", cost: "free" },
+  { name: "email_discoverer", display_name: "Email Discoverer", cost: "freemium" },
+  { name: "apollo", display_name: "Apollo.io", cost: "freemium" },
+];
+
+export interface EnrichRequest {
+  lead_ids?: number[];
+  skip_providers?: string[];
+  force_providers?: string[];
 }
 
 export const KANBAN_COLUMNS = [

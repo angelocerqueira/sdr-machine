@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from pydantic import BaseModel
 
 
@@ -7,6 +7,7 @@ from pydantic import BaseModel
 class LeadBase(BaseModel):
     nome: str
     telefone: str | None = None
+    email: str | None = None
     website: str | None = None
     endereco: str | None = None
     cidade: str | None = None
@@ -16,6 +17,12 @@ class LeadBase(BaseModel):
     reviews_count: int = 0
     google_maps_url: str | None = None
     top_reviews: list[str] = []
+    cnpj: str | None = None
+    razao_social: str | None = None
+    porte: str | None = None
+    cnae: str | None = None
+    data_fundacao: date | None = None
+    socios: list = []
 
 
 class LeadOut(LeadBase):
@@ -26,6 +33,8 @@ class LeadOut(LeadBase):
     opportunity_reasons: list[str] = []
     site_analysis: dict = {}
     social_profiles: dict = {}
+    tech_stack: list = []
+    enrichment_sources: list = []
     lp_html: str | None = None
     job_id: int | None = None
     created_at: datetime
@@ -41,6 +50,8 @@ class LeadSummaryOut(LeadBase):
     status: str
     opportunity_score: int | None = None
     opportunity_reasons: list[str] = []
+    tech_stack: list = []
+    enrichment_sources: list = []
     job_id: int | None = None
     created_at: datetime
     updated_at: datetime
@@ -97,6 +108,8 @@ class ScrapeRequest(BaseModel):
 
 class EnrichRequest(BaseModel):
     lead_ids: list[int] = []
+    skip_providers: list[str] = []
+    force_providers: list[str] = []
 
 
 class GenerateRequest(BaseModel):
