@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     langsmith_api_key: str = ""
     langsmith_project: str = "sdr-machine"
     langsmith_tracing: bool = False
+    hunter_api_key: str = ""
+    apollo_api_key: str = ""
     frontend_url: str = "http://localhost:3000"
 
     model_config = {"env_file": ".env"}
