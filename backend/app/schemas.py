@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from pydantic import BaseModel
 
 
@@ -21,7 +21,7 @@ class LeadBase(BaseModel):
     razao_social: str | None = None
     porte: str | None = None
     cnae: str | None = None
-    data_fundacao: str | None = None  # ISO date as string for JSON serialization
+    data_fundacao: date | None = None
     socios: list = []
 
 
