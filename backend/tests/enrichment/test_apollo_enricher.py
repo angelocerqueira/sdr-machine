@@ -59,6 +59,11 @@ def test_enrich_organization(mock_get, mock_settings):
     assert apollo_data["name"] == "Clinica X"
     assert apollo_data["estimated_num_employees"] == 25
 
+    # API key must be in header, not query params (security)
+    call_kwargs = mock_get.call_args
+    assert call_kwargs.kwargs.get("headers", {}).get("X-Api-Key") == "fake_key"
+    assert "api_key" not in (call_kwargs.kwargs.get("params") or {})
+
 
 # --- EC17: Apollo 200 with null organization ---
 

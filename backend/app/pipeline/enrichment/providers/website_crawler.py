@@ -80,13 +80,16 @@ class WebsiteCrawlerProvider(BaseProvider):
             html = resp.text[:15000]
             context.html_content = html
             context.response_headers = dict(resp.headers)
+            is_ok = 200 <= resp.status_code < 400
             site_data = {
-                "status": "ok",
+                "status": "ok" if is_ok else "http_error",
                 "status_code": resp.status_code,
                 "final_url": resp.url,
                 "has_ssl": str(resp.url).startswith("https"),
                 "content_length": len(resp.text),
             }
+            if not is_ok:
+                errors.append(f"http_{resp.status_code}")
         except requests.exceptions.SSLError:
             site_data = {"status": "ssl_error", "has_ssl": False}
             errors.append("ssl_error")
@@ -136,8 +139,11 @@ class WebsiteCrawlerProvider(BaseProvider):
             "social_profiles": social_profiles,
         }
 
+        # Always success=True when we have site status data — even for broken
+        # sites. The site_analysis.status field communicates the *site's* health,
+        # while success=True means the provider itself ran correctly.
         return ProviderResult(
-            success=site_data.get("status") == "ok",
+            success=bool(site_data),
             data=data,
             errors=errors,
             source=self.name,
