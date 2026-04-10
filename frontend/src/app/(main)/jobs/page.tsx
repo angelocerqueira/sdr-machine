@@ -189,7 +189,7 @@ export default function JobsPage() {
   return (
     <div>
       <div className="mb-8">
-        <h2 className="text-2xl font-bold tracking-tight font-[family-name:var(--font-outfit)]">Jobs</h2>
+        <h2 className="text-2xl font-bold tracking-tight font-[family-name:var(--font-heading)]">Jobs</h2>
         <p className="text-text-secondary text-sm mt-1">Histórico de execuções do pipeline</p>
       </div>
 

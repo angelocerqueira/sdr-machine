@@ -11,7 +11,7 @@ Scraping → Enriquecimento → Geração de LP → Outreach
 ```
 
 1. **Scraping** — Busca negócios locais no Google Maps via Apify (nome, telefone, site, rating, avaliações)
-2. **Enriquecimento** — Analisa o site de cada lead (SSL, responsividade, PageSpeed, CTAs) e calcula um score de oportunidade (quanto pior o site, maior a oportunidade)
+2. **Enriquecimento** — Pipeline inteligente com 6 providers: crawl do site (SSL, responsividade, PageSpeed, CTAs), extração de dados estruturados (schema.org), detecção de tech stack, consulta CNPJ (Receita Federal), descoberta de email (Hunter.io) e enriquecimento de contato (Apollo.io). Calcula um score de oportunidade com 10+ sinais (quanto pior a presença digital, maior a oportunidade)
 3. **Geração de LP** — Cria uma landing page personalizada para o negócio usando a API do Claude, servindo como demonstração de trabalho
 4. **Outreach** — Gera sequência de 3 mensagens (inicial + 2 follow-ups) com links de WhatsApp prontos para envio
 
@@ -52,6 +52,8 @@ YOUR_NAME=Seu Nome
 YOUR_WHATSAPP=5549999999999
 YOUR_EMAIL=seu@email.com
 YOUR_WEBSITE=https://seusite.com
+HUNTER_API_KEY=sua_chave_hunter        # opcional — descoberta de email
+APOLLO_API_KEY=sua_chave_apollo        # opcional — enriquecimento de contato
 ```
 
 Para o frontend, crie `frontend/.env.local`:
@@ -87,7 +89,7 @@ sdr-machine/
 │   │   ├── main.py              # FastAPI app + CORS + routers
 │   │   ├── config.py            # Settings via pydantic-settings (.env)
 │   │   ├── database.py          # SQLAlchemy engine + session
-│   │   ├── models.py            # Job, Lead, OutreachMessage
+│   │   ├── models.py            # Job, Lead, LandingPage, OutreachMessage
 │   │   ├── schemas.py           # Pydantic request/response schemas
 │   │   ├── routers/
 │   │   │   ├── leads.py         # CRUD de leads + servir LP como HTML
@@ -96,7 +98,12 @@ sdr-machine/
 │   │   │   └── settings.py      # Configurações (read-only)
 │   │   └── pipeline/
 │   │       ├── scraper.py       # Google Maps via Apify
-│   │       ├── enricher.py      # Análise de site + score de oportunidade
+│   │       ├── enricher.py      # Wrapper legado (delega ao orchestrator)
+│   │       ├── enrichment/      # Smart Enrichment Pipeline
+│   │       │   ├── orchestrator.py  # Orquestrador de providers
+│   │       │   ├── scoring.py       # Algoritmo de scoring (10+ sinais)
+│   │       │   ├── base_provider.py # BaseProvider + EnrichmentContext
+│   │       │   └── providers/       # 6 providers plugáveis
 │   │       ├── generator.py     # Geração de LP via Claude API
 │   │       └── outreach.py      # Geração de mensagens WhatsApp
 │   ├── alembic/                 # Migrations do banco
@@ -177,6 +184,11 @@ O score (0-100) mede o quão ruim é a presença digital do lead — quanto maio
 | Conteúdo escasso | +10 |
 | Template genérico | +5 |
 | Poucas imagens | +5 |
+| Sem links para redes sociais | +5 |
+| Sem dados estruturados (schema.org) | +3 |
+| Tech stack defasado (Flash, jQuery 1/2, Silverlight) | +5 |
+| Email não profissional (gmail/hotmail/etc) | +5 |
+| Empresa com 5+ anos e presença digital fraca (score >= 50) | +2 |
 
 ## Deploy
 

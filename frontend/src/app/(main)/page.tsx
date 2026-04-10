@@ -78,7 +78,7 @@ export default function DashboardPage() {
     <div>
       {/* Header */}
       <div className="mb-8">
-        <h2 className="text-2xl font-bold tracking-tight font-[family-name:var(--font-outfit)]">Dashboard</h2>
+        <h2 className="text-2xl font-bold tracking-tight font-[family-name:var(--font-heading)]">Dashboard</h2>
         <p className="text-text-secondary text-sm mt-1">Visão geral da prospecção</p>
       </div>
 

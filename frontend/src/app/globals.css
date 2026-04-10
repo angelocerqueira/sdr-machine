@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-bg: #09090b;
-  --color-surface: #131316;
-  --color-surface-raised: #1a1a1f;
-  --color-surface-overlay: #222228;
-  --color-border: #27272d;
-  --color-border-subtle: #1e1e23;
-  --color-text: #ececef;
-  --color-text-secondary: #a1a1aa;
-  --color-text-muted: #63636e;
+  --color-bg: #111113;
+  --color-surface: #1a1a1d;
+  --color-surface-raised: #242428;
+  --color-surface-overlay: #2c2c32;
+  --color-border: #333339;
+  --color-border-subtle: #27272d;
+  --color-text: #f0f0f3;
+  --color-text-secondary: #9898a3;
+  --color-text-muted: #5a5a66;
   --color-accent: #34d399;
   --color-accent-dim: #059669;
   --color-accent-subtle: rgba(52, 211, 153, 0.08);
@@ -18,9 +18,9 @@
   --color-warning: #fbbf24;
   --color-info: #60a5fa;
 
-  --font-heading: var(--font-outfit);
-  --font-body: var(--font-dm-sans);
-  --font-mono: var(--font-jetbrains-mono);
+  --font-heading: var(--font-geist);
+  --font-body: var(--font-geist);
+  --font-mono: var(--font-geist-mono);
 }
 
 /* Base */
@@ -82,7 +82,7 @@ h1, h2, h3, h4 {
 }
 
 .card-glow:hover {
-  box-shadow: 0 0 0 1px var(--color-accent-subtle), 0 4px 24px -4px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 1px var(--color-accent-subtle), 0 4px 16px -4px rgba(0, 0, 0, 0.4);
   border-color: color-mix(in srgb, var(--color-accent) 20%, var(--color-border));
 }
 

@@ -34,7 +34,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <h1 className="font-[family-name:var(--font-outfit)] text-2xl font-bold text-text mb-2 text-center">
+        <h1 className="font-[family-name:var(--font-heading)] text-2xl font-bold text-text mb-2 text-center">
           SDR Machine
         </h1>
         <p className="text-text-muted text-sm text-center mb-8">

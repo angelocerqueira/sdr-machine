@@ -19,7 +19,7 @@ export function LeadDetail({ lead }: LeadDetailProps) {
       {/* Header */}
       <div className="flex items-start justify-between gap-6">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight font-[family-name:var(--font-outfit)]">{lead.nome}</h2>
+          <h2 className="text-2xl font-bold tracking-tight font-[family-name:var(--font-heading)]">{lead.nome}</h2>
           <p className="text-text-secondary text-sm mt-1">
             {lead.categoria || lead.nicho} · {lead.cidade}
           </p>
