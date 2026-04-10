@@ -108,6 +108,8 @@ class ScrapeRequest(BaseModel):
 
 class EnrichRequest(BaseModel):
     lead_ids: list[int] = []
+    skip_providers: list[str] = []
+    force_providers: list[str] = []
 
 
 class GenerateRequest(BaseModel):

@@ -54,6 +54,15 @@ class TestPipelineEndpoints:
         assert data["type"] == "outreach"
         assert data["status"] == "pending"
 
+    def test_enrich_accepts_skip_providers(self, client, sample_lead):
+        response = client.post(
+            "/api/pipeline/enrich",
+            json={"lead_ids": [sample_lead.id], "skip_providers": ["apollo"]},
+        )
+        assert response.status_code in (200, 202)
+        data = response.json()
+        assert "id" in data or "job_id" in data
+
 
 class TestJobEndpoints:
     """Tests for GET /api/jobs endpoints."""
