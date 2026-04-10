@@ -38,13 +38,25 @@ Pydantic `BaseSettings` loading from `.env` (see `.env.example`). Key vars:
 | `TARGET_NICHES`, `TARGET_CITIES` | Lists in config | Default search parameters |
 | `MIN_RATING` | 3.0 | Google Maps filter |
 | `OPPORTUNITY_SCORE_THRESHOLD` | 40 | Lead qualification cutoff |
+| `HUNTER_API_KEY` | `""` | Email discovery via Hunter.io (opcional) |
+| `APOLLO_API_KEY` | `""` | Contact enrichment via Apollo.io (opcional) |
 
 ## Database Models (`app/models.py`)
 
-Three tables: `jobs`, `leads`, `outreach_messages`.
+Four tables: `jobs`, `leads`, `landing_pages`, `outreach_messages`.
 
-- **Lead** has indexes on `status`, `nicho`, `cidade`, `opportunity_score`. Has a PostgreSQL trigger for auto-updating `updated_at` (created in the Alembic migration, not in app code).
-- **Lead → OutreachMessages**: cascade delete. **Job → Leads**: SET NULL on delete.
+- **Lead** has indexes on `status`, `nicho`, `cidade`, `opportunity_score`, `email`, `cnpj`. Has a PostgreSQL trigger for auto-updating `updated_at` (created in the Alembic migration, not in app code).
+- **Lead** enrichment columns (added by Smart Enrichment Pipeline):
+  - `email` — String(255), contact email discovered via Hunter/Apollo
+  - `cnpj` — String(18), CNPJ from Receita Federal
+  - `razao_social` — String(255), razão social from CNPJ
+  - `porte` — String(50), porte da empresa (MEI, ME, EPP, etc.)
+  - `cnae` — String(100), CNAE principal
+  - `data_fundacao` — Date, data de fundação da empresa
+  - `socios` — JSON (list), lista de sócios from CNPJ
+  - `tech_stack` — JSON (list), tecnologias detectadas no site (name, category)
+  - `enrichment_sources` — JSON (list), audit trail de quais providers rodaram e resultado
+- **Lead → OutreachMessages**: cascade delete. **Lead → LandingPages**: cascade delete. **Job → Leads**: SET NULL on delete.
 - All schemas in `app/schemas.py` use `from_attributes = True` for ORM ↔ Pydantic conversion. `LeadSummaryOut` excludes `lp_html` to keep list responses small.
 
 ## API Routes
@@ -71,11 +83,39 @@ Each stage is a module with a main function, run as a **FastAPI BackgroundTask**
 - Deduplicates by phone or name. Filters by `min_rating`.
 - Returns empty list on HTTP errors (silent fail).
 
-### 2. Enricher (`enricher.py`)
-- `enrich_lead_data(website)` → fetches site (10s timeout, first 15KB of HTML), runs BeautifulSoup analysis, calls PageSpeed API (1s sleep between calls for rate limiting)
-- **Scoring algorithm** (0–100, higher = worse site = more opportunity):
+### 2. Enricher (`enricher.py` + `enrichment/`)
+
+O `enricher.py` legado ainda existe e mantém funções utilitárias (fetch_website, analyze_html, scrape_social_profiles), mas a entry point principal agora é `enrich_lead_via_orchestrator()`, que delega ao pacote `enrichment/`.
+
+**Pacote `enrichment/`** — arquitetura provider-based:
+
+- **`base_provider.py`** — `BaseProvider` (ABC), `EnrichmentContext` (dataclass mutável compartilhada entre providers), `ProviderResult` (resultado padronizado)
+- **`orchestrator.py`** — `EnrichmentOrchestrator` que planeja e executa providers em ordem. Métodos: `plan()` → `execute()` → `run()` (convenience)
+- **`scoring.py`** — Algoritmo de scoring isolado com 10+ sinais
+- **`providers/`** — 6 providers plugáveis:
+  - `CnpjProvider` — consulta Receita Federal, pode descobrir website
+  - `WebsiteCrawlerProvider` — crawl do site, popula `context.html_content`
+  - `SchemaOrgProvider` — extrai dados estruturados (schema.org) do HTML
+  - `TechStackProvider` — detecta tecnologias via headers + HTML patterns
+  - `EmailDiscovererProvider` — descoberta de email via Hunter.io
+  - `ApolloProvider` — enriquecimento de contato via Apollo.io
+
+**`EnrichmentContext`** — estado compartilhado entre providers (html_content, response_headers, discovered_website). O WebsiteCrawler popula `context.html_content` para que SchemaOrg e TechStack consumam sem re-crawl.
+
+**4 fases de execução** (definidas em `_PHASE_ORDER`):
+1. **Discovery** — CnpjProvider (pode descobrir website para leads sem site)
+2. **Crawl** — WebsiteCrawler, SchemaOrg, TechStack (encadeados via context.html_content)
+3. **Contact** — EmailDiscoverer, Apollo
+4. **Scoring** — `calculate_score()` recalcula score com todos os dados coletados
+
+**Overrides**: `skip_providers` remove providers do plano; `force_providers` força inclusão mesmo se `can_run()` retorna False. Skip tem precedência sobre force.
+
+**Scoring algorithm** (0–100, higher = worse site = more opportunity):
   - No website → 95 pts. Site down → 85 pts.
-  - No SSL +15, not responsive +15, no WhatsApp +10, no CTA +10, no analytics +8, no chatbot +8, PageSpeed <50 +10, thin content (<200 words) +10, template site +5, few images +5
+  - No SSL +15, not responsive +15, no WhatsApp +10, no CTA +10, no analytics +8, no chatbot +8, PageSpeed <50 +10, thin content +10, template site +5, few images +5, sem social links +5, sem structured data +3
+  - Tech stack defasado (Flash, jQuery 1/2, Silverlight) +5
+  - Email genérico (gmail/hotmail/etc) +5
+  - Empresa com 5+ anos e score >= 50 → +2
   - Capped at 100. Each condition adds a reason string to `opportunity_reasons`.
 
 ### 3. Generator (`generator.py`)
