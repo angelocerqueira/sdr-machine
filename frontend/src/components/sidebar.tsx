@@ -48,10 +48,10 @@ export function Sidebar() {
       <div className="px-5 pt-6 pb-5">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-accent to-accent-dim flex items-center justify-center">
-            <span className="text-bg text-xs font-bold font-[family-name:var(--font-outfit)]">S</span>
+            <span className="text-bg text-xs font-bold font-[family-name:var(--font-heading)]">S</span>
           </div>
           <div>
-            <h1 className="text-sm font-semibold text-text font-[family-name:var(--font-outfit)] tracking-tight">SDR Machine</h1>
+            <h1 className="text-sm font-semibold text-text font-[family-name:var(--font-heading)] tracking-tight">SDR Machine</h1>
             <p className="text-[10px] text-text-muted font-[family-name:var(--font-mono)] tracking-wide">v1.0</p>
           </div>
         </div>
