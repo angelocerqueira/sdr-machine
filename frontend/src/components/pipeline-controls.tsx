@@ -6,6 +6,7 @@ import { JobProgress } from "./job-progress";
 import { ConfirmModal } from "./confirm-modal";
 import { ScrapeModal } from "./scrape-modal";
 import type { Job } from "@/lib/types";
+import { ENRICH_PROVIDERS } from "@/lib/types";
 
 const PHASES = [
   { key: "scrape", label: "Scraping", description: "Google Maps", run: runScrape, defaultParams: {} },
@@ -31,6 +32,19 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
   const [eligibleCounts, setEligibleCounts] = useState<Record<string, number>>({});
   const [runningJobs, setRunningJobs] = useState<string[]>([]);
   const [pendingPhase, setPendingPhase] = useState<typeof PHASES[number] | null>(null);
+  const [enabledProviders, setEnabledProviders] = useState<Set<string>>(
+    new Set(ENRICH_PROVIDERS.map((p) => p.name))
+  );
+  const [showProviders, setShowProviders] = useState(false);
+
+  const toggleProvider = (name: string) => {
+    setEnabledProviders((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
 
   useEffect(() => {
     getPipelineStatus()
@@ -53,10 +67,17 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
 
   const handleConfirm = useCallback(() => {
     if (pendingPhase) {
-      handleRun(pendingPhase);
+      if (pendingPhase.key === "enrich") {
+        const skip = ENRICH_PROVIDERS
+          .filter((p) => !enabledProviders.has(p.name))
+          .map((p) => p.name);
+        handleRun(pendingPhase, skip.length > 0 ? { skip_providers: skip } : {});
+      } else {
+        handleRun(pendingPhase);
+      }
       setPendingPhase(null);
     }
-  }, [pendingPhase, handleRun]);
+  }, [pendingPhase, handleRun, enabledProviders]);
 
   const handleScrapeConfirm = useCallback((params: { nichos: string[]; cidades: string[]; max_results: number }) => {
     const scrapePhase = PHASES[0];
@@ -139,6 +160,37 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
           <p className="mt-2 text-accent font-[family-name:var(--font-mono)] text-[13px]">
             {eligibleCounts[pendingPhase.key] ?? 0} leads elegíveis
           </p>
+        )}
+        {pendingPhase?.key === "enrich" && (
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setShowProviders((v) => !v)}
+              className="text-xs text-text-muted hover:text-text-secondary transition-colors"
+            >
+              {showProviders ? "\u25BE" : "\u25B8"} Fontes de enriquecimento ({enabledProviders.size}/{ENRICH_PROVIDERS.length})
+            </button>
+            {showProviders && (
+              <div className="mt-2 space-y-1.5 rounded-lg border border-border bg-surface-raised p-3">
+                {ENRICH_PROVIDERS.map((p) => (
+                  <label key={p.name} className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer hover:text-text transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={enabledProviders.has(p.name)}
+                      onChange={() => toggleProvider(p.name)}
+                      className="accent-accent"
+                    />
+                    <span>{p.display_name}</span>
+                    {p.cost === "freemium" && (
+                      <span className="rounded bg-warning/15 border border-warning/20 px-1.5 py-0.5 text-[10px] text-warning font-[family-name:var(--font-mono)]">
+                        freemium
+                      </span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </ConfirmModal>
     </div>

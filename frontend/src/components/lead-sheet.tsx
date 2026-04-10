@@ -232,6 +232,38 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
                 </div>
               )}
 
+              {/* Enrichment sources */}
+              {lead.enrichment_sources && lead.enrichment_sources.length > 0 && (
+                <div className="rounded-xl border border-border bg-surface p-4">
+                  <h3 className="text-[10px] uppercase tracking-widest font-[family-name:var(--font-mono)] text-text-muted mb-3">
+                    Fontes de Enriquecimento
+                  </h3>
+                  <ul className="space-y-1">
+                    {lead.enrichment_sources.map((s, i) => (
+                      <li key={i} className="flex items-center gap-2 text-xs">
+                        <span
+                          className={
+                            s.status === "ok"
+                              ? "text-accent"
+                              : s.status === "skipped"
+                              ? "text-text-muted"
+                              : "text-danger"
+                          }
+                        >
+                          {"\u25CF"}
+                        </span>
+                        <span className="text-text-secondary">{s.provider}</span>
+                        {s.error && (
+                          <span className="truncate text-text-muted font-[family-name:var(--font-mono)]">
+                            — {s.error}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {/* Service Level Tabs or legacy DiagnosticPanel */}
               {(lead.site_analysis as Record<string, unknown>)?.service_levels ? (
                 <ServiceLevelTabs
