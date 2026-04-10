@@ -10,10 +10,9 @@ Supports `skip_providers` and `force_providers` to override the auto-plan.
 """
 from __future__ import annotations
 
-import inspect
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 
 from app.pipeline.enrichment.base_provider import (
     BaseProvider,
@@ -55,15 +54,6 @@ _PHASE_ORDER = [
     "email_discoverer",
     "apollo",
 ]
-
-
-def _accepts_context(func) -> bool:
-    """Check if a callable accepts a ``context`` keyword argument."""
-    try:
-        sig = inspect.signature(func)
-        return "context" in sig.parameters
-    except (TypeError, ValueError):
-        return False
 
 
 class EnrichmentOrchestrator:
@@ -132,10 +122,7 @@ class EnrichmentOrchestrator:
                 continue
             # Fall back to asking the provider itself
             try:
-                if _accepts_context(provider.can_run):
-                    runnable = provider.can_run(lead, context=None)
-                else:
-                    runnable = provider.can_run(lead)
+                runnable = provider.can_run(lead)
                 if runnable:
                     selected.append(provider)
             except Exception as exc:
@@ -172,14 +159,11 @@ class EnrichmentOrchestrator:
             source_entry: dict = {
                 "provider": provider.name,
                 "status": "ok",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             try:
                 # Gate: re-check can_run with current context
-                if _accepts_context(provider.can_run):
-                    runnable = provider.can_run(lead, context=context)
-                else:
-                    runnable = provider.can_run(lead)
+                runnable = provider.can_run(lead, context=context)
                 if not runnable:
                     source_entry["status"] = "skipped"
                     source_entry["error"] = "preconditions not met"

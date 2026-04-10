@@ -131,6 +131,9 @@ def _run_enrich(job_id: int, params: dict):
                     skip_providers=skip_providers,
                     force_providers=force_providers,
                 )
+                # NOTE: The orchestrator already applies data-precedence rules
+                # (existing lead fields are never overwritten). The result dict
+                # only contains fields that are safe to apply.
                 lead.opportunity_score = result.get("opportunity_score")
                 lead.opportunity_reasons = result.get("opportunity_reasons") or []
                 lead.site_analysis = result.get("site_analysis") or {}

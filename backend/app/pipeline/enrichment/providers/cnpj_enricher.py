@@ -28,12 +28,7 @@ class CnpjProvider(BaseProvider):
     cost = "free"
 
     def can_run(self, lead, context: EnrichmentContext | None = None) -> bool:
-        if getattr(lead, "cnpj", None):
-            return True
-        # nome + cidade may enable future CNPJ lookup
-        if getattr(lead, "nome", None) and getattr(lead, "cidade", None):
-            return True
-        return False
+        return bool(getattr(lead, "cnpj", None))
 
     def run(self, lead, context: EnrichmentContext) -> ProviderResult:
         cnpj_raw = getattr(lead, "cnpj", None)

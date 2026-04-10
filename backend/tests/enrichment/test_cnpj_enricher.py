@@ -18,13 +18,9 @@ def test_can_run_with_cnpj():
     assert provider.can_run(FakeLead(cnpj="12.345.678/0001-90")) is True
 
 
-def test_can_run_with_nome_and_cidade():
+def test_cannot_run_without_cnpj():
     provider = CnpjProvider()
-    assert provider.can_run(FakeLead(nome="Clinica XYZ", cidade="Chapeco SC")) is True
-
-
-def test_cannot_run_without_input():
-    provider = CnpjProvider()
+    assert provider.can_run(FakeLead(nome="Clinica XYZ", cidade="Chapeco SC")) is False
     assert provider.can_run(FakeLead(nome="", cidade=None)) is False
 
 

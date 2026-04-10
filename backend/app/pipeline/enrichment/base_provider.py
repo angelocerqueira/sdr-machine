@@ -46,7 +46,7 @@ class BaseProvider(ABC):
     cost: str = "free"  # "free" | "freemium"
 
     @abstractmethod
-    def can_run(self, lead: "Lead") -> bool:
+    def can_run(self, lead: "Lead", context: "EnrichmentContext | None" = None) -> bool:
         """Return True if the provider has the minimum data it needs."""
 
     @abstractmethod
