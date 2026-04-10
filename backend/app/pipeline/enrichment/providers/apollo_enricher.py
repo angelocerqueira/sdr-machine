@@ -51,7 +51,8 @@ class ApolloProvider(BaseProvider):
         try:
             resp = requests.get(
                 APOLLO_ORG_ENRICH_URL,
-                params={"api_key": settings.apollo_api_key, "domain": domain},
+                headers={"X-Api-Key": settings.apollo_api_key},
+                params={"domain": domain},
                 timeout=20,
             )
         except Exception as exc:

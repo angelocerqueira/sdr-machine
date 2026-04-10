@@ -72,7 +72,8 @@ def test_run_handles_connection_error(mock_get):
     ctx = EnrichmentContext()
     result = provider.run(lead, ctx)
 
-    # Not fatal — still success but with error status in data
+    # Provider ran successfully — it determined the site is down
+    assert result.success is True
     assert result.data["site_analysis"]["status"] == "connection_error"
 
 
@@ -85,7 +86,27 @@ def test_run_handles_timeout(mock_get):
     lead = FakeLead(website="https://example.com")
     ctx = EnrichmentContext()
     result = provider.run(lead, ctx)
+    assert result.success is True
     assert result.data["site_analysis"]["status"] == "timeout"
+
+
+@patch("app.pipeline.enrichment.providers.website_crawler.requests.get")
+def test_http_error_status_not_ok(mock_get):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 500
+    mock_resp.text = "<html>Internal Server Error</html>"
+    mock_resp.url = "https://example.com"
+    mock_resp.headers = {}
+    mock_get.return_value = mock_resp
+
+    provider = WebsiteCrawlerProvider()
+    lead = FakeLead(website="https://example.com")
+    ctx = EnrichmentContext()
+    result = provider.run(lead, ctx)
+
+    assert result.success is True
+    assert result.data["site_analysis"]["status"] == "http_error"
+    assert any("500" in e for e in result.errors)
 
 
 # --- EC1, EC2, EC3: URL normalization ---

@@ -55,15 +55,12 @@ def calculate_score(
     website = lead_data.get("website")
     status = site_analysis.get("status")
 
-    # Base: no website
+    # Early returns for extreme cases (matches legacy enricher.py behavior)
     if not website or status == "no_website":
-        score += 40
-        reasons.append("Sem website — oportunidade alta")
+        return 95, ["Sem website — oportunidade máxima"]
 
-    # Site down / broken
     if status in ("connection_error", "timeout", "ssl_error"):
-        score += 30
-        reasons.append(f"Site com problemas técnicos: {status}")
+        return 85, [f"Site com problemas: {status}"]
 
     if website and status == "ok":
         if not site_analysis.get("has_ssl"):
@@ -74,18 +71,42 @@ def calculate_score(
             score += 15
             reasons.append("Site não é responsivo (mobile)")
 
+        if not site_analysis.get("has_whatsapp_link"):
+            score += 10
+            reasons.append("Sem link de WhatsApp")
+
+        if not site_analysis.get("has_analytics"):
+            score += 8
+            reasons.append("Sem Google Analytics/tracking")
+
+        if not site_analysis.get("has_chatbot"):
+            score += 8
+            reasons.append("Sem chatbot/atendimento online")
+
         if not site_analysis.get("has_cta"):
             score += 10
             reasons.append("Sem CTA claro (call-to-action)")
-
-        if not site_analysis.get("has_social_links"):
-            score += 5
-            reasons.append("Sem links para redes sociais")
 
         pagespeed = site_analysis.get("pagespeed")
         if pagespeed is not None and pagespeed < 50:
             score += 10
             reasons.append(f"PageSpeed baixo ({pagespeed}/100)")
+
+        if site_analysis.get("word_count", 500) < 200:
+            score += 10
+            reasons.append("Conteúdo muito escasso")
+
+        if site_analysis.get("is_template"):
+            score += 5
+            reasons.append("Usa template genérico (Wix/WordPress.com)")
+
+        if site_analysis.get("image_count", 5) < 2:
+            score += 5
+            reasons.append("Quase sem imagens")
+
+        if not site_analysis.get("has_social_links"):
+            score += 5
+            reasons.append("Sem links para redes sociais")
 
         if not site_analysis.get("structured_data"):
             score += 3
