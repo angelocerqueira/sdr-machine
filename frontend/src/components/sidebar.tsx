@@ -55,38 +55,6 @@ const NAV_SECTIONS: NavSection[] = [
       },
     ],
   },
-  {
-    label: "Dados",
-    items: [
-      {
-        href: "/leads",
-        label: "Leads",
-        icon: (
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <circle cx="6" cy="5" r="2.5" />
-            <path d="M1 14c0-2.5 2-4.5 5-4.5s5 2 5 4.5" />
-            <circle cx="12" cy="5.5" r="1.8" />
-            <path d="M12 9.5c1.5 0 3 1 3 2.5" />
-          </svg>
-        ),
-      },
-    ],
-  },
-  {
-    label: "Config",
-    items: [
-      {
-        href: "/settings",
-        label: "Settings",
-        icon: (
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <circle cx="8" cy="8" r="2" />
-            <path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M2.9 13.1l1.4-1.4M11.7 4.3l1.4-1.4" />
-          </svg>
-        ),
-      },
-    ],
-  },
 ];
 
 export function Sidebar() {
@@ -164,6 +132,10 @@ export function Sidebar() {
                         {item.badge}
                       </span>
                     )}
+                    {/* Tooltip — tablet icon-only mode */}
+                    <span className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 hidden md:group-hover:flex lg:!hidden whitespace-nowrap bg-surface-overlay border border-border text-text text-xs font-medium rounded-md px-2.5 py-1 shadow-lg z-50">
+                      {item.label}
+                    </span>
                   </Link>
                 );
               })}

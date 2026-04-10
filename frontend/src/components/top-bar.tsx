@@ -1,10 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { CommandSearch } from "./command-search";
+import { SignOutButton } from "./sign-out-button";
 
 export function TopBar() {
   const [searchOpen, setSearchOpen] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const avatarRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (avatarRef.current && !avatarRef.current.contains(e.target as Node)) {
+        setAvatarOpen(false);
+      }
+    }
+    if (avatarOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [avatarOpen]);
 
   return (
     <>
@@ -56,10 +69,20 @@ export function TopBar() {
           + Novo Job
         </button>
 
-        {/* Avatar */}
-        <button className="w-7 h-7 rounded-full bg-surface-raised border border-border flex items-center justify-center text-[11px] font-semibold text-text-secondary hover:border-text-muted transition-colors duration-150">
-          AC
-        </button>
+        {/* Avatar + dropdown */}
+        <div ref={avatarRef} className="relative">
+          <button
+            onClick={() => setAvatarOpen((v) => !v)}
+            className="w-7 h-7 rounded-full bg-surface-raised border border-border flex items-center justify-center text-[11px] font-semibold text-text-secondary hover:border-text-muted transition-colors duration-150"
+          >
+            AC
+          </button>
+          {avatarOpen && (
+            <div className="absolute right-0 top-[calc(100%+6px)] bg-surface-overlay border border-border rounded-md shadow-lg py-1.5 px-2 min-w-[120px] z-50">
+              <SignOutButton />
+            </div>
+          )}
+        </div>
       </header>
 
       <CommandSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
