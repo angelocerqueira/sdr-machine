@@ -53,6 +53,7 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     ...options,
     headers,
+    credentials: "include",
   });
   if (res.status === 401) {
     forceLogout();
