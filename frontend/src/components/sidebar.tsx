@@ -21,7 +21,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Pipeline",
     items: [
       {
-        href: "/",
+        href: "/app",
         label: "Dashboard",
         icon: (
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -33,7 +33,7 @@ const NAV_SECTIONS: NavSection[] = [
         ),
       },
       {
-        href: "/kanban",
+        href: "/app/kanban",
         label: "Kanban",
         icon: (
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -44,7 +44,7 @@ const NAV_SECTIONS: NavSection[] = [
         ),
       },
       {
-        href: "/jobs",
+        href: "/app/jobs",
         label: "Jobs",
         icon: (
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
