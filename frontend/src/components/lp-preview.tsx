@@ -17,11 +17,11 @@ export function LpPreview({ publicId, leadName }: LpPreviewProps) {
   const lpUrl = getLeadLpUrlByPublicId(publicId);
 
   return (
-    <div className="flex flex-col h-screen bg-bg">
+    <div className="flex flex-col bg-bg">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-2.5 bg-surface border-b border-border shrink-0">
         <button
-          onClick={() => window.history.length > 1 ? router.back() : router.push("/kanban")}
+          onClick={() => window.history.length > 1 ? router.back() : router.push("/app/kanban")}
           className="flex items-center gap-1.5 text-text-muted hover:text-text text-[13px] transition-colors"
         >
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="w-4 h-4">
@@ -70,11 +70,12 @@ export function LpPreview({ publicId, leadName }: LpPreviewProps) {
       {mode === "desktop" ? (
         <iframe
           src={lpUrl}
-          className="flex-1 w-full bg-white"
+          className="w-full bg-white"
+          style={{ height: "80vh" }}
           title={`LP Preview — ${leadName}`}
         />
       ) : (
-        <div className="flex-1 flex items-center justify-center bg-bg overflow-auto py-6">
+        <div className="flex items-center justify-center bg-bg overflow-auto py-6" style={{ height: "80vh" }}>
           {/* iPhone frame */}
           <div className="relative shrink-0" style={{ width: 395, height: 852 }}>
             {/* Device shell */}
