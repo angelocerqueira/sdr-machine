@@ -364,7 +364,7 @@ export function DigitalBlueprint({ data }: { data: BlueprintData }) {
       ref={ref}
       className="w-full flex justify-center"
     >
-      <div className="w-full max-w-[60%] flex flex-col md:flex-row gap-6 md:gap-8 items-start">
+      <div className="w-full max-w-3xl lg:max-w-[60%] mx-auto flex flex-col md:flex-row gap-6 md:gap-8 items-start">
         {/* Left panel — Radar chart (40%) */}
         <div className="w-full md:w-[40%] shrink-0">
           <div

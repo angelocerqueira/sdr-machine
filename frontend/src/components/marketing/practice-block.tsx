@@ -56,10 +56,14 @@ export function PracticeBlock() {
       </div>
 
       {/* Tabs */}
-      <div className="flex justify-center gap-1 mb-8">
+      <div role="tablist" className="flex justify-center gap-1 mb-8">
         {TABS.map((tab) => (
           <button
             key={tab.key}
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            id={`tab-${tab.key}`}
+            aria-controls={`panel-${tab.key}`}
             onClick={() => setActiveTab(tab.key)}
             className={`px-5 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-200 ${
               activeTab === tab.key
@@ -73,19 +77,21 @@ export function PracticeBlock() {
       </div>
 
       {/* Tab content */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.3 }}
-        >
-          {activeTab === "chat" && <AgentChat data={LP_CHAT_DATA} />}
-          {activeTab === "blueprint" && <DigitalBlueprint data={LP_BLUEPRINT_DATA} />}
-          {activeTab === "mission" && <MissionControl data={LP_MISSION_DATA} />}
-        </motion.div>
-      </AnimatePresence>
+      <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3 }}
+          >
+            {activeTab === "chat" && <AgentChat data={LP_CHAT_DATA} />}
+            {activeTab === "blueprint" && <DigitalBlueprint data={LP_BLUEPRINT_DATA} />}
+            {activeTab === "mission" && <MissionControl data={LP_MISSION_DATA} />}
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </section>
   );
 }

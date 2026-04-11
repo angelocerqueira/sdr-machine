@@ -567,7 +567,7 @@ function ThreeColumnGrid({ data }: { data: MissionControlData }) {
 export function MissionControl({ data }: { data: MissionControlData }) {
   return (
     <div className="w-full flex justify-center">
-      <div className="w-full max-w-[60%] flex flex-col gap-4">
+      <div className="w-full max-w-3xl lg:max-w-[60%] mx-auto flex flex-col gap-4">
         {/* Status bar */}
         <StatusBar />
 

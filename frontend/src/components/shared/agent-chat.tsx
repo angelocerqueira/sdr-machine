@@ -173,10 +173,10 @@ export function AgentChat({ data, active = true }: { data: AgentChatData; active
   // Show processing indicator for PROCESSING_DURATION_MS then resolve
   const showProcessing = useCallback((): Promise<void> => {
     return new Promise((resolve) => {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) { resolve(); return; }
       setEntries((prev) => [...prev, { kind: "processing" }]);
       typingRef.current = setTimeout(() => {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current) { resolve(); return; }
         setEntries((prev) => prev.filter((e) => e.kind !== "processing"));
         resolve();
       }, PROCESSING_DURATION_MS);
@@ -298,7 +298,7 @@ export function AgentChat({ data, active = true }: { data: AgentChatData; active
       <div className="flex flex-col items-center gap-4 w-full">
         {/* Chat container */}
         <div
-          className="w-full max-w-[60%] rounded-2xl border border-[rgba(255,255,255,0.07)] overflow-hidden"
+          className="w-full max-w-3xl lg:max-w-[60%] mx-auto rounded-2xl border border-[rgba(255,255,255,0.07)] overflow-hidden"
           style={{
             background: "rgba(255,255,255,0.03)",
             backdropFilter: "blur(20px)",
