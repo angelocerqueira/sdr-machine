@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { runScrape, runEnrich, runGenerate, runOutreach, getPipelineStatus } from "@/lib/api";
+import { runScrape, runEnrich, runGenerate, runOutreach, getPipelineStatus, importCSV } from "@/lib/api";
 import { JobProgress } from "./job-progress";
 import { ConfirmModal } from "./confirm-modal";
 import { ScrapeModal } from "./scrape-modal";
+import { CsvImportModal } from "./csv-import-modal";
 import type { Job } from "@/lib/types";
 import { ENRICH_PROVIDERS } from "@/lib/types";
 
@@ -32,6 +33,7 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
   const [eligibleCounts, setEligibleCounts] = useState<Record<string, number>>({});
   const [runningJobs, setRunningJobs] = useState<string[]>([]);
   const [pendingPhase, setPendingPhase] = useState<typeof PHASES[number] | null>(null);
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
   const [enabledProviders, setEnabledProviders] = useState<Set<string>>(
     new Set(ENRICH_PROVIDERS.map((p) => p.name))
   );
@@ -90,6 +92,17 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
     onJobDone?.();
   }, [onJobDone]);
 
+  const handleCsvImport = useCallback(async (file: File, nicho: string, cidade: string) => {
+    setCsvModalOpen(false);
+    setError(null);
+    try {
+      const job = await importCSV(file, nicho, cidade);
+      setActiveJob(job);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao importar CSV");
+    }
+  }, []);
+
   return (
     <div className="rounded-xl border border-border bg-surface p-5">
       <div className="flex items-center gap-3 mb-4">
@@ -133,6 +146,21 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
             </button>
           );
         })}
+      </div>
+
+      {/* CSV Import button */}
+      <div className="mt-3">
+        <button
+          onClick={() => setCsvModalOpen(true)}
+          disabled={activeJob !== null}
+          className="flex items-center gap-2 px-4 py-2 text-[12px] text-text-secondary hover:text-text bg-surface-raised hover:bg-surface-overlay disabled:opacity-30 disabled:cursor-not-allowed border border-border-subtle hover:border-border rounded-lg transition-default"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M8 2v8M5 7l3 3 3-3" />
+            <path d="M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1" />
+          </svg>
+          Importar CSV
+        </button>
       </div>
 
       {error && (
@@ -193,6 +221,11 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
           </div>
         )}
       </ConfirmModal>
+      <CsvImportModal
+        open={csvModalOpen}
+        onConfirm={handleCsvImport}
+        onCancel={() => setCsvModalOpen(false)}
+      />
     </div>
   );
 }
