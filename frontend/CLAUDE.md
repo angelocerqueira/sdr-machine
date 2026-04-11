@@ -34,16 +34,27 @@ Opportunity score drives color everywhere: green (≥60), yellow (40–59), mute
 
 ```
 src/
-├── app/                    # Next.js App Router pages
-│   ├── layout.tsx          # Root layout: Sidebar + main area (max-w-7xl)
-│   ├── page.tsx            # Dashboard (stats cards + status breakdown)
-│   ├── kanban/page.tsx     # Pipeline controls + drag-drop kanban board
-│   ├── jobs/page.tsx       # Job history table with status indicators
-│   └── leads/[id]/page.tsx # Lead detail: score, info grid, LP iframe, messages
-├── components/             # All UI components (flat, no nesting)
+├── app/
+│   ├── (marketing)/        # Public landing page
+│   │   ├── layout.tsx       # Marketing layout (navbar, no sidebar)
+│   │   └── page.tsx         # LP with all sections
+│   ├── app/                 # Authenticated product (requires login)
+│   │   ├── layout.tsx       # App layout: TopBar + Sidebar + main area (max-w-7xl)
+│   │   ├── page.tsx         # Dashboard (stats cards + status breakdown)
+│   │   ├── kanban/page.tsx  # Pipeline controls + drag-drop kanban board
+│   │   ├── jobs/page.tsx    # Job history table with status indicators
+│   │   └── leads/[id]/page.tsx # Lead detail: score, info grid, LP iframe, messages
+│   ├── lp/[id]/page.tsx     # Public LP preview (no auth)
+│   ├── login/page.tsx       # Login page
+│   ├── layout.tsx           # Root layout
+│   └── globals.css          # Design tokens + utilities
+├── components/
+│   ├── marketing/           # LP-specific components (navbar, sections)
+│   ├── remotion/            # Remotion compositions (hero animation)
+│   └── *.tsx                # App UI components (flat)
 └── lib/
-    ├── api.ts              # Typed fetch wrapper + all endpoint functions
-    └── types.ts            # Interfaces (Lead, Job, OutreachMessage, etc.) + KANBAN_COLUMNS
+    ├── api.ts               # Typed fetch wrapper + all endpoint functions
+    └── types.ts             # Interfaces + KANBAN_COLUMNS
 ```
 
 ### API Layer (`lib/api.ts`)
@@ -70,3 +81,5 @@ Pure React hooks only (`useState`, `useEffect`, `useCallback`, `useRef`). No glo
 - Inline SVGs for icons (no icon library).
 - Filters on the kanban board are dynamically derived from the current lead data (niches, cities).
 - The LP preview in lead detail is an iframe pointing at the backend HTML endpoint (`/api/leads/{id}/lp`).
+- All authenticated app routes live under `/app/*`. Internal links must use the `/app` prefix (e.g., `/app/kanban`, not `/kanban`).
+- The marketing LP at `/` is public and uses its own layout without sidebar/top-bar.
