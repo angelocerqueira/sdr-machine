@@ -186,3 +186,14 @@ h1, h2, h3, h4 {
 .tooltip:hover .tooltip-content {
   opacity: 1;
 }
+
+/* CTA pulse glow */
+.pulse-glow {
+  box-shadow: 0 0 20px rgba(52, 211, 153, 0.2);
+  animation: pulse-glow-anim 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow-anim {
+  0%, 100% { box-shadow: 0 0 20px rgba(52, 211, 153, 0.2); }
+  50% { box-shadow: 0 0 40px rgba(52, 211, 153, 0.35); }
+}
