@@ -3,7 +3,7 @@ import json
 import threading
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, UploadFile, File, Form
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sse_starlette.sse import EventSourceResponse
@@ -353,6 +353,81 @@ def _run_outreach(job_id: int, params: dict):
         db.close()
 
 
+def _run_csv_import(job_id: int, params: dict):
+    from app.pipeline.csv_importer import parse_csv
+
+    db = SessionLocal()
+    try:
+        job = db.get(Job, job_id)
+        job.status = "running"
+        job.started_at = datetime.utcnow()
+        db.commit()
+        _emit(job_id, {"type": "started", "job_id": job_id})
+
+        file_content = params["file_content"]
+        nicho = params.get("nicho", "")
+        cidade = params.get("cidade", "")
+
+        raw_leads, parse_errors = parse_csv(file_content)
+        errors = list(parse_errors)
+        created = 0
+        skipped = 0
+
+        for idx, ld in enumerate(raw_leads):
+            try:
+                # Dedup: check nome + telefone
+                existing = db.query(Lead).filter(
+                    Lead.nome == ld["nome"],
+                    Lead.telefone == ld.get("telefone"),
+                ).first()
+                if existing:
+                    skipped += 1
+                    _emit(job_id, {"type": "progress", "current": idx + 1, "total": len(raw_leads)})
+                    continue
+
+                lead = Lead(
+                    nome=ld["nome"],
+                    telefone=ld.get("telefone"),
+                    website=ld.get("website"),
+                    endereco=ld.get("endereco"),
+                    cidade=ld.get("cidade") or cidade,
+                    nicho=ld.get("nicho") or nicho,
+                    categoria=ld.get("categoria"),
+                    rating=ld.get("rating"),
+                    email=ld.get("email"),
+                    status="scraped",
+                    job_id=job_id,
+                )
+                db.add(lead)
+                db.commit()
+                created += 1
+                _emit(job_id, {"type": "progress", "current": idx + 1, "total": len(raw_leads)})
+            except Exception as exc:
+                db.rollback()
+                errors.append(f"Lead {ld.get('nome', '?')}: {str(exc)[:120]}")
+
+        job.status = "done_with_errors" if errors else "done"
+        job.result_summary = {
+            "created": created,
+            "skipped": skipped,
+            "total": len(raw_leads),
+            "errors": errors,
+        }
+        job.finished_at = datetime.utcnow()
+        db.commit()
+        _emit(job_id, {"type": "done", "summary": job.result_summary})
+    except Exception as exc:
+        job = db.get(Job, job_id)
+        if job:
+            job.status = "failed"
+            job.error_message = str(exc)[:500]
+            job.finished_at = datetime.utcnow()
+            db.commit()
+        _emit(job_id, {"type": "error", "message": str(exc)[:200]})
+    finally:
+        db.close()
+
+
 # ---------------------------------------------------------------------------
 # Runner dispatch
 # ---------------------------------------------------------------------------
@@ -362,6 +437,7 @@ _RUNNERS = {
     "enrich": _run_enrich,
     "generate": _run_generate,
     "outreach": _run_outreach,
+    "csv_import": _run_csv_import,
 }
 
 
@@ -426,6 +502,34 @@ def run_generate(req: GenerateRequest, bg: BackgroundTasks, db: Session = Depend
 def run_outreach(req: OutreachRequest, bg: BackgroundTasks, db: Session = Depends(get_db)):
     params = req.model_dump()
     job = _start_job("outreach", params, bg, db)
+    return job
+
+
+@router.post("/pipeline/csv-import", response_model=JobOut)
+async def run_csv_import(
+    file: UploadFile = File(...),
+    nicho: str = Form(""),
+    cidade: str = Form(""),
+    bg: BackgroundTasks = None,
+    db: Session = Depends(get_db),
+):
+    if not file.filename or not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Arquivo deve ser um CSV")
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Arquivo excede limite de 5MB")
+
+    try:
+        file_content = content.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            file_content = content.decode("latin-1")
+        except UnicodeDecodeError:
+            raise HTTPException(status_code=400, detail="Encoding do arquivo não suportado")
+
+    params = {"file_content": file_content, "nicho": nicho, "cidade": cidade}
+    job = _start_job("csv_import", params, bg, db)
     return job
 
 
