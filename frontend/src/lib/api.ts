@@ -186,3 +186,30 @@ export const getPipelineStatus = () =>
 
 // Settings
 export const getSettings = () => fetchAPI<Settings>("/api/settings");
+
+export async function importCSV(file: File, nicho: string, cidade: string): Promise<Job> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("nicho", nicho);
+  formData.append("cidade", cidade);
+
+  const token = getSessionToken();
+  const res = await fetch(`${API}/api/pipeline/csv-import`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: "include",
+    body: formData,
+  });
+
+  if (res.status === 401) {
+    forceLogout();
+    throw new Error("Sessão expirada");
+  }
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail || `Erro ${res.status}`);
+  }
+
+  return res.json();
+}
