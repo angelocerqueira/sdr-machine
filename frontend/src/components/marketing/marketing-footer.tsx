@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 export function MarketingFooter() {
   return (
     <footer className="border-t border-border-subtle py-10 px-6">
