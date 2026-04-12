@@ -14,7 +14,7 @@ npm run build    # Production build
 npm run lint     # ESLint (flat config, core-web-vitals + TypeScript)
 ```
 
-Single env var: `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:8000`).
+Env vars: `NEXT_PUBLIC_API_URL` (backend URL, default `http://localhost:8000`), `DATABASE_URL` (PostgreSQL, same as backend — needed by Better Auth server-side).
 
 ## Path Alias
 
@@ -25,7 +25,7 @@ Single env var: `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:8000`).
 All theming lives in `src/app/globals.css` via CSS custom properties inside a `@theme` inline block (Tailwind v4 — there is no tailwind.config file).
 
 - **Colors:** `--color-bg`, `--color-surface`, `--color-accent` (#34d399 emerald), `--color-danger`, `--color-warning`, `--color-info`, plus `-secondary`, `-muted`, `-subtle` variants
-- **Fonts:** Outfit (headings), DM Sans (body), JetBrains Mono (mono) — loaded via `next/font/google` in `layout.tsx`, applied through `--font-*` CSS vars
+- **Fonts:** Geist (headings + body), Geist Mono (mono) — loaded via `next/font/google` in `layout.tsx`, applied through `--font-geist` / `--font-geist-mono` CSS vars
 - **Custom utilities:** `.card-glow`, `.status-pill`, `.score-high`/`.score-mid`/`.score-low`, `.kanban-card-dragging`, `.bg-dots`, `.stat-number` (tabular nums)
 
 Opportunity score drives color everywhere: green (≥60), yellow (40–59), muted (<40).
@@ -49,17 +49,24 @@ src/
 │   ├── layout.tsx           # Root layout
 │   └── globals.css          # Design tokens + utilities
 ├── components/
-│   ├── marketing/           # LP-specific components (navbar, sections)
+│   ├── marketing/           # LP-specific components (navbar, hero, sections, practice-block)
 │   ├── remotion/            # Remotion compositions (hero animation)
+│   ├── shared/              # Reusable between LP and app (agent-chat, digital-blueprint, mission-control, chat-widget)
 │   └── *.tsx                # App UI components (flat)
 └── lib/
     ├── api.ts               # Typed fetch wrapper + all endpoint functions
-    └── types.ts             # Interfaces + KANBAN_COLUMNS
+    ├── auth.ts              # Better Auth server config (session, cookies, database)
+    ├── auth-client.ts       # Better Auth React client
+    ├── types.ts             # Interfaces + KANBAN_COLUMNS
+    ├── practice-types.ts    # Types for Veja na Pratica components
+    ├── practice-data.ts     # Mock data for LP marketing
+    ├── chat-templates.ts    # Niche-specific chat templates (6 + fallback)
+    └── lead-to-practice.ts  # Lead enrichment -> component props transformers
 ```
 
 ### API Layer (`lib/api.ts`)
 
-`fetchAPI<T>()` is the base wrapper — adds JSON headers, throws on non-ok. All endpoints are individual exported functions. `streamJob()` is the exception: it uses `EventSource` (SSE) instead of fetch, streaming real-time job progress and auto-closing on "done"/"error" events.
+`fetchAPI<T>()` is the base wrapper — adds JSON headers, `credentials: "include"`, and Bearer token from session cookie. Auto-refreshes session cache on 401 before logging out. All endpoints are individual exported functions. `streamJob()` is the exception: it uses `EventSource` (SSE) instead of fetch, streaming real-time job progress and auto-closing on "done"/"error" events. `importCSV()` uses raw `fetch` + `FormData` (no JSON wrapper).
 
 ### State Management
 
@@ -77,7 +84,7 @@ Pure React hooks only (`useState`, `useEffect`, `useCallback`, `useRef`). No glo
 
 - All UI text is **Portuguese (pt-BR)**. Dates use `toLocaleString("pt-BR")`. Status/type labels are mapped via hard-coded dictionaries in each page.
 - `KANBAN_COLUMNS` in `types.ts` defines the 9-stage lead pipeline order — add new statuses there.
-- Components are flat `.tsx` files in `components/` — no subdirectories, no barrel exports.
+- App components are flat `.tsx` files in `components/`. Subdirectories: `marketing/` (LP sections), `remotion/` (hero animation), `shared/` (reusable between LP and app).
 - Inline SVGs for icons (no icon library).
 - Filters on the kanban board are dynamically derived from the current lead data (niches, cities).
 - The LP preview in lead detail is an iframe pointing at the backend HTML endpoint (`/api/leads/{id}/lp`).
