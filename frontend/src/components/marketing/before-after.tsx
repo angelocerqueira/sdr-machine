@@ -27,7 +27,7 @@ const TRANSFORMS: TransformPair[] = [
   },
 ];
 
-function TransformItem({ pair, index }: { pair: TransformPair; index: number }) {
+function TransformItem({ pair }: { pair: TransformPair }) {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
     target: ref,
@@ -89,7 +89,7 @@ export function BeforeAfter() {
       </div>
 
       {TRANSFORMS.map((pair, i) => (
-        <TransformItem key={i} pair={pair} index={i} />
+        <TransformItem key={i} pair={pair} />
       ))}
     </section>
   );
