@@ -1,13 +1,24 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { CommandSearch } from "./command-search";
 import { SignOutButton } from "./sign-out-button";
 
 export function TopBar() {
+  const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [totalLeads, setTotalLeads] = useState<number | null>(null);
   const avatarRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    import("@/lib/api").then(({ getDashboardStats }) => {
+      getDashboardStats()
+        .then((s) => setTotalLeads(s.total_leads))
+        .catch(() => {});
+    });
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -61,11 +72,14 @@ export function TopBar() {
         {/* Credits */}
         <div className="hidden md:flex items-center gap-1.5 font-[family-name:var(--font-mono)] text-[11px] text-text-muted bg-surface-raised border border-border-subtle rounded-md px-2.5 py-1">
           <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-          2.4k créditos
+          {totalLeads !== null ? `${totalLeads} leads` : "..."}
         </div>
 
         {/* CTA */}
-        <button className="bg-accent text-bg text-xs font-semibold rounded-md px-3.5 py-1.5 hover:bg-accent-dim transition-colors duration-150 whitespace-nowrap">
+        <button
+          className="bg-accent text-bg text-xs font-semibold rounded-md px-3.5 py-1.5 hover:bg-accent-dim transition-colors duration-150 whitespace-nowrap"
+          onClick={() => router.push("/app/kanban")}
+        >
           + Novo Job
         </button>
 

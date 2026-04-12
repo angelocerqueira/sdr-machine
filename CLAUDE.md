@@ -18,7 +18,7 @@ Each stage runs as a FastAPI background task, creating a `Job` record and stream
 
 1. **Scrape** — Calls Apify Google Places API for each niche×city combination, deduplicates leads
 2. **Enrich** — Usa um orquestrador inteligente (`enrichment/orchestrator.py`) com 6 providers plugáveis (CnpjProvider, WebsiteCrawlerProvider, SchemaOrgProvider, TechStackProvider, EmailDiscovererProvider, ApolloProvider). Executa em 4 fases ordenadas: Discovery (CNPJ) → Crawl (website, schema.org, tech stack) → Contact (email, Apollo) → Scoring. Providers compartilham estado via `EnrichmentContext`. Suporta `skip_providers` e `force_providers` para override. Calcula opportunity score (0-100, higher = worse site = more opportunity) com 10+ sinais
-3. **Generate** — Calls LLM API (model configurable via `CLAUDE_MODEL`) to produce standalone HTML landing pages per lead
+3. **Generate** — Calls LLM API (model configurable via `LLM_MODEL`) to produce standalone HTML landing pages per lead
 4. **Outreach** — Generates 3 WhatsApp messages per lead (initial, 48h followup, final) with pre-filled wa.me links
 
 ### Lead Status Flow
