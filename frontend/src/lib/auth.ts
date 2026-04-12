@@ -14,7 +14,7 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24, // renova a cada 1 dia de uso
     cookieCache: {
       enabled: true,
-      maxAge: 60 * 5, // 5 min
+      maxAge: 60 * 60 * 24 * 7, // 7 dias — deve acompanhar o tempo de sessao pra evitar 401 prematuro
     },
   },
   advanced: {
@@ -22,6 +22,8 @@ export const auth = betterAuth({
       session_data: {
         attributes: {
           httpOnly: false, // JS precisa ler este cookie para enviar Bearer token ao backend cross-origin
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax" as const,
         },
       },
     },

@@ -40,8 +40,37 @@ function getSessionToken(): string | null {
   return null;
 }
 
+let refreshingSession = false;
+
+async function refreshSessionCache(): Promise<boolean> {
+  if (refreshingSession) return false;
+  refreshingSession = true;
+  try {
+    // Call Better Auth getSession to refresh the cookieCache (session_data cookie)
+    const res = await fetch("/api/auth/get-session", { credentials: "include" });
+    if (res.ok) {
+      // session_data cookie should now be refreshed by Better Auth
+      return getSessionToken() !== null;
+    }
+    return false;
+  } catch {
+    return false;
+  } finally {
+    refreshingSession = false;
+  }
+}
+
 async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = getSessionToken();
+  let token = getSessionToken();
+
+  // If no token, try refreshing the session cache before giving up
+  if (!token) {
+    const refreshed = await refreshSessionCache();
+    if (refreshed) {
+      token = getSessionToken();
+    }
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...options?.headers as Record<string, string>,
@@ -55,6 +84,26 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
     headers,
     credentials: "include",
   });
+
+  // On 401, try one session refresh before logging out
+  if (res.status === 401 && token) {
+    const refreshed = await refreshSessionCache();
+    if (refreshed) {
+      const retryToken = getSessionToken();
+      if (retryToken) {
+        headers["Authorization"] = `Bearer ${retryToken}`;
+        const retry = await fetch(`${API}${path}`, {
+          ...options,
+          headers,
+          credentials: "include",
+        });
+        if (retry.ok) return retry.json();
+      }
+    }
+    forceLogout();
+    throw new Error("Sessão expirada");
+  }
+
   if (res.status === 401) {
     forceLogout();
     throw new Error("Sessão expirada");
