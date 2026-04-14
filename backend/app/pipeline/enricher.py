@@ -236,6 +236,12 @@ def analyze_html(html: str) -> dict:
             "word_count": 0,
             "image_count": 0,
             "is_template": False,
+            "has_booking_link": False,
+            "has_payment_link": False,
+            "has_contact_form": False,
+            "form_count": 0,
+            "has_video": False,
+            "contact_channels_count": 0,
         }
 
     soup = BeautifulSoup(html, "html.parser")
@@ -246,6 +252,37 @@ def analyze_html(html: str) -> dict:
     description = ""
     if meta_desc_tag:
         description = (meta_desc_tag.get("content") or "")[:200]
+
+    # ── Automation signals ──────────────────────────────────────────────────
+    _BOOKING_PATTERNS = [
+        "calendly.com", "setmore.com", "cal.com", "agendor",
+        "tidycal", "book.stripe", "simplybook",
+    ]
+    _PAYMENT_PATTERNS = [
+        "mercadopago", "pagseguro", "stripe.com", "paypal.com",
+        "picpay", "getnet", "cielo", "checkout",
+    ]
+    _VIDEO_PATTERNS = [
+        "youtube.com/embed", "vimeo.com/video", "<video", "youtu.be/",
+    ]
+
+    has_booking_link = any(p in html_lower for p in _BOOKING_PATTERNS)
+    has_payment_link = any(p in html_lower for p in _PAYMENT_PATTERNS)
+    has_contact_form = "<form" in html_lower
+    form_count = html_lower.count("<form")
+    has_video = any(p in html_lower for p in _VIDEO_PATTERNS)
+
+    contact_channels = 0
+    if "tel:" in html_lower:
+        contact_channels += 1
+    if "mailto:" in html_lower:
+        contact_channels += 1
+    if "wa.me" in html_lower or "api.whatsapp" in html_lower:
+        contact_channels += 1
+    if has_contact_form:
+        contact_channels += 1
+    if any(c in html_lower for c in ["tidio", "crisp", "intercom", "tawk", "zendesk", "drift"]):
+        contact_channels += 1
 
     return {
         "has_responsive_meta": "viewport" in html_lower,
@@ -260,6 +297,12 @@ def analyze_html(html: str) -> dict:
         "word_count": len(text.split()),
         "image_count": len(soup.find_all("img")),
         "is_template": any(x in html_lower for x in ["wix.com", "squarespace", "wordpress.com", "webnode", "site123"]),
+        "has_booking_link": has_booking_link,
+        "has_payment_link": has_payment_link,
+        "has_contact_form": has_contact_form,
+        "form_count": form_count,
+        "has_video": has_video,
+        "contact_channels_count": contact_channels,
     }
 
 
