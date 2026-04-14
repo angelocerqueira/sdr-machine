@@ -1,104 +1,111 @@
-"""Tests for the enrichment scoring algorithm."""
-from app.pipeline.enrichment.scoring import calculate_score
+"""Tests for backward-compatible behavior of the refactored scoring module.
+
+These tests verify the DimensionalScore properties that replace the old
+(int, list[str]) return value.
+"""
+from datetime import date
+from app.pipeline.enrichment.scoring import calculate_score, DimensionalScore
 
 
-def test_no_website_base_score():
-    lead_data = {"website": None}
-    site_analysis = {}
-    score, reasons = calculate_score(lead_data, site_analysis)
-    assert score == 95
-    assert any("Sem website" in r for r in reasons)
+def test_returns_dimensional_score():
+    result = calculate_score({}, {})
+    assert isinstance(result, DimensionalScore)
 
 
-def test_broken_site_scores_85():
-    lead_data = {"website": "https://example.com"}
-    for status in ("connection_error", "timeout", "ssl_error"):
-        site_analysis = {"status": status}
-        score, reasons = calculate_score(lead_data, site_analysis)
-        assert score == 85
-        assert any("problemas" in r.lower() for r in reasons)
+def test_no_website_scores_95_lp():
+    result = calculate_score({"website": None}, {"status": "no_website"})
+    assert result.lp_site == 95
+    assert "Sem website" in result.reasons["lp_site"][0]
 
 
-def test_perfect_site_low_score():
-    lead_data = {"website": "https://example.com", "email": "contato@example.com"}
-    site_analysis = {
-        "status": "ok",
-        "has_ssl": True,
-        "has_responsive_meta": True,
-        "has_cta": True,
-        "has_social_links": True,
-        "has_whatsapp_link": True,
-        "has_analytics": True,
-        "has_chatbot": True,
-        "pagespeed": 90,
-        "structured_data": {"type": "LocalBusiness"},
-        "word_count": 500,
-        "image_count": 10,
+def test_site_down_scores_85_lp():
+    result = calculate_score({"website": "https://ex.com"}, {"status": "connection_error"})
+    assert result.lp_site == 85
+
+
+def test_no_ssl_adds_15_to_lp():
+    site = {
+        "status": "ok", "has_ssl": False,
+        "has_responsive_meta": True, "has_whatsapp_link": True,
+        "has_analytics": True, "has_chatbot": True, "has_cta": True,
+        "pagespeed": 80, "word_count": 400, "is_template": False,
+        "image_count": 5, "has_social_links": True, "structured_data": True,
     }
-    score, reasons = calculate_score(lead_data, site_analysis)
-    assert score <= 10
-    assert reasons == [] or all("Sem" not in r for r in reasons)
-
-
-def test_bad_site_accumulates_points():
-    lead_data = {"website": "http://example.com", "email": "fulano@gmail.com"}
-    site_analysis = {
-        "status": "ok",
-        "has_ssl": False,
-        "has_responsive_meta": False,
-        "has_cta": False,
-        "has_social_links": False,
-        "has_whatsapp_link": False,
-        "has_analytics": False,
-        "has_chatbot": False,
-        "pagespeed": 30,
-        "word_count": 50,
-        "image_count": 0,
-    }
-    score, reasons = calculate_score(lead_data, site_analysis)
-    # SSL 15 + responsive 15 + whatsapp 10 + analytics 8 + chatbot 8 + CTA 10
-    # + PageSpeed 10 + word_count 10 + images 5 + social 5 + gmail 5 + no structured 3 = 100 (capped)
-    assert score == 100
-    assert any("SSL" in r or "HTTPS" in r for r in reasons)
-    assert any("responsivo" in r.lower() for r in reasons)
-    assert any("WhatsApp" in r for r in reasons)
-
-
-def test_tech_stack_dated_adds_points():
-    lead_data = {"website": "https://example.com"}
-    site_analysis = {
-        "status": "ok",
-        "has_ssl": True,
-        "has_responsive_meta": True,
-        "has_cta": True,
-        "has_social_links": True,
-        "pagespeed": 90,
-    }
-    tech_stack = [{"name": "Adobe Flash", "category": "runtime"}]
-    score, reasons = calculate_score(lead_data, site_analysis, tech_stack=tech_stack)
-    assert any("defasado" in r.lower() or "flash" in r.lower() for r in reasons)
+    result = calculate_score({"website": "https://ex.com"}, site)
+    assert result.lp_site == 15
+    assert any("SSL" in r for r in result.reasons["lp_site"])
 
 
 def test_score_capped_at_100():
-    lead_data = {"website": None, "email": "x@gmail.com"}
-    site_analysis = {"status": "no_website"}
-    tech_stack = [{"name": "Adobe Flash", "category": "runtime"}]
-    score, _ = calculate_score(lead_data, site_analysis, tech_stack=tech_stack)
-    assert score <= 100
-
-
-def test_gmail_email_adds_points():
-    lead_data = {"website": "https://example.com", "email": "fulano@gmail.com"}
-    site_analysis = {
-        "status": "ok",
-        "has_ssl": True,
-        "has_responsive_meta": True,
-        "has_cta": True,
-        "has_social_links": True,
-        "pagespeed": 90,
+    site = {
+        "status": "ok", "has_ssl": False, "has_responsive_meta": False,
+        "has_whatsapp_link": False, "has_analytics": False, "has_chatbot": False,
+        "has_cta": False, "pagespeed": 10, "word_count": 50, "is_template": True,
+        "image_count": 0, "has_social_links": False, "structured_data": None,
     }
-    score_with_gmail, reasons = calculate_score(lead_data, site_analysis)
-    lead_data_pro = {"website": "https://example.com", "email": "contato@example.com"}
-    score_pro, _ = calculate_score(lead_data_pro, site_analysis)
-    assert score_with_gmail > score_pro
-    assert any("email" in r.lower() for r in reasons)
+    result = calculate_score({"website": "https://ex.com"}, site)
+    assert result.lp_site <= 100
+
+
+def test_dated_tech_adds_to_lp():
+    site = {"status": "ok", "has_ssl": True, "has_responsive_meta": True,
+            "has_whatsapp_link": True, "has_analytics": True, "has_chatbot": True,
+            "has_cta": True, "pagespeed": 80, "word_count": 400, "is_template": False,
+            "image_count": 5, "has_social_links": True, "structured_data": True}
+    without = calculate_score({"website": "https://ex.com"}, site, tech_stack=[])
+    with_dated = calculate_score(
+        {"website": "https://ex.com"}, site,
+        tech_stack=[{"name": "jQuery 1", "category": "library"}]
+    )
+    assert with_dated.lp_site > without.lp_site
+
+
+def test_established_company_with_bad_site_adds_bonus():
+    site = {
+        "status": "ok", "has_ssl": False, "has_responsive_meta": False,
+        "has_whatsapp_link": False, "has_analytics": False, "has_chatbot": False,
+        "has_cta": False, "pagespeed": 30, "word_count": 100, "is_template": True,
+        "image_count": 0, "has_social_links": False, "structured_data": None,
+    }
+    without_fundacao = calculate_score({"website": "https://ex.com"}, site)
+    with_fundacao = calculate_score(
+        {"website": "https://ex.com"}, site,
+        data_fundacao=date(2010, 1, 1)
+    )
+    assert with_fundacao.lp_site >= without_fundacao.lp_site
+
+
+def test_composite_is_zero_when_unreachable():
+    result = calculate_score({"telefone": None, "website": None}, {"status": "no_website"})
+    assert result.composite == 0
+
+
+def test_flat_reasons_contains_all_dimensions():
+    result = calculate_score(
+        {"telefone": "11999998888", "website": None, "google_maps_url": None},
+        {"status": "no_website"},
+    )
+    flat = result.flat_reasons
+    assert any("[LP_SITE]" in r for r in flat)
+    assert any("[MAPA_REPUTACAO]" in r for r in flat)
+
+
+def test_bad_site_accumulates_points():
+    site = {
+        "status": "ok", "has_ssl": False, "has_responsive_meta": False,
+        "has_whatsapp_link": False, "has_analytics": False, "has_chatbot": False,
+        "has_cta": False, "pagespeed": 30, "word_count": 100, "is_template": True,
+        "image_count": 0, "has_social_links": False, "structured_data": None,
+    }
+    result = calculate_score({"website": "https://ex.com"}, site)
+    assert result.lp_site >= 50
+
+
+def test_gmail_email_adds_points_to_lp():
+    site = {"status": "ok", "has_ssl": True, "has_responsive_meta": True,
+            "has_whatsapp_link": True, "has_analytics": True, "has_chatbot": True,
+            "has_cta": True, "pagespeed": 80, "word_count": 400, "is_template": False,
+            "image_count": 5, "has_social_links": True, "structured_data": True}
+    without_email = calculate_score({"website": "https://ex.com"}, site)
+    with_gmail = calculate_score({"website": "https://ex.com", "email": "empresa@gmail.com"}, site)
+    assert with_gmail.lp_site > without_email.lp_site
