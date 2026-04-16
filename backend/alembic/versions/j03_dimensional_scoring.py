@@ -1,14 +1,14 @@
 """dimensional scoring — add 4 score axes + nivel_recomendado to leads
 
 Revision ID: j03
-Revises: i02
+Revises: i02_smart_enrichment_fields
 Create Date: 2026-04-13
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "j03"
-down_revision = "i02"
+down_revision = "i02_smart_enrichment_fields"
 branch_labels = None
 depends_on = None
 
