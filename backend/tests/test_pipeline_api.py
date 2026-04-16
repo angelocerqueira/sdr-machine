@@ -63,6 +63,24 @@ class TestPipelineEndpoints:
         data = response.json()
         assert "id" in data or "job_id" in data
 
+    def test_scrape_with_cnpj_fonte(self, client):
+        resp = client.post(
+            "/api/pipeline/scrape",
+            json={"nichos": ["dentista"], "cidades": ["Chapecó SC"], "fontes": ["cnpj"]},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["params"]["fontes"] == ["cnpj"]
+
+    def test_scrape_default_fontes_both(self, client):
+        resp = client.post(
+            "/api/pipeline/scrape",
+            json={"nichos": ["dentista"], "cidades": ["Chapecó SC"]},
+        )
+        assert resp.status_code == 200
+        params = resp.json()["params"]
+        assert "nichos" in params
+
 
 class TestJobEndpoints:
     """Tests for GET /api/jobs endpoints."""

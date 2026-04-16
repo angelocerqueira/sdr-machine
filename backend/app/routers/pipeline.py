@@ -53,8 +53,9 @@ def _run_scrape(job_id: int, params: dict):
         nichos = params.get("nichos") or settings.target_niches
         cidades = params.get("cidades") or settings.target_cities
         max_results = params.get("max_results") or settings.max_results_per_search
+        fontes = params.get("fontes") or ["google_maps", "cnpj"]
 
-        raw_leads, errors = scrape_all(nichos=nichos, cidades=cidades, max_results=max_results)
+        raw_leads, errors = scrape_all(nichos=nichos, cidades=cidades, max_results=max_results, fontes=fontes)
 
         created = 0
         for idx, ld in enumerate(raw_leads):
@@ -63,6 +64,11 @@ def _run_scrape(job_id: int, params: dict):
                     nome=ld["nome"],
                     telefone=ld.get("telefone"),
                     website=ld.get("website"),
+                    email=ld.get("email"),
+                    cnpj=ld.get("cnpj"),
+                    razao_social=ld.get("razao_social"),
+                    porte=ld.get("porte"),
+                    cnae=ld.get("cnae"),
                     endereco=ld.get("endereco"),
                     cidade=ld.get("cidade"),
                     nicho=ld.get("nicho"),

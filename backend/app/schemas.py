@@ -114,6 +114,7 @@ class ScrapeRequest(BaseModel):
     nichos: list[str] = []
     cidades: list[str] = []
     max_results: int = 50
+    fontes: list[str] = ["google_maps", "cnpj"]
 
 
 class EnrichRequest(BaseModel):
