@@ -198,6 +198,10 @@ def test_flat_reasons_prefixed_by_dimension():
     prefixes = {r.split("]")[0].strip("[") for r in result.flat_reasons}
     assert "ACESSIBILIDADE" in prefixes
 
+def test_nivel_recomendado_is_none_when_gate_fails():
+    result = calculate_score({"telefone": None, "email": None}, {})
+    assert result.nivel_recomendado is None
+
 def test_composite_is_max_of_service_dims_when_reachable():
     result = calculate_score({"telefone": "11999998888"}, {"status": "no_website"})
     assert result.composite == max(result.lp_site, result.automacao, result.mapa_reputacao)

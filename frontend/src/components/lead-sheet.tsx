@@ -219,15 +219,21 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
                     Gaps Detectados
                   </h3>
                   <div className="flex flex-wrap gap-2">
-                    {lead.opportunity_reasons.map((reason, i) => (
-                      <span
-                        key={i}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent-subtle border border-accent/20 text-[11px] text-accent font-[family-name:var(--font-mono)]"
-                      >
-                        <span className="w-1 h-1 rounded-full bg-accent shrink-0" />
-                        {reason}
-                      </span>
-                    ))}
+                    {lead.opportunity_reasons.map((reason, i) => {
+                      const match = reason.match(/^\[([A-Z_]+)\]\s*(.*)/);
+                      const dim = match ? match[1].toLowerCase().replace("_", " ") : null;
+                      const text = match ? match[2] : reason;
+                      return (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent-subtle border border-accent/20 text-[11px] text-accent font-[family-name:var(--font-mono)]"
+                        >
+                          <span className="w-1 h-1 rounded-full bg-accent shrink-0" />
+                          {dim && <span className="text-[9px] opacity-60">{dim}</span>}
+                          {text}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               )}

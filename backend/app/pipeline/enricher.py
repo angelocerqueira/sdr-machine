@@ -19,6 +19,18 @@ from app.pipeline.diagnostic import run_diagnostic
 logger = logging.getLogger(__name__)
 
 
+_BOOKING_PATTERNS = [
+    "calendly.com", "setmore.com", "cal.com", "agendor",
+    "tidycal", "book.stripe", "simplybook",
+]
+_PAYMENT_PATTERNS = [
+    "mercadopago", "pagseguro", "stripe.com", "paypal.com",
+    "picpay", "getnet", "cielo",
+]
+_VIDEO_PATTERNS = [
+    "youtube.com/embed", "vimeo.com/video", "<video", "youtu.be/",
+]
+
 _SOCIAL_NON_PROFILE_PATHS = {
     "instagram": {"p", "reel", "reels", "stories", "explore", "accounts", "about", "legal", "developer"},
     "facebook": {"sharer", "sharer.php", "share", "dialog", "plugins", "login.php", "groups"},
@@ -254,18 +266,6 @@ def analyze_html(html: str) -> dict:
         description = (meta_desc_tag.get("content") or "")[:200]
 
     # ── Automation signals ──────────────────────────────────────────────────
-    _BOOKING_PATTERNS = [
-        "calendly.com", "setmore.com", "cal.com", "agendor",
-        "tidycal", "book.stripe", "simplybook",
-    ]
-    _PAYMENT_PATTERNS = [
-        "mercadopago", "pagseguro", "stripe.com", "paypal.com",
-        "picpay", "getnet", "cielo", "checkout",
-    ]
-    _VIDEO_PATTERNS = [
-        "youtube.com/embed", "vimeo.com/video", "<video", "youtu.be/",
-    ]
-
     has_booking_link = any(p in html_lower for p in _BOOKING_PATTERNS)
     has_payment_link = any(p in html_lower for p in _PAYMENT_PATTERNS)
     has_contact_form = "<form" in html_lower

@@ -52,12 +52,18 @@ export function LeadDetail({ lead }: LeadDetailProps) {
             Gaps Detectados
           </h3>
           <div className="space-y-2">
-            {lead.opportunity_reasons.map((reason, i) => (
-              <div key={i} className="flex items-center gap-3 text-[13px] text-text-secondary">
-                <span className="w-1.5 h-1.5 rounded-full bg-danger shrink-0" />
-                {reason}
-              </div>
-            ))}
+            {lead.opportunity_reasons.map((reason, i) => {
+              const match = reason.match(/^\[([A-Z_]+)\]\s*(.*)/);
+              const dim = match ? match[1].toLowerCase().replace("_", " ") : null;
+              const text = match ? match[2] : reason;
+              return (
+                <div key={i} className="flex items-center gap-3 text-[13px] text-text-secondary">
+                  <span className="w-1.5 h-1.5 rounded-full bg-danger shrink-0" />
+                  {dim && <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-overlay text-text-muted font-[family-name:var(--font-mono)] shrink-0">{dim}</span>}
+                  {text}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

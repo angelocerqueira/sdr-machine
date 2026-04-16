@@ -112,7 +112,7 @@ export function leadToBlueprintData(lead: Lead): BlueprintData {
 
   const gaps: GapBlock[] = (lead.opportunity_reasons || [])
     .slice(0, 6)
-    .map(mapReasonToGap);
+    .map(r => mapReasonToGap(r.replace(/^\[[A-Z_]+\]\s*/, "")));
 
   return { radarScores, maturityScore, gaps };
 }

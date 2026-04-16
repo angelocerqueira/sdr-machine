@@ -111,7 +111,9 @@ class DimensionalScore:
         return min(100, max(self.lp_site, self.automacao, self.mapa_reputacao))
 
     @property
-    def nivel_recomendado(self) -> str:
+    def nivel_recomendado(self) -> str | None:
+        if self.acessibilidade < _ACESSIBILIDADE_GATE:
+            return None
         scores = {"lp": self.lp_site, "automacao": self.automacao, "mapa": self.mapa_reputacao}
         return max(scores, key=scores.get)
 
@@ -322,6 +324,7 @@ def _score_automacao(
         score += 8
         reasons.append("Sem analytics — tomada de decisão manual")
 
+    # Default 1 = lead sem site não tem fragmentação de canais para automatizar
     contact_channels = site_analysis.get("contact_channels_count", 1)
     if contact_channels >= 3:
         score += 10
