@@ -42,7 +42,7 @@ export function KanbanCard({ lead, onSelect }: KanbanCardProps) {
             {lead.opportunity_score ?? "—"}
             {lead.opportunity_reasons?.length > 0 && (
               <span className="tooltip-content">
-                {lead.opportunity_reasons.slice(0, 4).join(" · ")}
+                {lead.opportunity_reasons.slice(0, 4).map(r => r.replace(/^\[[A-Z_]+\]\s*/, "")).join(" · ")}
               </span>
             )}
           </span>

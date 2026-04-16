@@ -228,6 +228,12 @@ class EnrichmentOrchestrator:
         lead_view = {
             "website": flat.get("website") or getattr(lead, "website", None),
             "email": flat.get("email") or getattr(lead, "email", None),
+            "telefone": getattr(lead, "telefone", None),
+            "rating": float(getattr(lead, "rating", None)) if getattr(lead, "rating", None) else None,
+            "reviews_count": getattr(lead, "reviews_count", None) or 0,
+            "top_reviews": getattr(lead, "top_reviews", None) or [],
+            "google_maps_url": getattr(lead, "google_maps_url", None),
+            "social_profiles": merged_social_profiles,
         }
 
         data_fundacao_val = flat.get("data_fundacao")
@@ -238,7 +244,7 @@ class EnrichmentOrchestrator:
             except ValueError:
                 data_fundacao_date = None
 
-        score, reasons = calculate_score(
+        dimensional = calculate_score(
             lead_view,
             merged_site_analysis,
             tech_stack=merged_tech_stack,
@@ -246,8 +252,13 @@ class EnrichmentOrchestrator:
         )
 
         return {
-            "opportunity_score": score,
-            "opportunity_reasons": reasons,
+            "opportunity_score": dimensional.composite,
+            "opportunity_reasons": dimensional.flat_reasons,
+            "score_acessibilidade": dimensional.acessibilidade,
+            "score_lp": dimensional.lp_site,
+            "score_automacao": dimensional.automacao,
+            "score_mapa": dimensional.mapa_reputacao,
+            "nivel_recomendado": dimensional.nivel_recomendado,
             "site_analysis": merged_site_analysis,
             "social_profiles": merged_social_profiles,
             "tech_stack": merged_tech_stack,

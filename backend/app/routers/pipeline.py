@@ -141,6 +141,11 @@ def _run_enrich(job_id: int, params: dict):
                 lead.social_profiles = social if isinstance(social, dict) else {}
                 lead.tech_stack = result.get("tech_stack") or []
                 lead.enrichment_sources = result.get("enrichment_sources") or []
+                lead.score_acessibilidade = result.get("score_acessibilidade", 0)
+                lead.score_lp = result.get("score_lp", 0)
+                lead.score_automacao = result.get("score_automacao", 0)
+                lead.score_mapa = result.get("score_mapa", 0)
+                lead.nivel_recomendado = result.get("nivel_recomendado")
                 if result.get("email"):
                     lead.email = result["email"]
                 if result.get("cnpj"):

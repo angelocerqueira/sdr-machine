@@ -31,6 +31,11 @@ class LeadOut(LeadBase):
     status: str
     opportunity_score: int | None = None
     opportunity_reasons: list[str] = []
+    score_acessibilidade: int = 0
+    score_lp: int = 0
+    score_automacao: int = 0
+    score_mapa: int = 0
+    nivel_recomendado: str | None = None
     site_analysis: dict = {}
     social_profiles: dict = {}
     tech_stack: list = []
@@ -50,6 +55,11 @@ class LeadSummaryOut(LeadBase):
     status: str
     opportunity_score: int | None = None
     opportunity_reasons: list[str] = []
+    score_acessibilidade: int = 0
+    score_lp: int = 0
+    score_automacao: int = 0
+    score_mapa: int = 0
+    nivel_recomendado: str | None = None
     tech_stack: list = []
     enrichment_sources: list = []
     job_id: int | None = None

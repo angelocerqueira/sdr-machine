@@ -290,3 +290,33 @@ def test_execute_continues_on_provider_exception():
     assert failing_entry is not None
     assert failing_entry["status"] == "error"
     assert good_provider.calls == 1
+
+
+def test_orchestrator_returns_dimensional_score_fields():
+    """Garante que o orchestrator retorna os 5 novos campos de score dimensional."""
+    orch = EnrichmentOrchestrator(providers=[])
+
+    class _FakeLead:
+        nome = "Clínica Teste"
+        telefone = "11999998888"
+        website = None
+        rating = 2.5
+        reviews_count = 5
+        google_maps_url = "https://maps.google.com/place/x"
+        top_reviews = []
+        cnpj = None
+        email = None
+
+    result = orch.run(_FakeLead())
+
+    assert "score_acessibilidade" in result
+    assert "score_lp" in result
+    assert "score_automacao" in result
+    assert "score_mapa" in result
+    assert "nivel_recomendado" in result
+    # Com celular válido, acessibilidade deve passar o gate
+    assert result["score_acessibilidade"] >= 40
+    # Com rating baixo e poucas reviews, score_mapa deve ser alto
+    assert result["score_mapa"] >= 40
+    # nivel_recomendado deve ser um dos valores válidos
+    assert result["nivel_recomendado"] in ("lp", "automacao", "mapa")

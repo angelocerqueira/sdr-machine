@@ -15,6 +15,11 @@ export interface Lead {
   status: string;
   opportunity_score: number | null;
   opportunity_reasons: string[];
+  score_acessibilidade: number;
+  score_lp: number;
+  score_automacao: number;
+  score_mapa: number;
+  nivel_recomendado: string | null;
   site_analysis: Record<string, unknown>;
   social_profiles: Record<string, unknown>;
   lp_html: string | null;

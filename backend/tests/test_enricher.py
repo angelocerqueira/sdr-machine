@@ -469,3 +469,56 @@ class TestScrapeInstagram:
 
         result = _scrape_instagram_profile("https://instagram.com/testclinic")
         assert result is None
+
+
+# ── Automation signals in analyze_html ────────────────────────────────────────
+
+def test_analyze_html_booking_link():
+    html = '<a href="https://calendly.com/empresa/reuniao">Agendar</a>'
+    result = analyze_html(html)
+    assert result["has_booking_link"] is True
+
+
+def test_analyze_html_no_booking_link():
+    html = "<p>Entre em contato pelo WhatsApp</p>"
+    result = analyze_html(html)
+    assert result["has_booking_link"] is False
+
+
+def test_analyze_html_payment_link():
+    html = '<script src="https://js.stripe.com/v3/"></script>'
+    result = analyze_html(html)
+    assert result["has_payment_link"] is True
+
+
+def test_analyze_html_contact_form():
+    html = "<form method='post'><input type='email'/><button>Enviar</button></form>"
+    result = analyze_html(html)
+    assert result["has_contact_form"] is True
+    assert result["form_count"] == 1
+
+
+def test_analyze_html_video():
+    html = '<iframe src="https://www.youtube.com/embed/abc123"></iframe>'
+    result = analyze_html(html)
+    assert result["has_video"] is True
+
+
+def test_analyze_html_contact_channels_count():
+    html = """
+    <a href="tel:+5511999998888">Ligar</a>
+    <a href="https://wa.me/5511999998888">WhatsApp</a>
+    <a href="mailto:contato@empresa.com">Email</a>
+    <form><input/></form>
+    """
+    result = analyze_html(html)
+    assert result["contact_channels_count"] >= 3
+
+
+def test_analyze_html_empty_returns_new_fields():
+    result = analyze_html("")
+    assert "has_booking_link" in result
+    assert "has_payment_link" in result
+    assert "has_contact_form" in result
+    assert "has_video" in result
+    assert "contact_channels_count" in result
