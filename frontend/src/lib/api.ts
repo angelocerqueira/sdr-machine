@@ -218,7 +218,12 @@ export const streamJob = (id: number, onEvent: (event: { type: string; message: 
 };
 
 // Pipeline
-export const runScrape = (params: { nichos?: string[]; cidades?: string[]; max_results?: number }) =>
+export const runScrape = (params: {
+  nichos?: string[];
+  cidades?: string[];
+  max_results?: number;
+  fontes?: string[];
+}) =>
   fetchAPI<Job>("/api/pipeline/scrape", { method: "POST", body: JSON.stringify(params) });
 
 export const runEnrich = (params: EnrichRequest) =>

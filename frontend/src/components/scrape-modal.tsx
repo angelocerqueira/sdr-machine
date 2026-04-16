@@ -5,7 +5,7 @@ import { getSettings } from "@/lib/api";
 
 interface ScrapeModalProps {
   open: boolean;
-  onConfirm: (params: { nichos: string[]; cidades: string[]; max_results: number }) => void;
+  onConfirm: (params: { nichos: string[]; cidades: string[]; max_results: number; fontes: string[] }) => void;
   onCancel: () => void;
 }
 
@@ -15,6 +15,7 @@ export function ScrapeModal({ open, onConfirm, onCancel }: ScrapeModalProps) {
   const [nichoInput, setNichoInput] = useState("");
   const [cidadeInput, setCidadeInput] = useState("");
   const [maxResults, setMaxResults] = useState(50);
+  const [fontes, setFontes] = useState<string[]>(["google_maps", "cnpj"]);
   const [suggestedNichos, setSuggestedNichos] = useState<string[]>([]);
   const [suggestedCidades, setSuggestedCidades] = useState<string[]>([]);
 
@@ -53,6 +54,12 @@ export function ScrapeModal({ open, onConfirm, onCancel }: ScrapeModalProps) {
     setCidadeInput("");
   }, [cidadeInput, cidades]);
 
+  const toggleFonte = useCallback((fonte: string) => {
+    setFontes((prev) =>
+      prev.includes(fonte) ? prev.filter((f) => f !== fonte) : [...prev, fonte]
+    );
+  }, []);
+
   const handleConfirm = useCallback(() => {
     // Include current input values if not yet added
     const finalNichos = [...nichos];
@@ -63,18 +70,20 @@ export function ScrapeModal({ open, onConfirm, onCancel }: ScrapeModalProps) {
     if (cidadeInput.trim() && !finalCidades.includes(cidadeInput.trim())) {
       finalCidades.push(cidadeInput.trim());
     }
-    if (finalNichos.length === 0 || finalCidades.length === 0) return;
+    if (finalNichos.length === 0 || finalCidades.length === 0 || fontes.length === 0) return;
     onConfirm({
       nichos: finalNichos,
       cidades: finalCidades,
       max_results: maxResults,
+      fontes,
     });
     setNichos([]);
     setCidades([]);
     setNichoInput("");
     setCidadeInput("");
     setMaxResults(50);
-  }, [nichos, cidades, nichoInput, cidadeInput, maxResults, onConfirm]);
+    setFontes(["google_maps", "cnpj"]);
+  }, [nichos, cidades, nichoInput, cidadeInput, maxResults, fontes, onConfirm]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent, addFn: () => void) => {
@@ -98,9 +107,9 @@ export function ScrapeModal({ open, onConfirm, onCancel }: ScrapeModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 sheet-backdrop" onClick={onCancel} />
       <div className="relative bg-surface rounded-xl border border-border p-6 max-w-md w-full mx-4 shadow-xl">
-        <h3 className="text-[15px] font-semibold text-text mb-1">Scraping Google Maps</h3>
+        <h3 className="text-[15px] font-semibold text-text mb-1">Buscar Negócios</h3>
         <p className="text-[12px] text-text-muted mb-5">
-          Buscar negócios por nicho e cidade no Google Maps. Adicione múltiplos nichos/cidades com Enter.
+          Buscar negócios por nicho e cidade. Adicione múltiplos nichos/cidades com Enter.
         </p>
 
         <div className="space-y-4">
@@ -201,6 +210,33 @@ export function ScrapeModal({ open, onConfirm, onCancel }: ScrapeModalProps) {
               className={inputClass}
             />
           </div>
+
+
+          {/* Fontes */}
+          <div>
+            <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1.5 font-[family-name:var(--font-mono)]">
+              Fontes de busca
+            </label>
+            <div className="flex gap-4">
+              {[
+                { key: "google_maps", label: "Google Maps" },
+                { key: "cnpj", label: "CNPJ / Receita Federal" },
+              ].map(({ key, label }) => (
+                <label key={key} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={fontes.includes(key)}
+                    onChange={() => toggleFonte(key)}
+                    className="w-3.5 h-3.5 accent-accent"
+                  />
+                  <span className="text-[12px] text-text-secondary">{label}</span>
+                </label>
+              ))}
+            </div>
+            {fontes.length === 0 && (
+              <p className="text-[11px] text-danger mt-1">Selecione ao menos uma fonte.</p>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-3 justify-end mt-6">
@@ -212,7 +248,7 @@ export function ScrapeModal({ open, onConfirm, onCancel }: ScrapeModalProps) {
           </button>
           <button
             onClick={handleConfirm}
-            disabled={!hasNichos || !hasCidades}
+            disabled={!hasNichos || !hasCidades || fontes.length === 0}
             className="px-4 py-2 text-[13px] text-bg font-medium rounded-lg transition-default bg-accent hover:bg-accent-dim disabled:opacity-30 disabled:cursor-not-allowed"
           >
             Executar Scraping

@@ -81,7 +81,7 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
     }
   }, [pendingPhase, handleRun, enabledProviders]);
 
-  const handleScrapeConfirm = useCallback((params: { nichos: string[]; cidades: string[]; max_results: number }) => {
+  const handleScrapeConfirm = useCallback((params: { nichos: string[]; cidades: string[]; max_results: number; fontes: string[] }) => {
     const scrapePhase = PHASES[0];
     handleRun(scrapePhase, params);
     setPendingPhase(null);
