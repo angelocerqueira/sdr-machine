@@ -39,7 +39,7 @@ Better Auth (email/password, session-based). Frontend stores session in PostgreS
 
 ### Frontend Design System
 
-Dark theme using CSS custom properties in `globals.css`. Fonts: Geist (headings + body), Geist Mono (mono) — loaded via `next/font/google`. Accent color is emerald (#34d399). Kanban board uses `@dnd-kit` for drag-and-drop. Marketing LP uses Remotion (hero) + Framer Motion (scroll animations).
+Design system "Instrumento" — anti-cockpit, pró-ofício. Light/dark themes via `data-theme` attribute on `<html>` (persisted in localStorage). Tokens defined as CSS custom properties in `globals.css`, mapped to Tailwind v4 via `@theme inline`. Fonts: Inter Tight (sans) + JetBrains Mono (mono) — loaded via `next/font/google`. Accent color is OKLCH blue (hue 256). Score colors: terracotta (80-100, hot), mostarda (50-79), salvia (0-49). Primitive UI components in `components/ui/` (Icon, Tag, Badge, Kbd, StatusPill, ScoreRing, PipeMini). Kanban board uses `@dnd-kit` for drag-and-drop. Marketing LP uses Remotion (hero) + Framer Motion (scroll animations).
 
 ## Development Commands
 

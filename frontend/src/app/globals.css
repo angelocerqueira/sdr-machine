@@ -333,6 +333,11 @@ h1, h2, h3, h4 {
   transition: all 150ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.pulse-glow {
+  box-shadow: 0 0 20px var(--accent-soft);
+  animation: pulse-glow-anim 2s ease-in-out infinite;
+}
+
 /* ==========================================================================
    Keyframes
    ========================================================================== */
@@ -344,4 +349,9 @@ h1, h2, h3, h4 {
 @keyframes skeleton-shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+@keyframes pulse-glow-anim {
+  0%, 100% { box-shadow: 0 0 20px var(--accent-soft); }
+  50% { box-shadow: 0 0 40px var(--accent-soft); }
 }

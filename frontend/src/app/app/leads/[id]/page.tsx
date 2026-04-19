@@ -67,7 +67,7 @@ export default function LeadPage() {
             {messages.map((msg) => (
               <div key={msg.id} className="rounded-lg border border-border-subtle bg-surface-raised p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="status-pill bg-surface-overlay text-text-muted">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium tracking-wide uppercase font-mono bg-surface-overlay text-text-muted">
                     {msg.type.replace("_", " ")}
                   </span>
                   {msg.sent_at && (

@@ -22,13 +22,15 @@ Env vars: `NEXT_PUBLIC_API_URL` (backend URL, default `http://localhost:8000`), 
 
 ## Design System
 
-All theming lives in `src/app/globals.css` via CSS custom properties inside a `@theme` inline block (Tailwind v4 — there is no tailwind.config file).
+Design system "Instrumento" — anti-cockpit, pró-ofício. All theming lives in `src/app/globals.css` via CSS custom properties in `:root` / `[data-theme="dark"]`, mapped to Tailwind v4 via `@theme inline` block (no tailwind.config file).
 
-- **Colors:** `--color-bg`, `--color-surface`, `--color-accent` (#34d399 emerald), `--color-danger`, `--color-warning`, `--color-info`, plus `-secondary`, `-muted`, `-subtle` variants
-- **Fonts:** Geist (headings + body), Geist Mono (mono) — loaded via `next/font/google` in `layout.tsx`, applied through `--font-geist` / `--font-geist-mono` CSS vars
-- **Custom utilities:** `.card-glow`, `.status-pill`, `.score-high`/`.score-mid`/`.score-low`, `.kanban-card-dragging`, `.bg-dots`, `.stat-number` (tabular nums)
+- **Colors:** Paper/ink/line palette (warm off-white light, cool charcoal dark). Accent is OKLCH blue (hue 256). Semantic colors are desaturated: ok (salvia), warn (mostarda), danger (terracotta). Primitives: `--paper-0..3`, `--ink-0..5`, `--line-1..3`. Semantic aliases: `--bg`, `--surface`, `--text`, `--border` etc. Tailwind utilities: `bg-bg`, `text-text-muted`, `border-border-strong`, `bg-accent-soft`, etc.
+- **Fonts:** Inter Tight (sans) + JetBrains Mono (mono) — loaded via `next/font/google` in `layout.tsx` as `--font-inter-tight` / `--font-jetbrains-mono`. Weights: 400 (body), 460 (label), 480 (heading), 500 (btn), 600 (rare). Numbers always in mono with `tabular-nums`.
+- **Theme:** Light/dark via `data-theme` attribute on `<html>`, persisted in localStorage. Default: dark. Toggle reads/writes `sdr-theme` key.
+- **Custom utilities:** `.card-glow`, `.score-high`/`.score-mid`/`.score-low`, `.kanban-card-dragging`, `.bg-dots`, `.stat-number`, `.skeleton`, `.pulse-glow`
+- **DS Components (`components/ui/`):** `Icon` (30+ stroke SVGs), `Tag`, `Badge`, `Kbd`, `StatusPill` (11 lead statuses), `ScoreRing` (SVG 0-100), `PipeMini` (pipeline stepper). Import from `@/components/ui`.
 
-Opportunity score drives color everywhere: green (≥60), yellow (40–59), muted (<40).
+Score colors: terracotta (80-100, "aja agora"), mostarda (50-79), salvia (0-49). Alto score = oportunidade quente, não "parabéns".
 
 ## Architecture
 
@@ -49,6 +51,7 @@ src/
 │   ├── layout.tsx           # Root layout
 │   └── globals.css          # Design tokens + utilities
 ├── components/
+│   ├── ui/                  # DS primitives (Icon, Tag, Badge, Kbd, StatusPill, ScoreRing, PipeMini)
 │   ├── marketing/           # LP-specific components (navbar, hero, sections, practice-block)
 │   ├── remotion/            # Remotion compositions (hero animation)
 │   ├── shared/              # Reusable between LP and app (agent-chat, digital-blueprint, mission-control, chat-widget)
@@ -84,8 +87,8 @@ Pure React hooks only (`useState`, `useEffect`, `useCallback`, `useRef`). No glo
 
 - All UI text is **Portuguese (pt-BR)**. Dates use `toLocaleString("pt-BR")`. Status/type labels are mapped via hard-coded dictionaries in each page.
 - `KANBAN_COLUMNS` in `types.ts` defines the 9-stage lead pipeline order — add new statuses there.
-- App components are flat `.tsx` files in `components/`. Subdirectories: `marketing/` (LP sections), `remotion/` (hero animation), `shared/` (reusable between LP and app).
-- Inline SVGs for icons (no icon library).
+- App components are flat `.tsx` files in `components/`. Subdirectories: `ui/` (DS primitives), `marketing/` (LP sections), `remotion/` (hero animation), `shared/` (reusable between LP and app).
+- Icons via `<Icon name="..." />` from `@/components/ui` — custom stroke SVGs, no external icon library.
 - Filters on the kanban board are dynamically derived from the current lead data (niches, cities).
 - The LP preview in lead detail is an iframe pointing at the backend HTML endpoint (`/api/leads/{id}/lp`).
 - All authenticated app routes live under `/app/*`. Internal links must use the `/app` prefix (e.g., `/app/kanban`, not `/kanban`).
