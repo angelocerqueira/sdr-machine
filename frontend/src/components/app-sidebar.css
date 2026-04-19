@@ -139,15 +139,17 @@
 }
 .app-sidebar-avatar-menu {
   position: absolute;
-  left: calc(100% + 8px);
-  bottom: 0;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-2);
   padding: 4px;
   box-shadow: var(--shadow-3);
-  min-width: 140px;
+  min-width: 100px;
   z-index: 60;
+  white-space: nowrap;
 }
 
 /* ================================================================
@@ -166,6 +168,7 @@
     align-items: center;
     padding: 14px 0 12px;
     gap: 4px;
+    overflow: visible;
   }
 
   .app-sidebar-btn {

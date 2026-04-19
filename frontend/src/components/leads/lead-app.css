@@ -409,11 +409,16 @@
 }
 .la-tabs-spacer { flex: 1; }
 .la-tabs-action {
-  display: flex;
+  display: none;
   align-items: center;
-  flex-shrink: 0;
   padding: 6px 0;
   gap: 8px;
+}
+@media (min-width: 1024px) {
+  .la-tabs-action {
+    display: flex;
+    flex-shrink: 0;
+  }
 }
 
 /* Body scrollable */
