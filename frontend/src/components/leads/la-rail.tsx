@@ -1,10 +1,14 @@
 "use client";
 
+import { useState } from "react";
+import { Icon } from "@/components/ui";
+import { updateLead } from "@/lib/api";
 import { scoreClass } from "./lead-app-mock";
 import type { LeadAppDetail } from "./lead-app-types";
 
 interface LaRailProps {
   lead: LeadAppDetail;
+  onLeadUpdated?: () => void;
 }
 
 const NIVEL_LABELS: Record<string, string> = {
@@ -110,19 +114,79 @@ function LaRailReco({ lead }: LaRailProps) {
   );
 }
 
-/* ─── Section 3: Details (KV grid) ─── */
-function LaRailDetails({ lead }: LaRailProps) {
-  const rows: [string, string][] = [
-    ["Email", lead.email],
-    ["Endereço", lead.endereco],
-    ["CNPJ", lead.cnpj],
-    ["Razão", lead.razao_social],
-    ["Porte", lead.porte],
-    ["CNAE", lead.cnae],
-    ["Sócios", lead.socios.map((s) => s.nome).join(", ")],
+/* ─── Section 3: Details (KV grid) — editable ─── */
+
+type EditableField = "email" | "endereco" | "cidade" | "nicho" | "telefone";
+
+const EDITABLE_FIELDS: { label: string; field: EditableField }[] = [
+  { label: "Email", field: "email" },
+  { label: "Telefone", field: "telefone" },
+  { label: "Endereço", field: "endereco" },
+  { label: "Cidade", field: "cidade" },
+  { label: "Nicho", field: "nicho" },
+];
+
+const READONLY_ROWS: { label: string; getValue: (lead: LeadAppDetail) => string }[] = [
+  { label: "CNPJ", getValue: (l) => l.cnpj },
+  { label: "Razão", getValue: (l) => l.razao_social },
+  { label: "Porte", getValue: (l) => l.porte },
+  { label: "CNAE", getValue: (l) => l.cnae },
+  { label: "Sócios", getValue: (l) => l.socios.map((s) => s.nome).join(", ") },
+];
+
+function LaRailDetails({ lead, onLeadUpdated }: LaRailProps) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState<Record<EditableField, string>>({
+    email: lead.email,
+    telefone: lead.telefone,
+    endereco: lead.endereco,
+    cidade: lead.cidade,
+    nicho: lead.nicho,
+  });
+
+  const startEditing = () => {
+    setDraft({
+      email: lead.email,
+      telefone: lead.telefone,
+      endereco: lead.endereco,
+      cidade: lead.cidade,
+      nicho: lead.nicho,
+    });
+    setEditing(true);
+  };
+
+  const cancel = () => setEditing(false);
+
+  const save = async () => {
+    const changed: Record<string, string> = {};
+    for (const { field } of EDITABLE_FIELDS) {
+      if (draft[field] !== lead[field]) {
+        changed[field] = draft[field];
+      }
+    }
+    if (Object.keys(changed).length === 0) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateLead(lead.id, changed);
+      setEditing(false);
+      onLeadUpdated?.();
+    } catch (e) {
+      console.error("Erro ao salvar:", e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const allRows = [
+    ...EDITABLE_FIELDS.map(({ label, field }) => ({ label, value: lead[field], editable: true, field })),
+    ...READONLY_ROWS.map(({ label, getValue }) => ({ label, value: getValue(lead), editable: false, field: undefined })),
   ];
 
-  const hasData = rows.some(([, v]) => v);
+  const hasData = allRows.some((r) => r.value);
 
   if (!hasData) return null;
 
@@ -130,16 +194,90 @@ function LaRailDetails({ lead }: LaRailProps) {
     <div className="la-rail-section">
       <div className="la-rail-head">
         <span>Cadastro</span>
+        {!editing ? (
+          <button
+            onClick={startEditing}
+            style={{
+              all: "unset",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              fontSize: 10,
+              textTransform: "none",
+              letterSpacing: 0,
+              color: "var(--accent)",
+            }}
+          >
+            <Icon name="settings" size={11} /> Editar
+          </button>
+        ) : (
+          <div style={{ display: "flex", gap: 4 }}>
+            <button
+              onClick={save}
+              disabled={saving}
+              style={{
+                all: "unset",
+                cursor: saving ? "wait" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+                fontSize: 10,
+                color: "var(--ok)",
+                opacity: saving ? 0.5 : 1,
+              }}
+            >
+              <Icon name="check" size={11} /> Salvar
+            </button>
+            <button
+              onClick={cancel}
+              disabled={saving}
+              style={{
+                all: "unset",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+                fontSize: 10,
+                color: "var(--text-muted)",
+              }}
+            >
+              <Icon name="x" size={11} />
+            </button>
+          </div>
+        )}
       </div>
       <dl className="la-kv">
-        {rows.map(([label, value]) =>
-          value ? (
+        {allRows.map(({ label, value, editable, field }) => {
+          if (!editing && !value) return null;
+          return (
             <div key={label} className="la-kv-row">
               <dt>{label}</dt>
-              <dd style={{ fontSize: 12 }}>{value}</dd>
+              {editing && editable && field ? (
+                <dd>
+                  <input
+                    type="text"
+                    value={draft[field as EditableField]}
+                    onChange={(e) => setDraft((d) => ({ ...d, [field]: e.target.value }))}
+                    style={{
+                      width: "100%",
+                      fontSize: 12,
+                      padding: "3px 6px",
+                      border: "1px solid var(--border)",
+                      borderRadius: 4,
+                      background: "var(--surface-raised)",
+                      color: "var(--text-body)",
+                      outline: "none",
+                      fontFamily: "inherit",
+                    }}
+                  />
+                </dd>
+              ) : (
+                <dd style={{ fontSize: 12 }}>{value || "\u2014"}</dd>
+              )}
             </div>
-          ) : null
-        )}
+          );
+        })}
       </dl>
     </div>
   );
@@ -188,12 +326,12 @@ function LaRailSources({ lead }: LaRailProps) {
 }
 
 /* ─── Main Rail ─── */
-export function LaRail({ lead }: LaRailProps) {
+export function LaRail({ lead, onLeadUpdated }: LaRailProps) {
   return (
     <aside className="la-rail">
       <LaRailScore lead={lead} />
       <LaRailReco lead={lead} />
-      <LaRailDetails lead={lead} />
+      <LaRailDetails lead={lead} onLeadUpdated={onLeadUpdated} />
       <LaRailSources lead={lead} />
     </aside>
   );

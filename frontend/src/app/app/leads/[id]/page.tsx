@@ -238,7 +238,7 @@ export default function LeadPage() {
         ) : null}
       </div>
 
-      {lead && <LaRail lead={lead} />}
+      {lead && <LaRail lead={lead} onLeadUpdated={() => { refreshLead(); refreshLeads(); }} />}
     </>
   );
 }

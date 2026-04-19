@@ -71,6 +71,13 @@ class LeadSummaryOut(LeadBase):
 
 class LeadUpdate(BaseModel):
     status: str | None = None
+    nome: str | None = None
+    telefone: str | None = None
+    email: str | None = None
+    website: str | None = None
+    endereco: str | None = None
+    cidade: str | None = None
+    nicho: str | None = None
 
 
 class LeadListOut(BaseModel):

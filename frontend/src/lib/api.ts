@@ -131,7 +131,7 @@ export const getLeadCounts = (params?: Record<string, string>) => {
 
 export const getLead = (id: number) => fetchAPI<Lead>(`/api/leads/${id}`);
 
-export const updateLead = (id: number, data: { status?: string }) =>
+export const updateLead = (id: number, data: Record<string, unknown>) =>
   fetchAPI<Lead>(`/api/leads/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 
 export const deleteLead = async (id: number) => {
@@ -161,8 +161,22 @@ export const getLeadLandingPages = (leadId: number) =>
 export const activateLandingPage = (leadId: number, lpId: number) =>
   fetchAPI<LandingPage>(`/api/leads/${leadId}/landing-pages/${lpId}/activate`, { method: "POST" });
 
+// Lead Jobs (timeline)
+export const getLeadJobs = (leadId: number) =>
+  fetchAPI<Job[]>(`/api/leads/${leadId}/jobs`);
+
 // Dashboard
 export const getDashboardStats = () => fetchAPI<DashboardStats>("/api/dashboard/stats");
+
+export interface DashboardTrends {
+  leads_by_day: Array<{ day: string; count: number }>;
+  jobs_by_day: Array<{ day: string; count: number }>;
+  score_distribution: Record<string, number>;
+  leads_by_nicho: Array<{ nicho: string; count: number }>;
+}
+
+export const getDashboardTrends = (days = 30) =>
+  fetchAPI<DashboardTrends>(`/api/dashboard/stats/trends?days=${days}`);
 
 // Jobs
 export const getJobs = (params?: Record<string, string>) => {
