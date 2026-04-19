@@ -5,91 +5,43 @@
    Source: design_handoff_lead_app/lead-app.css
    ========================================================================== */
 
-/* ---------- Shell: sidebar 64 + master 320 + workspace + rail 340 ----------
-   Total: 724px fixo. Em viewports <1440 o rail é colapsado pra dar respiro
-   ao centro (que é onde o trabalho acontece). */
-.la {
-  display: grid;
-  grid-template-columns: 64px 320px minmax(0, 1fr) 340px;
-  height: 100vh;
-  min-width: 1280px;
+/* ---------- Shell: mobile-first, 3-column grid (sidebar lives in parent layout) ----------
+   Mobile: stacked (master full-width, workspace below, rail hidden)
+   Tablet (md): master 280px + workspace
+   Desktop (lg): master 320px + workspace 1fr + rail 340px */
+.la-shell {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 48px); /* subtract mobile bar */
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
 }
+.la-shell .la-rail { display: none; }
 
-.la.rail-closed {
-  grid-template-columns: 64px 320px minmax(0, 1fr) 0px;
-}
-.la.rail-closed .la-rail { display: none; }
-
-@media (max-width: 1439px) {
-  .la { grid-template-columns: 64px 320px minmax(0, 1fr) 0px; }
-  .la .la-rail { display: none; }
-  .la.rail-open { grid-template-columns: 64px 320px minmax(0, 1fr) 340px; }
-  .la.rail-open .la-rail { display: flex; }
+/* Tablet: side-by-side */
+@media (min-width: 768px) {
+  .la-shell {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    height: 100vh;
+  }
 }
 
-/* Rail toggle button lives in topbar — sempre visível pra dar controle manual */
+/* Desktop: add rail column */
+@media (min-width: 1200px) {
+  .la-shell {
+    grid-template-columns: 320px minmax(0, 1fr) 0px;
+  }
+  .la-shell.rail-open {
+    grid-template-columns: 320px minmax(0, 1fr) 340px;
+  }
+  .la-shell.rail-open .la-rail { display: flex; }
+}
+
 .la-rail-toggle { display: inline-flex; }
 
-/* Sidebar global fininha */
-.la-nav {
-  background: var(--paper-1);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 14px 0 12px;
-  gap: 4px;
-}
-[data-theme="dark"] .la-nav { background: var(--paper-0); }
-
-.la-nav-brand {
-  width: 32px; height: 32px;
-  border-radius: var(--r-2);
-  background: var(--text-strong);
-  color: var(--bg);
-  display: grid; place-items: center;
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: -0.03em;
-  margin-bottom: 12px;
-}
-.la-nav-btn {
-  width: 40px; height: 40px;
-  border-radius: var(--r-2);
-  display: grid; place-items: center;
-  color: var(--text-muted);
-  position: relative;
-  transition: background var(--dur-fast), color var(--dur-fast);
-}
-.la-nav-btn:hover { color: var(--text-strong); background: var(--surface-raised); }
-.la-nav-btn.active { color: var(--text-strong); background: var(--surface-raised); }
-.la-nav-btn.active::before {
-  content: "";
-  position: absolute;
-  left: -14px; top: 10px; bottom: 10px;
-  width: 2px;
-  background: var(--text-strong);
-  border-radius: 1px;
-}
-.la-nav-sep { flex: 1; }
-.la-nav-tip {
-  position: absolute;
-  left: 54px; top: 50%; transform: translateY(-50%);
-  background: var(--text-strong);
-  color: var(--bg);
-  padding: 4px 8px;
-  border-radius: var(--r-1);
-  font-size: 11px;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--dur-fast);
-  z-index: 50;
-}
-.la-nav-btn:hover .la-nav-tip { opacity: 1; }
+/* Note: .la-nav-* sidebar classes removed — sidebar now lives in app-sidebar.css */
 
 /* ---------- Master list (leads) ---------- */
 .la-master {

@@ -93,9 +93,9 @@ export function KanbanBoard() {
   };
 
   const selectClass =
-    "bg-surface-raised border border-border rounded-lg px-3 py-1.5 text-[13px] text-text-secondary focus:border-accent/50 focus:outline-none transition-default appearance-none cursor-pointer hover:border-text-muted";
+    "bg-surface-raised border border-border rounded-md px-3 py-1.5 text-[13px] text-text-secondary font-mono focus:border-accent/50 focus:outline-none transition-default appearance-none cursor-pointer hover:border-border-strong";
   const inputClass =
-    "bg-surface-raised border border-border rounded-lg px-3 py-1.5 text-[13px] text-text-secondary placeholder:text-text-muted focus:border-accent/50 focus:outline-none transition-default w-28 font-[family-name:var(--font-mono)]";
+    "bg-surface-raised border border-border rounded-md px-3 py-1.5 text-[13px] text-text-secondary placeholder:text-text-muted font-mono focus:border-accent/50 focus:outline-none transition-default w-28";
 
   if (loading) {
     return (
@@ -110,7 +110,7 @@ export function KanbanBoard() {
     <div className="space-y-5">
       {/* Filters */}
       <div className="flex gap-3 flex-wrap items-center">
-        <span className="text-[11px] uppercase tracking-widest text-text-muted font-[family-name:var(--font-mono)]">
+        <span className="t-eyebrow">
           Filtros
         </span>
         <input
@@ -118,7 +118,7 @@ export function KanbanBoard() {
           placeholder="Buscar por nome ou telefone..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="bg-surface-raised border border-border rounded-lg px-3 py-1.5 text-[13px] text-text-secondary placeholder:text-text-muted focus:border-accent/50 focus:outline-none transition-default w-64"
+          className="bg-surface-raised border border-border rounded-md px-3 py-1.5 text-[13px] text-text-secondary placeholder:text-text-muted focus:border-accent/50 focus:outline-none transition-default w-64"
         />
         <select
           value={filterNicho}
@@ -162,7 +162,7 @@ export function KanbanBoard() {
 
       {/* Board */}
       <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
-        <div className="flex gap-3 overflow-x-auto pb-4">
+        <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide">
           {KANBAN_COLUMNS.map((col) => (
             <KanbanColumn
               key={col.id}

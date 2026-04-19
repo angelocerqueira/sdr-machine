@@ -2,7 +2,6 @@
 
 import { useState, useEffect, createContext, useContext } from "react";
 import "@/components/leads/lead-app.css";
-import { LaSidebar } from "@/components/leads/la-sidebar";
 
 interface RailContextValue {
   railOpen: boolean;
@@ -32,7 +31,7 @@ export default function LeadAppLayout({ children }: { children: React.ReactNode 
 
   // Collapse rail on narrow viewports
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 1439px)");
+    const mq = window.matchMedia("(max-width: 1199px)");
     function handleChange(e: MediaQueryListEvent | MediaQueryList) {
       if (e.matches) setRailOpen(false);
     }
@@ -41,12 +40,11 @@ export default function LeadAppLayout({ children }: { children: React.ReactNode 
     return () => mq.removeEventListener("change", handleChange);
   }, []);
 
-  const shellClass = `la${railOpen ? " rail-open" : " rail-closed"}`;
+  const shellClass = `la-shell${railOpen ? " rail-open" : ""}`;
 
   return (
     <RailContext.Provider value={{ railOpen, setRailOpen }}>
-      <div className={shellClass} style={{ position: "fixed", inset: 0, zIndex: 50 }}>
-        <LaSidebar />
+      <div className={shellClass}>
         {children}
       </div>
     </RailContext.Provider>

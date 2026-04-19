@@ -112,7 +112,7 @@ export function KanbanColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-xl border bg-surface min-w-[240px] w-[240px] flex flex-col transition-default ${
+      className={`rounded-lg border bg-surface min-w-[280px] w-[280px] flex flex-col transition-default ${
         isOver
           ? "border-accent/40 bg-accent-subtle"
           : id === "disqualified" || id === "failed"
@@ -122,17 +122,18 @@ export function KanbanColumn({
     >
       {/* Column header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
-        <h3 className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider font-[family-name:var(--font-mono)]">
+        <h3 className="t-eyebrow">
           {label}
         </h3>
         <span
-          className={`text-[11px] font-medium font-[family-name:var(--font-mono)] rounded-full px-2 py-0.5 ${
+          className={`text-[11px] font-medium font-mono tabular-nums rounded-full px-2 py-0.5 ${
             total > 0 && (id === "disqualified" || id === "failed")
               ? "bg-danger/10 text-danger"
               : total > 0
               ? "bg-accent-subtle text-accent"
               : "bg-surface-raised text-text-muted"
           }`}
+          style={{ fontFeatureSettings: '"tnum"' }}
         >
           {total}
         </span>
@@ -142,7 +143,7 @@ export function KanbanColumn({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex flex-col gap-2 p-2 flex-1 min-h-[120px] max-h-[calc(100vh-320px)] overflow-y-auto"
+        className="flex flex-col gap-2 p-2 flex-1 min-h-[120px] max-h-[calc(100vh-200px)] overflow-y-auto"
       >
         {loading ? (
           <div className="space-y-2">

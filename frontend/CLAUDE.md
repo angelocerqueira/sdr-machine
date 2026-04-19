@@ -41,11 +41,14 @@ src/
 │   │   ├── layout.tsx       # Marketing layout (navbar, no sidebar)
 │   │   └── page.tsx         # LP with all sections
 │   ├── app/                 # Authenticated product (requires login)
-│   │   ├── layout.tsx       # App layout: TopBar + Sidebar + main area (max-w-7xl)
+│   │   ├── layout.tsx       # App layout: AppSidebar (64px) + main area
 │   │   ├── page.tsx         # Dashboard (stats cards + status breakdown)
 │   │   ├── kanban/page.tsx  # Pipeline controls + drag-drop kanban board
 │   │   ├── jobs/page.tsx    # Job history table with status indicators
-│   │   └── leads/[id]/page.tsx # Lead detail: score, info grid, LP iframe, messages
+│   │   └── leads/           # Lead App (3-column workspace)
+│   │       ├── layout.tsx   # Lead App layout: master + workspace + rail grid
+│   │       ├── page.tsx     # Empty state (no lead selected)
+│   │       └── [id]/page.tsx # Workspace: topbar + header + tabs + body
 │   ├── lp/[id]/page.tsx     # Public LP preview (no auth)
 │   ├── login/page.tsx       # Login page
 │   ├── layout.tsx           # Root layout
