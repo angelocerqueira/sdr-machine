@@ -7,6 +7,13 @@ interface LaRailProps {
   lead: LeadAppDetail;
 }
 
+const NIVEL_LABELS: Record<string, string> = {
+  lp: "Landing Page",
+  automacao_basica: "Automação Básica",
+  mapa_automacoes: "Mapa de Automações",
+  vertical_os: "Vertical OS",
+};
+
 /* ─── Section 1: Score ─── */
 function LaRailScore({ lead }: LaRailProps) {
   const cls = scoreClass(lead.opportunity_score);
@@ -51,8 +58,12 @@ function LaRailScore({ lead }: LaRailProps) {
   );
 }
 
-/* ─── Section 2: Recommendation ─── */
+/* ─── Section 2: Recommendation (ServiceLevels) ─── */
 function LaRailReco({ lead }: LaRailProps) {
+  const sl = lead.service_levels;
+  const nivel = sl?.nivel_recomendado || lead.recommendation.level;
+  const label = NIVEL_LABELS[nivel] || lead.recommendation.label;
+
   return (
     <div className="la-rail-section">
       <div className="la-rail-head">
@@ -60,7 +71,40 @@ function LaRailReco({ lead }: LaRailProps) {
       </div>
       <div className="la-reco">
         <div className="la-reco-head">Nível recomendado</div>
-        <div className="la-reco-title">{lead.recommendation.label}</div>
+        <div className="la-reco-title">{label}</div>
+        {sl?.resumo_executivo && (
+          <div className="la-reco-body">{sl.resumo_executivo}</div>
+        )}
+        {sl && nivel && sl[nivel as keyof typeof sl] && typeof sl[nivel as keyof typeof sl] === "object" && (
+          (() => {
+            const data = sl[nivel as "lp" | "automacao_basica" | "mapa_automacoes" | "vertical_os"];
+            if (!data || typeof data !== "object" || !("sinais" in data)) return null;
+            return (
+              <>
+                {data.sinais.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-subtle)", marginBottom: 4 }}>
+                      Sinais
+                    </div>
+                    <ul style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5, paddingLeft: 14, margin: 0 }}>
+                      {data.sinais.slice(0, 4).map((s, i) => <li key={i}>{s}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {data.oportunidades.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-subtle)", marginBottom: 4 }}>
+                      Oportunidades
+                    </div>
+                    <ul style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5, paddingLeft: 14, margin: 0 }}>
+                      {data.oportunidades.slice(0, 4).map((o, i) => <li key={i}>{o}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </>
+            );
+          })()
+        )}
       </div>
     </div>
   );

@@ -7,6 +7,8 @@ interface LaTabStripProps {
   setActiveTab: (tab: string) => void;
   tabs: TabConfig[];
   actions: Record<string, TabAction>;
+  onPrimaryAction?: () => void;
+  actionLoading?: boolean;
 }
 
 export function LaTabStrip({
@@ -14,6 +16,8 @@ export function LaTabStrip({
   setActiveTab,
   tabs,
   actions,
+  onPrimaryAction,
+  actionLoading,
 }: LaTabStripProps) {
   const currentActions = actions[activeTab];
 
@@ -36,13 +40,15 @@ export function LaTabStrip({
       ))}
       <div className="la-tabs-spacer" />
       <div className="la-tabs-action">
-        {currentActions?.secondary && (
-          <button className="btn btn-ghost btn-sm">
-            {currentActions.secondary}
-          </button>
-        )}
         {currentActions?.primary && (
-          <button className="btn btn-primary btn-sm">
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={onPrimaryAction}
+            disabled={actionLoading}
+          >
+            {actionLoading ? (
+              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : null}
             {currentActions.primary}
           </button>
         )}

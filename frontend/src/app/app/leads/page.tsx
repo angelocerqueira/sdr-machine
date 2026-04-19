@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 
 export default function LeadsEmptyPage() {
   const router = useRouter();
-  const { leads, leadsLoading } = useLeadApp(null);
+  const { leads, leadsLoading, search, handleSearch, statusFilter, handleFilter } = useLeadApp(null);
 
   return (
     <>
@@ -16,6 +16,10 @@ export default function LeadsEmptyPage() {
         onSelect={(id) => router.push(`/app/leads/${id}`)}
         leads={leads}
         loading={leadsLoading}
+        search={search}
+        onSearch={handleSearch}
+        statusFilter={statusFilter}
+        onFilter={handleFilter}
       />
       <div className="la-work" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div className="state">

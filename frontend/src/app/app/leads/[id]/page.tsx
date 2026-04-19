@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLeadApp } from "@/components/leads/use-lead-app";
 import { useRailContext } from "../layout";
@@ -14,13 +14,15 @@ import { LaTabLp } from "@/components/leads/la-tab-landing-page";
 import { LaTabMsgs } from "@/components/leads/la-tab-mensagens";
 import { LaTabInfo } from "@/components/leads/la-tab-informacoes";
 import { buildTabs, TAB_ACTIONS } from "@/components/leads/lead-app-mock";
-import { getLeadLandingPages } from "@/lib/api";
+import { getLeadLandingPages, runEnrich, runGenerate, runOutreach } from "@/lib/api";
 import { Icon } from "@/components/ui";
 import type { LeadAppDetail } from "@/components/leads/lead-app-types";
-import type { Lead, LandingPage } from "@/lib/types";
+import type { Lead, LandingPage, ServiceLevels } from "@/lib/types";
 
 /** Map real API Lead to the LeadAppDetail shape expected by tab components */
 function mapToDetail(lead: Lead, landingPages: LandingPage[]): LeadAppDetail {
+  const sl = (lead.site_analysis as Record<string, unknown>)?.service_levels as ServiceLevels | undefined;
+
   return {
     id: lead.id,
     public_id: lead.public_id,
@@ -61,6 +63,7 @@ function mapToDetail(lead: Lead, landingPages: LandingPage[]): LeadAppDetail {
       level: lead.nivel_recomendado || "",
       label: lead.nivel_recomendado?.replace(/_/g, " ") || "Não definido",
     },
+    service_levels: sl || null,
     lp_versions: landingPages.map((lp) => ({
       id: lp.id,
       v: lp.version,
@@ -90,14 +93,24 @@ export default function LeadPage() {
     messages,
     currentIndex,
     total,
+    search,
+    handleSearch,
+    statusFilter,
+    handleFilter,
+    refreshLead,
+    refreshLeads,
+    refreshMessages,
   } = useLeadApp(activeId);
 
   // Fetch landing pages
   const [landingPages, setLandingPages] = useState<LandingPage[]>([]);
-  useEffect(() => {
+
+  const fetchLandingPages = useCallback(() => {
     if (!activeId || activeId <= 0) return;
     getLeadLandingPages(activeId).then(setLandingPages).catch(() => setLandingPages([]));
   }, [activeId]);
+
+  useEffect(() => { fetchLandingPages(); }, [fetchLandingPages]);
 
   const lead = rawLead ? mapToDetail(rawLead, landingPages) : null;
 
@@ -120,11 +133,40 @@ export default function LeadPage() {
       })
     : buildTabs({ reasons: 0, lpVersions: 0, messages: 0 });
 
+  // ---- Tab actions ----
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const handlePrimaryAction = useCallback(async () => {
+    if (!lead || actionLoading) return;
+    setActionLoading(true);
+    try {
+      switch (activeTab) {
+        case "diag":
+          await runEnrich({ lead_ids: [lead.id] });
+          // Wait a bit then refresh (job runs async)
+          setTimeout(() => { refreshLead(); refreshLeads(); }, 3000);
+          break;
+        case "lp":
+          await runGenerate({ lead_ids: [lead.id] });
+          setTimeout(() => { refreshLead(); fetchLandingPages(); refreshLeads(); }, 5000);
+          break;
+        case "msgs":
+          await runOutreach({ lead_ids: [lead.id] });
+          setTimeout(() => { refreshMessages(); refreshLead(); refreshLeads(); }, 5000);
+          break;
+      }
+    } catch (e) {
+      console.error("Erro na ação:", e);
+    } finally {
+      setActionLoading(false);
+    }
+  }, [lead, activeTab, actionLoading, refreshLead, refreshLeads, refreshMessages, fetchLandingPages]);
+
   const tabContent = () => {
     if (!lead) return null;
     switch (activeTab) {
       case "diag": return <LaTabDiag lead={lead} />;
-      case "lp": return <LaTabLp lead={lead} />;
+      case "lp": return <LaTabLp lead={lead} onVersionActivated={fetchLandingPages} />;
       case "msgs": return <LaTabMsgs lead={lead} />;
       case "info": return <LaTabInfo lead={lead} />;
       default: return <LaTabDiag lead={lead} />;
@@ -138,6 +180,10 @@ export default function LeadPage() {
         onSelect={(id) => router.push(`/app/leads/${id}`)}
         leads={leads}
         loading={leadsLoading}
+        search={search}
+        onSearch={handleSearch}
+        statusFilter={statusFilter}
+        onFilter={handleFilter}
       />
 
       <div className="la-work">
@@ -172,6 +218,8 @@ export default function LeadPage() {
               setActiveTab={setActiveTab}
               tabs={tabs}
               actions={TAB_ACTIONS}
+              onPrimaryAction={handlePrimaryAction}
+              actionLoading={actionLoading}
             />
             <div className="la-body">
               {tabContent()}

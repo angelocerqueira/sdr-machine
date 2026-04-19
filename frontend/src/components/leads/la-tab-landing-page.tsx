@@ -1,10 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { Icon } from "@/components/ui";
-import { getLeadLpUrl } from "@/lib/api";
+import { getLeadLpUrl, activateLandingPage } from "@/lib/api";
 import type { LeadAppDetail } from "./lead-app-types";
 
-export function LaTabLp({ lead }: { lead: LeadAppDetail }) {
+interface LaTabLpProps {
+  lead: LeadAppDetail;
+  onVersionActivated?: () => void;
+}
+
+export function LaTabLp({ lead, onVersionActivated }: LaTabLpProps) {
+  const [activating, setActivating] = useState<number | null>(null);
+
   if (lead.lp_versions.length === 0) {
     return (
       <div className="state" style={{ margin: "32px auto" }}>
@@ -20,6 +28,18 @@ export function LaTabLp({ lead }: { lead: LeadAppDetail }) {
   }
 
   const lpUrl = getLeadLpUrl(lead.id);
+
+  async function handleActivate(lpId: number) {
+    setActivating(lpId);
+    try {
+      await activateLandingPage(lead.id, lpId);
+      onVersionActivated?.();
+    } catch (e) {
+      console.error("Erro ao ativar versão:", e);
+    } finally {
+      setActivating(null);
+    }
+  }
 
   return (
     <div className="la-lp">
@@ -72,12 +92,21 @@ export function LaTabLp({ lead }: { lead: LeadAppDetail }) {
                 className={`la-version ${v.active ? "active" : ""}`}
               >
                 <div className="la-version-v">v{v.v}</div>
-                <div className="la-version-date">
-                  {v.created}
-                </div>
-                <div className="la-version-action" style={{ fontSize: 11, color: v.active ? "var(--accent)" : "var(--text-muted)" }}>
-                  {v.active ? "Ativa" : ""}
-                </div>
+                <div className="la-version-date">{v.created}</div>
+                {v.active ? (
+                  <div className="la-version-action" style={{ fontSize: 11, color: "var(--accent)" }}>
+                    Ativa
+                  </div>
+                ) : (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ fontSize: 11 }}
+                    disabled={activating === v.id}
+                    onClick={() => handleActivate(v.id)}
+                  >
+                    {activating === v.id ? "Ativando\u2026" : "Ativar"}
+                  </button>
+                )}
               </div>
             ))}
           </div>

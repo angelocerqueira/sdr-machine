@@ -38,6 +38,15 @@ export interface LeadAppDetail {
     level: string;
     label: string;
   };
+  service_levels: {
+    lp?: { score: number; sinais: string[]; oportunidades: string[]; justificativa: string };
+    automacao_basica?: { score: number; sinais: string[]; oportunidades: string[]; justificativa: string };
+    mapa_automacoes?: { score: number; sinais: string[]; oportunidades: string[]; justificativa: string };
+    vertical_os?: { score: number; sinais: string[]; oportunidades: string[]; justificativa: string };
+    nivel_recomendado?: string;
+    qualificado?: boolean;
+    resumo_executivo?: string;
+  } | null;
   lp_versions: Array<{
     id: number;
     v: number;
