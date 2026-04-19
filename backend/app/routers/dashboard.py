@@ -9,6 +9,66 @@ from app.schemas import DashboardStats
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
+@router.get("/stats/trends")
+def get_dashboard_trends(days: int = 30, db: Session = Depends(get_db)):
+    """Returns daily lead counts, job counts, score distribution, and top nichos for the last N days."""
+    from datetime import datetime, timedelta
+
+    cutoff = datetime.utcnow() - timedelta(days=days)
+
+    # Leads created per day
+    leads_by_day = (
+        db.query(
+            func.date(Lead.created_at).label("day"),
+            func.count(Lead.id).label("count"),
+        )
+        .filter(Lead.created_at >= cutoff)
+        .group_by(func.date(Lead.created_at))
+        .order_by(func.date(Lead.created_at))
+        .all()
+    )
+
+    # Jobs per day
+    jobs_by_day = (
+        db.query(
+            func.date(Job.created_at).label("day"),
+            func.count(Job.id).label("count"),
+        )
+        .filter(Job.created_at >= cutoff)
+        .group_by(func.date(Job.created_at))
+        .order_by(func.date(Job.created_at))
+        .all()
+    )
+
+    # Score distribution buckets
+    score_buckets: dict[str, int] = {}
+    leads_with_score = (
+        db.query(Lead.opportunity_score)
+        .filter(Lead.opportunity_score.isnot(None))
+        .all()
+    )
+    for (score,) in leads_with_score:
+        bucket = f"{(score // 10) * 10}-{(score // 10) * 10 + 9}"
+        score_buckets[bucket] = score_buckets.get(bucket, 0) + 1
+
+    # Leads by nicho (top 10)
+    nicho_counts = (
+        db.query(Lead.nicho, func.count(Lead.id))
+        .filter(Lead.nicho.isnot(None))
+        .group_by(Lead.nicho)
+        .order_by(func.count(Lead.id).desc())
+        .limit(10)
+        .all()
+    )
+
+    return {
+        "leads_by_day": [{"day": str(day), "count": count} for day, count in leads_by_day],
+        "jobs_by_day": [{"day": str(day), "count": count} for day, count in jobs_by_day],
+        "score_distribution": score_buckets,
+        "leads_by_nicho": [{"nicho": n, "count": c} for n, c in nicho_counts],
+    }
+
+
 @router.get("/stats", response_model=DashboardStats)
 def get_stats(db: Session = Depends(get_db)):
     total_leads = db.query(func.count(Lead.id)).scalar() or 0

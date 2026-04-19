@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getDashboardStats } from "@/lib/api";
+import { getDashboardStats, getDashboardTrends } from "@/lib/api";
+import type { DashboardTrends } from "@/lib/api";
 import { StatsCard } from "@/components/stats-card";
 import type { DashboardStats } from "@/lib/types";
 
@@ -57,12 +58,20 @@ const STATUS_LABELS: Record<string, string> = {
   failed: "Falhou",
 };
 
+function scoreColor(bucket: number): string {
+  if (bucket >= 80) return "var(--score-high)";
+  if (bucket >= 50) return "var(--score-mid)";
+  return "var(--score-low)";
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [trends, setTrends] = useState<DashboardTrends | null>(null);
 
   useEffect(() => {
     getDashboardStats().then(setStats);
+    getDashboardTrends(14).then(setTrends).catch(() => {});
   }, []);
 
   if (!stats) {
@@ -125,6 +134,176 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Trends Section */}
+      {trends && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6">
+          {/* Lead Activity (bar chart) */}
+          <div className="rounded-xl border border-border bg-surface p-6 lg:col-span-2">
+            <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider font-[family-name:var(--font-mono)] mb-5">
+              Atividade de leads (14 dias)
+            </h3>
+            {trends.leads_by_day.length > 0 ? (() => {
+              const maxCount = Math.max(...trends.leads_by_day.map((d) => d.count), 1);
+              return (
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 120 }}>
+                  {trends.leads_by_day.slice(-14).map((d) => {
+                    const pct = (d.count / maxCount) * 100;
+                    const dayLabel = new Date(d.day + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+                    return (
+                      <div
+                        key={d.day}
+                        style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 9,
+                            fontFamily: "var(--font-mono)",
+                            color: "var(--text-muted)",
+                            fontVariantNumeric: "tabular-nums",
+                          }}
+                        >
+                          {d.count > 0 ? d.count : ""}
+                        </span>
+                        <div
+                          style={{
+                            width: "100%",
+                            maxWidth: 32,
+                            height: `${Math.max(pct, 4)}%`,
+                            background: "var(--accent)",
+                            borderRadius: "3px 3px 0 0",
+                            opacity: d.count > 0 ? 1 : 0.15,
+                            transition: "height 0.3s ease",
+                          }}
+                        />
+                        <span
+                          style={{
+                            fontSize: 8,
+                            fontFamily: "var(--font-mono)",
+                            color: "var(--text-subtle)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {dayLabel}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })() : (
+              <p className="text-text-muted text-xs">Sem dados no período</p>
+            )}
+          </div>
+
+          {/* Top Nichos */}
+          <div className="rounded-xl border border-border bg-surface p-6">
+            <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider font-[family-name:var(--font-mono)] mb-5">
+              Top nichos
+            </h3>
+            {trends.leads_by_nicho.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {trends.leads_by_nicho.slice(0, 8).map((n) => (
+                  <div
+                    key={n.nicho}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      fontSize: 12,
+                    }}
+                  >
+                    <span style={{ color: "var(--text-body)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginRight: 8 }}>
+                      {n.nicho}
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 11,
+                        fontVariantNumeric: "tabular-nums",
+                        color: "var(--text-muted)",
+                        background: "var(--surface-raised)",
+                        padding: "2px 8px",
+                        borderRadius: 99,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {n.count}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-text-muted text-xs">Nenhum nicho</p>
+            )}
+          </div>
+
+          {/* Score Distribution */}
+          <div className="rounded-xl border border-border bg-surface p-6 lg:col-span-3">
+            <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider font-[family-name:var(--font-mono)] mb-5">
+              Distribuição de scores
+            </h3>
+            {Object.keys(trends.score_distribution).length > 0 ? (() => {
+              const buckets = Object.entries(trends.score_distribution).sort(
+                ([a], [b]) => parseInt(a) - parseInt(b)
+              );
+              const maxVal = Math.max(...buckets.map(([, v]) => v), 1);
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {buckets.map(([bucket, count]) => {
+                    const lo = parseInt(bucket);
+                    const hi = Math.min(lo + 9, 100);
+                    const pct = (count / maxVal) * 100;
+                    return (
+                      <div key={bucket} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span
+                          style={{
+                            width: 48,
+                            fontSize: 11,
+                            fontFamily: "var(--font-mono)",
+                            fontVariantNumeric: "tabular-nums",
+                            color: "var(--text-muted)",
+                            textAlign: "right",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {lo}-{hi}
+                        </span>
+                        <div style={{ flex: 1, height: 16, background: "var(--surface-raised)", borderRadius: 4, overflow: "hidden" }}>
+                          <div
+                            style={{
+                              height: "100%",
+                              width: `${Math.max(pct, 2)}%`,
+                              background: scoreColor(lo),
+                              borderRadius: 4,
+                              transition: "width 0.3s ease",
+                            }}
+                          />
+                        </div>
+                        <span
+                          style={{
+                            width: 28,
+                            fontSize: 11,
+                            fontFamily: "var(--font-mono)",
+                            fontVariantNumeric: "tabular-nums",
+                            color: "var(--text-muted)",
+                            textAlign: "right",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {count}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })() : (
+              <p className="text-text-muted text-xs">Sem dados de score</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

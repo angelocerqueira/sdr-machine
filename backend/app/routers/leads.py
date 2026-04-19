@@ -4,8 +4,8 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import LandingPage, Lead
-from app.schemas import LandingPageOut, LeadListOut, LeadOut, LeadSummaryOut, LeadUpdate, OutreachMessageOut
+from app.models import Job, LandingPage, Lead
+from app.schemas import JobOut, LandingPageOut, LeadListOut, LeadOut, LeadSummaryOut, LeadUpdate, OutreachMessageOut
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
 
@@ -186,6 +186,21 @@ def get_lead_messages(lead_id: int, db: Session = Depends(get_db)):
     return lead.outreach_messages
 
 
+@router.get("/{lead_id}/jobs", response_model=list[JobOut])
+def get_lead_jobs(lead_id: int, db: Session = Depends(get_db)):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+    jobs = db.query(Job).order_by(Job.created_at.desc()).limit(50).all()
+    result = []
+    for job in jobs:
+        lead_ids = job.params.get("lead_ids", []) if job.params else []
+        if lead_id in lead_ids or job.id == lead.job_id:
+            result.append(job)
+    return result
+
+
 @router.patch("/{lead_id}", response_model=LeadOut)
 def update_lead(lead_id: int, payload: LeadUpdate, db: Session = Depends(get_db)):
     lead = db.get(Lead, lead_id)
@@ -198,7 +213,10 @@ def update_lead(lead_id: int, payload: LeadUpdate, db: Session = Depends(get_db)
                 status_code=422,
                 detail=f"Invalid status '{payload.status}'. Must be one of: {sorted(VALID_STATUSES)}",
             )
-        lead.status = payload.status
+
+    update_data = payload.model_dump(exclude_none=True)
+    for field, value in update_data.items():
+        setattr(lead, field, value)
 
     db.commit()
     db.refresh(lead)
