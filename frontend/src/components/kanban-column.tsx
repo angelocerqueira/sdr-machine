@@ -143,7 +143,7 @@ export function KanbanColumn({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex flex-col gap-2 p-2 flex-1 min-h-[120px] max-h-[calc(100vh-200px)] overflow-y-auto"
+        className="flex flex-col gap-2 p-2 flex-1 min-h-[120px] max-h-[calc(100vh-200px)] overflow-y-auto overflow-x-hidden"
       >
         {loading ? (
           <div className="space-y-2">
