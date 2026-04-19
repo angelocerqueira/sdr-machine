@@ -252,6 +252,8 @@
    ========================================================================== */
 *, *::before, *::after { box-sizing: border-box; }
 
+html, body { overflow-x: hidden; }
+
 body {
   font-family: var(--font-sans);
   font-size: var(--text-base);
