@@ -58,6 +58,20 @@ src/
 │   ├── marketing/           # LP-specific components (navbar, hero, sections, practice-block)
 │   ├── remotion/            # Remotion compositions (hero animation)
 │   ├── shared/              # Reusable between LP and app (agent-chat, digital-blueprint, mission-control, chat-widget)
+│   ├── leads/               # Lead App workspace components
+│   │   ├── la-master.tsx    # Master list (grouped, searchable)
+│   │   ├── la-topbar.tsx    # Breadcrumbs + J/K nav + rail toggle
+│   │   ├── la-header.tsx    # Lead name, meta, status
+│   │   ├── la-tab-strip.tsx # Tab bar with dynamic counts
+│   │   ├── la-tab-diagnostico.tsx  # Score dims + opportunity reasons
+│   │   ├── la-tab-landing-page.tsx # LP iframe + version history
+│   │   ├── la-tab-mensagens.tsx    # Outreach messages + WA links
+│   │   ├── la-tab-informacoes.tsx  # Tech stack + reviews
+│   │   ├── la-rail.tsx      # Score, recommendation, cadastro, sources
+│   │   ├── use-lead-app.ts  # Data hook (leads, detail, messages, J/K nav)
+│   │   ├── lead-app-mock.ts # Utilities only (scoreClass, buildTabs, STATUS_LABELS)
+│   │   ├── lead-app-types.ts # LeadAppDetail, LeadAppItem, TabConfig
+│   │   └── lead-app.css     # All Lead App styles
 │   └── *.tsx                # App UI components (flat)
 └── lib/
     ├── api.ts               # Typed fetch wrapper + all endpoint functions
@@ -82,6 +96,14 @@ Pure React hooks only (`useState`, `useEffect`, `useCallback`, `useRef`). No glo
 
 `kanban-board.tsx` uses `@dnd-kit/core` with `pointerWithin` collision detection. On drop, it applies an **optimistic local update** then calls `updateLead()` — if the API call fails, the local state is reverted to the previous snapshot.
 
+### Lead App (`/app/leads/`)
+
+3-column layout: master list (left, grouped by status) + workspace (center, tabs) + rail (right, collapsible). All data from API — no mock data. Components use `LeadAppDetail` type (mapped from `Lead` via `mapToDetail()` in page.tsx). `use-lead-app.ts` hook manages: leads list fetch, lead detail fetch, messages fetch, tab persistence, J/K keyboard navigation. Each tab has an empty state UI (`.state` CSS class) shown when data isn't available yet. Landing page versions fetched via `getLeadLandingPages()`. The `lead-app-mock.ts` file contains only utility functions (`scoreClass`, `buildTabs`, `STATUS_LABELS`) — no mock data.
+
+### AppSidebar
+
+`app-sidebar.tsx` + `app-sidebar.css`. Mobile-first: 240px drawer on mobile (hamburger toggle), 64px icon-only on desktop with hover tooltips. User avatar at bottom opens dropdown with name/email (from `authClient.useSession()`), theme toggle, and sign out. Desktop: dropdown opens to the right; mobile: opens above.
+
 ### Real-Time Job Progress
 
 `job-progress.tsx` subscribes to `GET /api/jobs/{id}/stream` via `EventSource`. It accumulates log messages, auto-scrolls, and closes the stream when the job finishes. `pipeline-controls.tsx` renders this component and calls `onJobDone` (which triggers a page reload) on completion.
@@ -90,7 +112,7 @@ Pure React hooks only (`useState`, `useEffect`, `useCallback`, `useRef`). No glo
 
 - All UI text is **Portuguese (pt-BR)**. Dates use `toLocaleString("pt-BR")`. Status/type labels are mapped via hard-coded dictionaries in each page.
 - `KANBAN_COLUMNS` in `types.ts` defines the 9-stage lead pipeline order — add new statuses there.
-- App components are flat `.tsx` files in `components/`. Subdirectories: `ui/` (DS primitives), `marketing/` (LP sections), `remotion/` (hero animation), `shared/` (reusable between LP and app), `leads/` (Lead App workspace — sidebar, master list, tabs, rail, hook, CSS, types, mock data).
+- App components are flat `.tsx` files in `components/`. Subdirectories: `ui/` (DS primitives), `marketing/` (LP sections), `remotion/` (hero animation), `shared/` (reusable between LP and app), `leads/` (Lead App workspace — master list, tabs, rail, hook, CSS, types, utilities).
 - Icons via `<Icon name="..." />` from `@/components/ui` — custom stroke SVGs, no external icon library.
 - Filters on the kanban board are dynamically derived from the current lead data (niches, cities).
 - The LP preview in lead detail is an iframe pointing at the backend HTML endpoint (`/api/leads/{id}/lp`).

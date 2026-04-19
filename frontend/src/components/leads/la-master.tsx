@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { Icon } from "@/components/ui";
-import { scoreClass, groupLeads, type LeadListItem } from "./use-lead-app";
+import { scoreClass } from "./lead-app-mock";
+import { groupLeads, type LeadListItem } from "./use-lead-app";
 
 const FILTERS = [
   { key: "all", label: "Todos" },
@@ -27,50 +27,40 @@ interface LaMasterProps {
   onSelect: (id: number) => void;
   leads: LeadListItem[];
   loading?: boolean;
+  search: string;
+  onSearch: (q: string) => void;
+  statusFilter: string;
+  onFilter: (f: string) => void;
 }
 
-export function LaMaster({ activeId, onSelect, leads, loading }: LaMasterProps) {
-  const [filter, setFilter] = useState("all");
-  const [search, setSearch] = useState("");
-
-  const filtered = leads.filter((l) => {
-    if (search) {
-      const q = search.toLowerCase();
-      if (!l.name.toLowerCase().includes(q) && !l.niche.toLowerCase().includes(q) && !l.city.toLowerCase().includes(q)) return false;
-    }
-    if (filter === "hot") return l.score >= 80;
-    if (filter === "enriched") return l.status === "enriched";
-    if (filter === "new") return l.status === "scraped";
-    return true;
-  });
-
-  const groups = groupLeads(filtered);
+export function LaMaster({ activeId, onSelect, leads, loading, search, onSearch, statusFilter, onFilter }: LaMasterProps) {
+  const groups = groupLeads(leads);
 
   return (
     <aside className="la-master">
       <div className="la-master-head">
         <div className="la-master-title-row">
           <div className="la-master-title">Leads</div>
-          <div className="la-master-count">{filtered.length} / {leads.length}</div>
+          <div className="la-master-count">{leads.length}</div>
         </div>
         <div className="la-master-search">
           <span className="la-master-search-icon">
             <Icon name="search" size={14} />
           </span>
           <input
-            placeholder="Buscar por nome, nicho, cidade…"
+            placeholder="Buscar por nome, nicho, cidade\u2026"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => onSearch(e.target.value)}
           />
-          <span className="la-master-search-kbd">⌘K</span>
+          <span className="la-master-search-kbd">\u2318K</span>
         </div>
       </div>
       <div className="la-master-filters">
         {FILTERS.map((f) => (
           <button
             key={f.key}
-            className={`la-master-filter ${filter === f.key ? "active" : ""}`}
-            onClick={() => setFilter(f.key)}
+            className={`la-master-filter ${statusFilter === f.key ? "active" : ""}`}
+            onClick={() => onFilter(f.key)}
           >
             {f.label}
           </button>
@@ -92,7 +82,7 @@ export function LaMaster({ activeId, onSelect, leads, loading }: LaMasterProps) 
             <div key={g.key}>
               <div className="la-master-group">
                 {g.title}
-                <span className="count">· {g.items.length}</span>
+                <span className="count">\u00b7 {g.items.length}</span>
               </div>
               {g.items.map((l) => (
                 <button
@@ -106,7 +96,7 @@ export function LaMaster({ activeId, onSelect, leads, loading }: LaMasterProps) 
                   <div style={{ minWidth: 0 }}>
                     <div className="la-master-name">{l.name}</div>
                     <div className="la-master-meta">
-                      {l.niche} · {l.city}
+                      {l.niche} \u00b7 {l.city}
                     </div>
                   </div>
                   <div

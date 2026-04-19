@@ -37,6 +37,26 @@ Four tables: `jobs`, `leads`, `landing_pages`, `outreach_messages`. Lead has a P
 
 Better Auth (email/password, session-based). Frontend stores session in PostgreSQL via `lib/auth.ts`. Backend validates session tokens via `middleware/auth.py` against the same `session` table. Session lasts 30 days, cookie cache 7 days with auto-refresh on 401.
 
+### Frontend Layout
+
+**AppSidebar** (`components/app-sidebar.tsx`): Unified mobile-first sidebar. 64px icon-only on desktop, 240px drawer on mobile. Contains nav buttons (Dashboard, Pipeline, Leads, Jobs), search (Cmd+K), and user avatar dropdown (name/email from session, theme toggle, sign out). Theme toggle lives inside avatar dropdown menu.
+
+### Lead App (`/app/leads/`)
+
+3-column workspace: master list (left) + workspace (center) + rail (right, collapsible). Components in `components/leads/`:
+- **LaMaster**: Scrollable lead list with search, grouped by status (hot/outreach/LP/enriched/new/out)
+- **LaTopbar**: Breadcrumbs + J/K navigation + rail toggle
+- **LaHeader**: Lead name, meta (nicho, cidade, rating), status pill
+- **LaTabStrip**: 4 tabs with dynamic counts — Diagnóstico, Landing Page, Mensagens, Informações
+- **LaTabDiag**: Score dimensions (4 bars) + opportunity reasons list. Empty state when not enriched
+- **LaTabLp**: Real LP iframe preview + version history from API. Empty state when no LP generated
+- **LaTabMsgs**: Outreach messages with real timestamps + WhatsApp deep links. Empty state when no messages
+- **LaTabInfo**: Tech stack + top reviews from Google Maps. Empty state when not enriched
+- **LaRail**: Score breakdown, recommendation level, cadastro (CNPJ/email/sócios), enrichment sources
+- **use-lead-app.ts**: Hook fetching leads list, lead detail, messages. J/K keyboard nav
+- **lead-app-mock.ts**: Utilities only (scoreClass, buildTabs, TAB_ACTIONS, STATUS_LABELS). No mock data
+- **lead-app.css**: All Lead App styles (~2000 lines)
+
 ### Frontend Design System
 
 Design system "Instrumento" — anti-cockpit, pró-ofício. Light/dark themes via `data-theme` attribute on `<html>` (persisted in localStorage). Tokens defined as CSS custom properties in `globals.css`, mapped to Tailwind v4 via `@theme inline`. Fonts: Inter Tight (sans) + JetBrains Mono (mono) — loaded via `next/font/google`. Accent color is OKLCH blue (hue 256). Score colors: terracotta (80-100, hot), mostarda (50-79), salvia (0-49). Primitive UI components in `components/ui/` (Icon, Tag, Badge, Kbd, StatusPill, ScoreRing, PipeMini). Kanban board uses `@dnd-kit` for drag-and-drop. Marketing LP uses Remotion (hero) + Framer Motion (scroll animations).
