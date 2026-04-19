@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLeadApp } from "@/components/leads/use-lead-app";
 import { useRailContext } from "../layout";
@@ -12,13 +13,14 @@ import { LaTabDiag } from "@/components/leads/la-tab-diagnostico";
 import { LaTabLp } from "@/components/leads/la-tab-landing-page";
 import { LaTabMsgs } from "@/components/leads/la-tab-mensagens";
 import { LaTabInfo } from "@/components/leads/la-tab-informacoes";
-import { TABS, TAB_ACTIONS } from "@/components/leads/lead-app-mock";
+import { buildTabs, TAB_ACTIONS } from "@/components/leads/lead-app-mock";
+import { getLeadLandingPages } from "@/lib/api";
 import { Icon } from "@/components/ui";
 import type { LeadAppDetail } from "@/components/leads/lead-app-types";
-import type { Lead } from "@/lib/types";
+import type { Lead, LandingPage } from "@/lib/types";
 
 /** Map real API Lead to the LeadAppDetail shape expected by tab components */
-function mapToDetail(lead: Lead): LeadAppDetail {
+function mapToDetail(lead: Lead, landingPages: LandingPage[]): LeadAppDetail {
   return {
     id: lead.id,
     public_id: lead.public_id,
@@ -31,6 +33,7 @@ function mapToDetail(lead: Lead): LeadAppDetail {
     categoria: lead.categoria || "",
     rating: lead.rating || 0,
     reviews_count: lead.reviews_count,
+    top_reviews: lead.top_reviews || [],
     status: lead.status,
     opportunity_score: lead.opportunity_score ?? 0,
     scores: {
@@ -46,7 +49,7 @@ function mapToDetail(lead: Lead): LeadAppDetail {
     email: lead.email || "",
     socios: lead.socios || [],
     tech_stack: lead.tech_stack || [],
-    gaps: (lead.opportunity_reasons || []).map((r) => ({ dim: "geral", text: r, weight: "mid" })),
+    opportunity_reasons: lead.opportunity_reasons || [],
     sources: (lead.enrichment_sources || []).map((s) => ({
       provider: s.provider,
       status: s.status === "success" ? "ok" : s.status === "skipped" ? "skip" : s.status,
@@ -57,16 +60,16 @@ function mapToDetail(lead: Lead): LeadAppDetail {
     recommendation: {
       level: lead.nivel_recomendado || "",
       label: lead.nivel_recomendado?.replace(/_/g, " ") || "Não definido",
-      summary: "",
-      price_low: 0,
-      price_high: 0,
-      delivery_weeks: 0,
     },
-    score_previous: null,
-    checklist: [],
-    checklist_groups: [],
-    lp_metrics: { visits: 0, clicks_wa: 0, ctr: 0, period: "—", delta_ctr: 0, active_version: 0, first_visit: "—" },
-    lp_versions: [],
+    lp_versions: landingPages.map((lp) => ({
+      id: lp.id,
+      v: lp.version,
+      created: new Date(lp.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) +
+        " \u00b7 " +
+        new Date(lp.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      active: lp.is_active,
+    })),
+    created_at: lead.created_at,
   };
 }
 
@@ -89,7 +92,14 @@ export default function LeadPage() {
     total,
   } = useLeadApp(activeId);
 
-  const lead = rawLead ? mapToDetail(rawLead) : null;
+  // Fetch landing pages
+  const [landingPages, setLandingPages] = useState<LandingPage[]>([]);
+  useEffect(() => {
+    if (!activeId || activeId <= 0) return;
+    getLeadLandingPages(activeId).then(setLandingPages).catch(() => setLandingPages([]));
+  }, [activeId]);
+
+  const lead = rawLead ? mapToDetail(rawLead, landingPages) : null;
 
   // Inject real messages
   if (lead && messages.length > 0) {
@@ -98,8 +108,17 @@ export default function LeadPage() {
       type: m.type,
       sent_at: m.sent_at,
       text: m.message_text,
+      created_at: m.created_at,
     }));
   }
+
+  const tabs = lead
+    ? buildTabs({
+        reasons: lead.opportunity_reasons.length,
+        lpVersions: lead.lp_versions.length,
+        messages: lead.messages.length,
+      })
+    : buildTabs({ reasons: 0, lpVersions: 0, messages: 0 });
 
   const tabContent = () => {
     if (!lead) return null;
@@ -151,7 +170,7 @@ export default function LeadPage() {
             <LaTabStrip
               activeTab={activeTab}
               setActiveTab={setActiveTab}
-              tabs={TABS}
+              tabs={tabs}
               actions={TAB_ACTIONS}
             />
             <div className="la-body">
