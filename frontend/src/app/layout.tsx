@@ -1,16 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter_Tight, JetBrains_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
-const geist = Geist({
+const interTight = Inter_Tight({
   subsets: ["latin"],
-  variable: "--font-geist",
+  variable: "--font-inter-tight",
   display: "swap",
 });
 
-const geistMono = Geist_Mono({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-geist-mono",
+  variable: "--font-jetbrains-mono",
   display: "swap",
 });
 
@@ -19,11 +20,16 @@ export const metadata: Metadata = {
   description: "Máquina de Prospecção Automatizada",
 };
 
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('sdr-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}})()`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className="dark">
+    <html lang="pt-BR" data-theme="dark" suppressHydrationWarning>
+      <head>
+        <Script id="theme-init" strategy="beforeInteractive">{THEME_INIT_SCRIPT}</Script>
+      </head>
       <body
-        className={`${geist.variable} ${geistMono.variable} bg-bg text-text min-h-screen`}
+        className={`${interTight.variable} ${jetbrainsMono.variable} font-sans bg-bg text-text min-h-screen`}
       >
         {children}
       </body>
