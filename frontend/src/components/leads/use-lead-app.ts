@@ -80,11 +80,12 @@ export function useLeadApp(activeId: number | null) {
   const [leadsLoading, setLeadsLoading] = useState(true);
 
   useEffect(() => {
-    setLeadsLoading(true);
+    let cancelled = false;
     getLeads({ per_page: "200", order_by: "opportunity_score_desc" })
-      .then((res) => setLeads(res.items.map(mapLeadToItem)))
+      .then((res) => { if (!cancelled) setLeads(res.items.map(mapLeadToItem)); })
       .catch(() => {})
-      .finally(() => setLeadsLoading(false));
+      .finally(() => { if (!cancelled) setLeadsLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   // ---- Lead detail (from API) ----
@@ -93,16 +94,13 @@ export function useLeadApp(activeId: number | null) {
   const [leadError, setLeadError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!activeId || activeId <= 0) {
-      setLead(null);
-      return;
-    }
-    setLeadLoading(true);
-    setLeadError(null);
+    if (!activeId || activeId <= 0) return;
+    let cancelled = false;
+    setLead(null); // eslint-disable-line react-hooks/set-state-in-effect -- intentional reset before fetch
     getLead(activeId)
-      .then(setLead)
-      .catch((e) => setLeadError(e.message))
-      .finally(() => setLeadLoading(false));
+      .then((data) => { if (!cancelled) { setLead(data); setLeadLoading(false); } })
+      .catch((e) => { if (!cancelled) { setLeadError(e.message); setLeadLoading(false); } });
+    return () => { cancelled = true; };
   }, [activeId]);
 
   // ---- Messages ----

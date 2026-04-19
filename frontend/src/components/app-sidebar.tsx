@@ -22,9 +22,8 @@ export function AppSidebar() {
   const avatarRef = useRef<HTMLDivElement>(null);
 
   // Close mobile drawer on route change
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: close drawer on navigation
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
 
   // Close avatar dropdown on outside click
   useEffect(() => {
