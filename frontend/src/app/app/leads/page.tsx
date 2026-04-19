@@ -2,16 +2,20 @@
 
 import { Icon } from "@/components/ui";
 import { LaMaster } from "@/components/leads/la-master";
+import { useLeadApp } from "@/components/leads/use-lead-app";
 import { useRouter } from "next/navigation";
 
 export default function LeadsEmptyPage() {
   const router = useRouter();
+  const { leads, leadsLoading } = useLeadApp(null);
 
   return (
     <>
       <LaMaster
         activeId={-1}
         onSelect={(id) => router.push(`/app/leads/${id}`)}
+        leads={leads}
+        loading={leadsLoading}
       />
       <div className="la-work" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div className="state">

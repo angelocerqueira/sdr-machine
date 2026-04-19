@@ -12,7 +12,63 @@ import { LaTabDiag } from "@/components/leads/la-tab-diagnostico";
 import { LaTabLp } from "@/components/leads/la-tab-landing-page";
 import { LaTabMsgs } from "@/components/leads/la-tab-mensagens";
 import { LaTabInfo } from "@/components/leads/la-tab-informacoes";
-import { LEAD_DETAIL, TABS, TAB_ACTIONS } from "@/components/leads/lead-app-mock";
+import { TABS, TAB_ACTIONS } from "@/components/leads/lead-app-mock";
+import { Icon } from "@/components/ui";
+import type { LeadAppDetail } from "@/components/leads/lead-app-types";
+import type { Lead } from "@/lib/types";
+
+/** Map real API Lead to the LeadAppDetail shape expected by tab components */
+function mapToDetail(lead: Lead): LeadAppDetail {
+  return {
+    id: lead.id,
+    public_id: lead.public_id,
+    nome: lead.nome,
+    telefone: lead.telefone || "",
+    website: lead.website || "",
+    endereco: lead.endereco || "",
+    cidade: lead.cidade || "",
+    nicho: lead.nicho || "",
+    categoria: lead.categoria || "",
+    rating: lead.rating || 0,
+    reviews_count: lead.reviews_count,
+    status: lead.status,
+    opportunity_score: lead.opportunity_score ?? 0,
+    scores: {
+      acessibilidade: lead.score_acessibilidade ?? 0,
+      lp: lead.score_lp ?? 0,
+      automacao: lead.score_automacao ?? 0,
+      mapa: lead.score_mapa ?? 0,
+    },
+    cnpj: lead.cnpj || "",
+    razao_social: lead.razao_social || "",
+    porte: lead.porte || "",
+    cnae: lead.cnae || "",
+    email: lead.email || "",
+    socios: lead.socios || [],
+    tech_stack: lead.tech_stack || [],
+    gaps: (lead.opportunity_reasons || []).map((r) => ({ dim: "geral", text: r, weight: "mid" })),
+    sources: (lead.enrichment_sources || []).map((s) => ({
+      provider: s.provider,
+      status: s.status === "success" ? "ok" : s.status === "skipped" ? "skip" : s.status,
+      time: new Date(s.timestamp).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      note: s.error || "",
+    })),
+    messages: [],
+    recommendation: {
+      level: lead.nivel_recomendado || "",
+      label: lead.nivel_recomendado?.replace(/_/g, " ") || "Não definido",
+      summary: "",
+      price_low: 0,
+      price_high: 0,
+      delivery_weeks: 0,
+    },
+    score_previous: null,
+    checklist: [],
+    checklist_groups: [],
+    lp_metrics: { visits: 0, clicks_wa: 0, ctr: 0, period: "—", delta_ctr: 0, active_version: 0, first_visit: "—" },
+    lp_versions: [],
+  };
+}
 
 export default function LeadPage() {
   const params = useParams();
@@ -25,14 +81,30 @@ export default function LeadPage() {
     setActiveTab,
     theme,
     setTheme,
+    leads,
+    leadsLoading,
+    lead: rawLead,
+    leadLoading,
+    leadError,
+    messages,
     currentIndex,
     total,
   } = useLeadApp(activeId);
 
-  // TODO: fetch real lead data — for now use mock
-  const lead = LEAD_DETAIL;
+  const lead = rawLead ? mapToDetail(rawLead) : null;
+
+  // Inject real messages
+  if (lead && messages.length > 0) {
+    lead.messages = messages.map((m) => ({
+      id: m.id,
+      type: m.type,
+      sent_at: m.sent_at,
+      text: m.message_text,
+    }));
+  }
 
   const tabContent = () => {
+    if (!lead) return null;
     switch (activeTab) {
       case "diag": return <LaTabDiag lead={lead} />;
       case "lp": return <LaTabLp lead={lead} />;
@@ -47,31 +119,53 @@ export default function LeadPage() {
       <LaMaster
         activeId={activeId}
         onSelect={(id) => router.push(`/app/leads/${id}`)}
+        leads={leads}
+        loading={leadsLoading}
       />
 
       <div className="la-work">
-        <LaTopbar
-          lead={lead}
-          theme={theme}
-          setTheme={setTheme}
-          railOpen={railOpen}
-          setRailOpen={setRailOpen}
-          position={currentIndex + 1}
-          total={total}
-        />
-        <LaHeader lead={lead} />
-        <LaTabStrip
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          tabs={TABS}
-          actions={TAB_ACTIONS}
-        />
-        <div className="la-body">
-          {tabContent()}
-        </div>
+        {leadLoading ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, gap: 8, color: "var(--text-muted)", fontSize: 13 }}>
+            <span className="spin" />
+            Carregando lead...
+          </div>
+        ) : leadError ? (
+          <div className="state" style={{ margin: "auto" }}>
+            <div className="state-icon" style={{ color: "var(--danger)" }}>
+              <Icon name="error" size={20} />
+            </div>
+            <div className="state-title">Erro ao carregar lead</div>
+            <div className="state-msg">{leadError}</div>
+            <button className="btn btn-secondary btn-sm" onClick={() => router.refresh()}>
+              <Icon name="refresh" size={14} /> Tentar novamente
+            </button>
+          </div>
+        ) : lead ? (
+          <>
+            <LaTopbar
+              lead={lead}
+              theme={theme}
+              setTheme={setTheme}
+              railOpen={railOpen}
+              setRailOpen={setRailOpen}
+              position={currentIndex + 1}
+              total={total}
+            />
+            <LaHeader lead={lead} />
+            <LaTabStrip
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              tabs={TABS}
+              actions={TAB_ACTIONS}
+            />
+            <div className="la-body">
+              {tabContent()}
+            </div>
+          </>
+        ) : null}
       </div>
 
-      <LaRail lead={lead} />
+      {lead && <LaRail lead={lead} />}
     </>
   );
 }
