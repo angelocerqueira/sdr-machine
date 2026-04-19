@@ -1,7 +1,8 @@
 "use client";
 
 import { Icon } from "@/components/ui";
-import { scoreClass, groupLeads, type LeadListItem } from "./use-lead-app";
+import { scoreClass } from "./lead-app-mock";
+import { groupLeads, type LeadListItem } from "./use-lead-app";
 
 const FILTERS = [
   { key: "all", label: "Todos" },

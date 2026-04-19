@@ -25,12 +25,6 @@ function mapLeadToItem(l: Lead): LeadListItem {
   };
 }
 
-export function scoreClass(s: number): "high" | "mid" | "low" {
-  if (s >= 80) return "high";
-  if (s >= 50) return "mid";
-  return "low";
-}
-
 const GROUP_DEFS = [
   { key: "hot", title: "Prontas pra call", statuses: ["responded"] },
   { key: "outreach", title: "Em outreach", statuses: ["outreach_sent", "outreach_ready"] },

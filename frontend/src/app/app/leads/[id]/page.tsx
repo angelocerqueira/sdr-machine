@@ -14,7 +14,7 @@ import { LaTabLp } from "@/components/leads/la-tab-landing-page";
 import { LaTabMsgs } from "@/components/leads/la-tab-mensagens";
 import { LaTabInfo } from "@/components/leads/la-tab-informacoes";
 import { buildTabs, TAB_ACTIONS } from "@/components/leads/lead-app-mock";
-import { getLeadLandingPages, runEnrich, runGenerate, runOutreach } from "@/lib/api";
+import { getLeadLandingPages, runEnrich, runGenerate, runOutreach, streamJob } from "@/lib/api";
 import { Icon } from "@/components/ui";
 import type { LeadAppDetail } from "@/components/leads/lead-app-types";
 import type { Lead, LandingPage, ServiceLevels } from "@/lib/types";
@@ -140,24 +140,34 @@ export default function LeadPage() {
     if (!lead || actionLoading) return;
     setActionLoading(true);
     try {
+      let job;
+      let onDone: () => void;
       switch (activeTab) {
         case "diag":
-          await runEnrich({ lead_ids: [lead.id] });
-          // Wait a bit then refresh (job runs async)
-          setTimeout(() => { refreshLead(); refreshLeads(); }, 3000);
+          job = await runEnrich({ lead_ids: [lead.id] });
+          onDone = () => { refreshLead(); refreshLeads(); };
           break;
         case "lp":
-          await runGenerate({ lead_ids: [lead.id] });
-          setTimeout(() => { refreshLead(); fetchLandingPages(); refreshLeads(); }, 5000);
+          job = await runGenerate({ lead_ids: [lead.id] });
+          onDone = () => { refreshLead(); fetchLandingPages(); refreshLeads(); };
           break;
         case "msgs":
-          await runOutreach({ lead_ids: [lead.id] });
-          setTimeout(() => { refreshMessages(); refreshLead(); refreshLeads(); }, 5000);
+          job = await runOutreach({ lead_ids: [lead.id] });
+          onDone = () => { refreshMessages(); refreshLead(); refreshLeads(); };
           break;
+        default:
+          return;
       }
+      // Stream SSE until job finishes, then refresh
+      streamJob(job.id, (event) => {
+        if (event.type === "done" || event.type === "error") {
+          onDone();
+          setActionLoading(false);
+        }
+      });
+      return; // loading clears when SSE fires done/error
     } catch (e) {
       console.error("Erro na ação:", e);
-    } finally {
       setActionLoading(false);
     }
   }, [lead, activeTab, actionLoading, refreshLead, refreshLeads, refreshMessages, fetchLandingPages]);
