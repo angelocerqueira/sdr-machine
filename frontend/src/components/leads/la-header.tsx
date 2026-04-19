@@ -15,11 +15,11 @@ export function LaHeader({ lead }: LaHeaderProps) {
           <div className="la-header-name">{lead.nome}</div>
           <div className="la-header-sub">
             <span>{lead.nicho}</span>
-            <span className="sep">\u00b7</span>
+            <span className="sep">·</span>
             <span>{lead.cidade}</span>
-            <span className="sep">\u00b7</span>
+            <span className="sep">·</span>
             <span>{lead.telefone}</span>
-            <span className="sep">\u00b7</span>
+            <span className="sep">·</span>
             <a href="#" style={{ color: "var(--accent)" }}>
               {lead.website}
             </a>
@@ -30,12 +30,12 @@ export function LaHeader({ lead }: LaHeaderProps) {
         <StatusPill status={lead.status} />
         <Tag icon="pin">{lead.cidade}</Tag>
         <Tag>
-          {lead.rating} \u2605 \u00b7 {lead.reviews_count}
+          {lead.rating} ★ · {lead.reviews_count}
         </Tag>
         <Tag>{lead.porte}</Tag>
-        <Tag>CNPJ ativo</Tag>
+        {lead.cnpj && <Tag>CNPJ ativo</Tag>}
         <div style={{ marginLeft: "auto" }} className="la-pipe-mini-wrap">
-          <PipeMini current="enriched" />
+          <PipeMini current={lead.status} />
         </div>
       </div>
     </div>

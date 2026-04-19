@@ -79,8 +79,6 @@ export default function LeadPage() {
   const {
     activeTab,
     setActiveTab,
-    theme,
-    setTheme,
     leads,
     leadsLoading,
     lead: rawLead,
@@ -144,8 +142,6 @@ export default function LeadPage() {
           <>
             <LaTopbar
               lead={lead}
-              theme={theme}
-              setTheme={setTheme}
               railOpen={railOpen}
               setRailOpen={setRailOpen}
               position={currentIndex + 1}

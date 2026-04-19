@@ -5,8 +5,6 @@ import type { LeadAppDetail } from "./lead-app-types";
 
 interface LaTopbarProps {
   lead: LeadAppDetail;
-  theme: string;
-  setTheme: (t: string) => void;
   railOpen: boolean;
   setRailOpen: (open: boolean) => void;
   position?: number;
@@ -15,8 +13,6 @@ interface LaTopbarProps {
 
 export function LaTopbar({
   lead,
-  theme,
-  setTheme,
   railOpen,
   setRailOpen,
   position = 1,
@@ -43,13 +39,11 @@ export function LaTopbar({
           />
         </button>
         <span className="la-topbar-nav-pos">{position} / {total}</span>
-        <button className="la-topbar-nav-btn" aria-label="Pr\u00f3ximo">
+        <button className="la-topbar-nav-btn" aria-label="Próximo">
           <Icon name="chevron-r" size={16} />
         </button>
       </div>
-      <span className="la-kbd" style={{ marginLeft: 6 }}>
-        J
-      </span>
+      <span className="la-kbd" style={{ marginLeft: 6 }}>J</span>
       <span className="la-kbd">K</span>
       <div style={{ width: 12 }} />
       <button
@@ -62,14 +56,7 @@ export function LaTopbar({
       </button>
       <button
         className="btn btn-ghost btn-sm btn-icon"
-        onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-        aria-label="Alternar tema"
-      >
-        <Icon name={theme === "dark" ? "sun" : "moon"} size={16} />
-      </button>
-      <button
-        className="btn btn-ghost btn-sm btn-icon"
-        aria-label="Mais op\u00e7\u00f5es"
+        aria-label="Mais opções"
       >
         <Icon name="more" size={16} />
       </button>
