@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Icon, type IconName } from "@/components/ui";
 import { CommandSearch } from "./command-search";
@@ -19,7 +19,20 @@ export function AppSidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [theme, setThemeState] = useState(() => {
+    if (typeof document !== "undefined") {
+      return document.documentElement.getAttribute("data-theme") || "light";
+    }
+    return "light";
+  });
   const avatarRef = useRef<HTMLDivElement>(null);
+
+  const toggleTheme = useCallback(() => {
+    const next = theme === "dark" ? "light" : "dark";
+    setThemeState(next);
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("sdr-theme", next); } catch {}
+  }, [theme]);
 
   // Close mobile drawer on route change
   // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: close drawer on navigation
@@ -110,10 +123,10 @@ export function AppSidebar() {
           <span className="app-sidebar-label">Buscar</span>
           <span className="app-sidebar-tip">Buscar</span>
         </button>
-        <button className="app-sidebar-btn" onClick={() => router.push("/app")}>
-          <Icon name="settings" size={18} />
-          <span className="app-sidebar-label">Configurações</span>
-          <span className="app-sidebar-tip">Configurações</span>
+        <button className="app-sidebar-btn" onClick={toggleTheme}>
+          <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
+          <span className="app-sidebar-label">{theme === "dark" ? "Modo claro" : "Modo escuro"}</span>
+          <span className="app-sidebar-tip">{theme === "dark" ? "Modo claro" : "Modo escuro"}</span>
         </button>
         <div ref={avatarRef} className="app-sidebar-avatar-wrap">
           <button

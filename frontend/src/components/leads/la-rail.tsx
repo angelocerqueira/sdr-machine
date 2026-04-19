@@ -27,7 +27,7 @@ function LaRailScore({ lead }: LaRailProps) {
             fontSize: 10,
           }}
         >
-          v2 \u00b7 re-enrich 18/04
+          v2 · re-enrich 18/04
         </span>
       </div>
       <div className="la-score-big">
@@ -45,14 +45,14 @@ function LaRailScore({ lead }: LaRailProps) {
         )}
       </div>
       <div className="la-score-caption">
-        Acima do threshold (60) \u00b7 fila qualificada
+        Acima do threshold (60) · fila qualificada
       </div>
       <div className="la-score-dims">
         {(
           [
             ["acessibilidade", "Acessib."],
             ["lp", "Landing"],
-            ["automacao", "Automa\u00e7\u00e3o"],
+            ["automacao", "Automação"],
             ["mapa", "Stack/SEO"],
           ] as const
         ).map(([k, label]) => {
@@ -78,10 +78,10 @@ function LaRailReco({ lead }: LaRailProps) {
   return (
     <div className="la-rail-section">
       <div className="la-rail-head">
-        <span>Recomenda\u00e7\u00e3o</span>
+        <span>Recomendação</span>
       </div>
       <div className="la-reco">
-        <div className="la-reco-head">N\u00edvel recomendado</div>
+        <div className="la-reco-head">Nível recomendado</div>
         <div className="la-reco-title">{lead.recommendation.label}</div>
         <div className="la-reco-body">{lead.recommendation.summary}</div>
         <div className="la-reco-price">
@@ -120,7 +120,7 @@ function LaRailDetails({ lead }: LaRailProps) {
           </dd>
         </div>
         <div className="la-kv-row">
-          <dt>Endere\u00e7o</dt>
+          <dt>Endereço</dt>
           <dd style={{ fontSize: 12 }}>{lead.endereco}</dd>
         </div>
         <div className="la-kv-row">
@@ -128,7 +128,7 @@ function LaRailDetails({ lead }: LaRailProps) {
           <dd className="mono">{lead.cnpj}</dd>
         </div>
         <div className="la-kv-row">
-          <dt>Raz\u00e3o</dt>
+          <dt>Razão</dt>
           <dd style={{ fontSize: 12 }}>{lead.razao_social}</dd>
         </div>
         <div className="la-kv-row">
@@ -142,7 +142,7 @@ function LaRailDetails({ lead }: LaRailProps) {
           </dd>
         </div>
         <div className="la-kv-row">
-          <dt>S\u00f3cios</dt>
+          <dt>Sócios</dt>
           <dd style={{ fontSize: 12 }}>
             {lead.socios.map((s) => s.nome).join(", ")}
           </dd>

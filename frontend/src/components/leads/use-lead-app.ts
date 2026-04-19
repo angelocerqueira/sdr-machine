@@ -62,19 +62,6 @@ export function useLeadApp(activeId: number | null) {
     try { localStorage.setItem("sdr-lead-tab", tab); } catch {}
   }, []);
 
-  // Theme state
-  const [theme, setThemeState] = useState(() => {
-    if (typeof document !== "undefined") {
-      return document.documentElement.getAttribute("data-theme") || "light";
-    }
-    return "light";
-  });
-  const setTheme = useCallback((t: string) => {
-    setThemeState(t);
-    document.documentElement.setAttribute("data-theme", t);
-    try { localStorage.setItem("sdr-theme", t); } catch {}
-  }, []);
-
   // ---- Leads list (from API) ----
   const [leads, setLeads] = useState<LeadListItem[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(true);
@@ -138,8 +125,6 @@ export function useLeadApp(activeId: number | null) {
   return {
     activeTab,
     setActiveTab,
-    theme,
-    setTheme,
     leads,
     leadsLoading,
     lead,
