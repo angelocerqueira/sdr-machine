@@ -1,9 +1,3 @@
-type LeadStatus =
-  | "scraped" | "enriched" | "lp_generated"
-  | "outreach_ready" | "outreach_sent" | "responded"
-  | "in_call" | "closed" | "delivered"
-  | "disqualified" | "failed";
-
 interface StatusPillProps {
   status: string;
   className?: string;

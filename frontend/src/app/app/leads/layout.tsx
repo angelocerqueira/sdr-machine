@@ -16,14 +16,15 @@ export function useRailContext() {
 }
 
 export default function LeadAppLayout({ children }: { children: React.ReactNode }) {
-  const [railOpen, setRailOpen] = useState(true);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("sdr-rail-open");
-      if (saved !== null) setRailOpen(saved === "true");
-    } catch {}
-  }, []);
+  const [railOpen, setRailOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("sdr-rail-open");
+        if (saved !== null) return saved === "true";
+      } catch {}
+    }
+    return true;
+  });
 
   useEffect(() => {
     try { localStorage.setItem("sdr-rail-open", String(railOpen)); } catch {}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Icon } from "@/components/ui";
-import { LEADS, groupLeads, scoreClass, STATUS_LABELS } from "./lead-app-mock";
+import { LEADS, groupLeads, scoreClass } from "./lead-app-mock";
 
 const FILTERS = [
   { key: "all", label: "Todos" },

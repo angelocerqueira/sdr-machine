@@ -1,6 +1,6 @@
 "use client";
 
-import { Icon, StatusPill, Tag, PipeMini } from "@/components/ui";
+import { StatusPill, Tag, PipeMini } from "@/components/ui";
 import type { LeadAppDetail } from "./lead-app-types";
 
 interface LaHeaderProps {

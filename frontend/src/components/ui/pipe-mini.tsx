@@ -1,5 +1,3 @@
-import { Icon } from "./icon";
-
 const STAGES = [
   { key: "scraped", label: "Capturado" },
   { key: "enriched", label: "Enriquecido" },
@@ -7,8 +5,6 @@ const STAGES = [
   { key: "outreach_ready", label: "Ativado" },
   { key: "outreach_sent", label: "Em outreach" },
 ] as const;
-
-type StageKey = (typeof STAGES)[number]["key"];
 
 interface PipeMiniProps {
   current: string;

@@ -13,7 +13,6 @@ import { LaTabLp } from "@/components/leads/la-tab-landing-page";
 import { LaTabMsgs } from "@/components/leads/la-tab-mensagens";
 import { LaTabInfo } from "@/components/leads/la-tab-informacoes";
 import { LEAD_DETAIL, TABS, TAB_ACTIONS } from "@/components/leads/lead-app-mock";
-import { Icon } from "@/components/ui";
 
 export default function LeadPage() {
   const params = useParams();

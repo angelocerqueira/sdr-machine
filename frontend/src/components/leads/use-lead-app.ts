@@ -3,40 +3,37 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { LEADS } from "./lead-app-mock";
-import type { LeadAppItem } from "./lead-app-types";
 
 export function useLeadApp(activeId: number | null) {
   const router = useRouter();
 
   // Tab state (persisted)
-  const [activeTab, setActiveTabState] = useState("diag");
+  const [activeTab, setActiveTabState] = useState(() => {
+    if (typeof window !== "undefined") {
+      try { return localStorage.getItem("sdr-lead-tab") || "diag"; } catch {}
+    }
+    return "diag";
+  });
   const setActiveTab = useCallback((tab: string) => {
     setActiveTabState(tab);
     try { localStorage.setItem("sdr-lead-tab", tab); } catch {}
-  }, []);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("sdr-lead-tab");
-      if (saved) setActiveTabState(saved);
-    } catch {}
   }, []);
 
   // Filter state
   const [filter, setFilter] = useState("all");
 
   // Theme state
-  const [theme, setThemeState] = useState("light");
+  const [theme, setThemeState] = useState(() => {
+    if (typeof document !== "undefined") {
+      return document.documentElement.getAttribute("data-theme") || "light";
+    }
+    return "light";
+  });
 
   const setTheme = useCallback((t: string) => {
     setThemeState(t);
     document.documentElement.setAttribute("data-theme", t);
     try { localStorage.setItem("sdr-theme", t); } catch {}
-  }, []);
-
-  useEffect(() => {
-    const current = document.documentElement.getAttribute("data-theme") || "light";
-    setThemeState(current);
   }, []);
 
   // J/K keyboard navigation
