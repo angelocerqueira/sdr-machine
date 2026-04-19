@@ -59,7 +59,7 @@ export function useLeadApp(activeId: number | null) {
   // ---- Search + filter ----
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // ---- Leads list (from API) ----
   const [leads, setLeads] = useState<LeadListItem[]>([]);
