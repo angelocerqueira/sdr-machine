@@ -41,7 +41,7 @@ export default function LeadAppLayout({ children }: { children: React.ReactNode 
     return () => mq.removeEventListener("change", handleChange);
   }, []);
 
-  const shellClass = `la${railOpen ? "" : " rail-closed"}`;
+  const shellClass = `la${railOpen ? " rail-open" : " rail-closed"}`;
 
   return (
     <RailContext.Provider value={{ railOpen, setRailOpen }}>
