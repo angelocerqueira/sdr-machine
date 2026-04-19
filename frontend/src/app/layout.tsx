@@ -24,7 +24,7 @@ const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('sdr-theme
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" data-theme="dark" suppressHydrationWarning>
+    <html lang="pt-BR" data-theme="light" suppressHydrationWarning>
       <head>
         <Script id="theme-init" strategy="beforeInteractive">{THEME_INIT_SCRIPT}</Script>
       </head>
