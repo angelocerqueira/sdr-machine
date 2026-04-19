@@ -75,7 +75,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div>
+    <div className="p-5 md:p-6 max-w-7xl">
       {/* Header */}
       <div className="mb-8">
         <h2 className="text-2xl font-bold tracking-tight font-[family-name:var(--font-heading)]">Dashboard</h2>

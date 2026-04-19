@@ -81,7 +81,7 @@ export function useLeadApp(activeId: number | null) {
 
   useEffect(() => {
     let cancelled = false;
-    getLeads({ per_page: "200", order_by: "opportunity_score_desc" })
+    getLeads({ per_page: "100", order_by: "score_desc" })
       .then((res) => { if (!cancelled) setLeads(res.items.map(mapLeadToItem)); })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLeadsLoading(false); });
