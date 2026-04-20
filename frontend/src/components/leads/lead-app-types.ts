@@ -1,3 +1,28 @@
+export interface FunnelActionDM {
+  acao: string;
+  resultado_esperado: string;
+  kpi: string;
+}
+
+export interface FunnelStageDM {
+  diagnostico: string;
+  acoes_top2: FunnelActionDM[];
+}
+
+export interface IAPotencialDM {
+  score: number;
+  oportunidades: string[];
+  justificativa: string;
+}
+
+export interface DiagnosticoMarketing {
+  resumo_executivo: string;
+  momento_funil: "descoberta" | "atracao" | "consideracao" | "acao" | "apologia";
+  potencial_ia_automacao: IAPotencialDM;
+  prioridades_top3: string[];
+  funil: Record<string, FunnelStageDM>;
+}
+
 export interface LeadAppItem {
   id: number;
   name: string;
@@ -47,6 +72,7 @@ export interface LeadAppDetail {
     qualificado?: boolean;
     resumo_executivo?: string;
   } | null;
+  diagnostico_marketing?: DiagnosticoMarketing;
   lp_versions: Array<{
     id: number;
     v: number;
