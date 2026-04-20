@@ -76,6 +76,13 @@ function mapToDetail(lead: Lead, landingPages: LandingPage[]): LeadAppDetail {
       active: lp.is_active,
     })),
     created_at: lead.created_at,
+    // Classification fields
+    perfil_lead: lead.perfil_lead,
+    nicho_canonico: lead.nicho_canonico,
+    nicho_source: lead.nicho_source,
+    nicho_confidence: lead.nicho_confidence,
+    pacote_sugerido: lead.pacote_sugerido,
+    prioridade: lead.prioridade,
   };
 }
 

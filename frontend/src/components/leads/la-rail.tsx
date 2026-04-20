@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Icon } from "@/components/ui";
 import { updateLead } from "@/lib/api";
 import { scoreClass } from "./lead-app-mock";
+import { LaClassification } from "./la-classification";
 import type { LeadAppDetail } from "./lead-app-types";
 
 interface LaRailProps {
@@ -329,6 +330,7 @@ function LaRailSources({ lead }: LaRailProps) {
 export function LaRail({ lead, onLeadUpdated }: LaRailProps) {
   return (
     <aside className="la-rail">
+      <LaClassification lead={lead} onLeadUpdated={onLeadUpdated} />
       <LaRailScore lead={lead} />
       <LaRailReco lead={lead} />
       <LaRailDetails lead={lead} onLeadUpdated={onLeadUpdated} />

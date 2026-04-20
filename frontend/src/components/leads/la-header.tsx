@@ -1,6 +1,7 @@
 "use client";
 
 import { StatusPill, Tag, PipeMini } from "@/components/ui";
+import { ProfileBadge } from "@/components/ui/profile-badge";
 import type { LeadAppDetail } from "./lead-app-types";
 
 interface LaHeaderProps {
@@ -28,6 +29,7 @@ export function LaHeader({ lead }: LaHeaderProps) {
       </div>
       <div className="la-header-row2">
         <StatusPill status={lead.status} />
+        {lead.perfil_lead && <ProfileBadge profile={lead.perfil_lead} size="md" />}
         <Tag icon="pin">{lead.cidade}</Tag>
         <Tag>
           {lead.rating} ★ · {lead.reviews_count}
