@@ -25,6 +25,9 @@ from app.pipeline.enrichment.providers.tech_stack import TechStackProvider
 from app.pipeline.enrichment.providers.cnpj_enricher import CnpjProvider
 from app.pipeline.enrichment.providers.email_discoverer import EmailDiscovererProvider
 from app.pipeline.enrichment.providers.apollo_enricher import ApolloProvider
+from app.pipeline.enrichment.providers.classification_provider import (
+    ClassificationProvider,
+)
 from app.pipeline.enrichment.scoring import calculate_score
 
 logger = logging.getLogger(__name__)
@@ -43,6 +46,7 @@ def _default_providers() -> list[BaseProvider]:
         TechStackProvider(),
         EmailDiscovererProvider(),
         ApolloProvider(),
+        ClassificationProvider(),
     ]
 
 
@@ -53,6 +57,7 @@ _PHASE_ORDER = [
     "tech_stack",
     "email_discoverer",
     "apollo",
+    "classification",
 ]
 
 
@@ -107,6 +112,7 @@ class EnrichmentOrchestrator:
             if include_crawl_chain
             else set()
         )
+        optimistic_names.add("classification")  # classificação sempre roda
 
         for name in _PHASE_ORDER:
             provider = self._providers_by_name.get(name)
@@ -187,6 +193,16 @@ class EnrichmentOrchestrator:
 
                 # --- Merge data ---
                 data = result.data or {}
+
+                # Capture classification-specific fields (flat merge)
+                if provider.name == "classification":
+                    for k in (
+                        "perfil_lead", "nicho_canonico", "nicho_source",
+                        "nicho_confidence", "pacote_sugerido", "prioridade",
+                        "classification_hash",
+                    ):
+                        if k in data:
+                            flat[k] = data[k]
 
                 sa = data.get("site_analysis") or {}
                 if sa:

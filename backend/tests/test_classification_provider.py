@@ -69,3 +69,38 @@ def test_run_never_raises():
     result = provider.run(lead, EnrichmentContext())
     assert isinstance(result, ProviderResult)
     assert result.success is True  # result é válido, com DISQUALIFIED
+
+
+from app.pipeline.enrichment.orchestrator import EnrichmentOrchestrator
+
+
+def test_orchestrator_includes_classification_in_phase_order():
+    orch = EnrichmentOrchestrator()
+    assert "classification" in orch._providers_by_name
+
+
+def test_orchestrator_always_runs_classification():
+    from app.models import Lead
+    lead = Lead(nome="X", telefone="11", rating=4.0, reviews_count=10)
+    orch = EnrichmentOrchestrator()
+    plan = orch.plan(lead, skip_providers=["cnpj_enricher"])
+    names = [p.name for p in plan.providers]
+    assert "classification" in names
+    assert names.index("classification") == len(names) - 1  # sempre última
+
+
+def test_orchestrator_execute_writes_classification_fields():
+    from app.models import Lead
+    lead = Lead(
+        nome="X", telefone="11999", rating=4.5, reviews_count=60,
+        nicho="Pizzaria",
+    )
+    orch = EnrichmentOrchestrator()
+    plan = orch.plan(lead, skip_providers=[
+        "cnpj_enricher", "website_crawler", "schema_extractor",
+        "tech_stack", "email_discoverer", "apollo",
+    ])
+    out = orch.execute(lead, plan)
+    assert "perfil_lead" in out
+    assert out["perfil_lead"] == "hot_no_site"
+    assert out["nicho_canonico"] == "restaurante"
