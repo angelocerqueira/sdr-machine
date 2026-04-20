@@ -122,7 +122,7 @@ def _classify_profile(lead_data: dict) -> LeadProfile:
     t = PROFILE_THRESHOLDS
 
     # Rule 1: DISQUALIFIED
-    if rating and rating < t["disqualified_min_rating"]:
+    if rating > 0 and rating < t["disqualified_min_rating"]:
         return LeadProfile.DISQUALIFIED
     if review_count < t["disqualified_min_reviews_without_phone"] and not telefone:
         return LeadProfile.DISQUALIFIED

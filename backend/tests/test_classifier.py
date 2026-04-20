@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import MagicMock
 
 from app.pipeline.enrichment.classifier import classify, ClassificationResult
 from app.pipeline.enrichment.classifier_enums import (
@@ -35,6 +36,17 @@ def test_disqualified_rating_below_threshold():
 def test_disqualified_no_phone_and_few_reviews():
     result = classify(_base_lead(telefone=None, review_count=1))
     assert result.perfil_lead == LeadProfile.DISQUALIFIED
+
+
+def test_rating_zero_does_not_disqualify_by_rating_rule_alone():
+    """rating=0.0 means 'missing'; a lead with valid phone + reviews should flow through,
+    not be blocked by the rating rule (caught elsewhere if truly bad)."""
+    result = classify(_base_lead(
+        rating=0.0, review_count=50, telefone="11999", has_website=False,
+    ))
+    # rating=0.0 bypasses Rule 1 (correct — 0.0 is sentinel for absent rating).
+    # has_website=False + rating=0.0 (< hot_no_site threshold) → falls through to WARM.
+    assert result.perfil_lead == LeadProfile.WARM
 
 
 def test_hot_no_site():
@@ -133,9 +145,6 @@ def test_never_raises_on_garbage_types():
         "has_website": "yes",
     })
     assert isinstance(result, ClassificationResult)
-
-
-from unittest.mock import MagicMock
 
 
 class _FakeToolUse:
