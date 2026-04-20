@@ -435,3 +435,75 @@ a { color: inherit; text-decoration: none; }
   0%, 100% { box-shadow: 0 0 20px var(--accent-soft); }
   50% { box-shadow: 0 0 40px var(--accent-soft); }
 }
+
+/* === Distribution widgets (ProfileDistribution, NichoDistribution) === */
+
+.distribution-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.distribution-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 80px;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 6px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s;
+}
+
+.distribution-row:hover {
+  background: var(--surface-raised);
+}
+
+.distribution-row .label {
+  font-size: 0.8125rem;
+  color: var(--text-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.distribution-row .bar {
+  height: 6px;
+  background: var(--surface-raised);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.distribution-row .fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.25s ease;
+  border-radius: 3px;
+}
+
+.distribution-row .count {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.expand-btn {
+  margin-top: 0.625rem;
+  font-size: 0.75rem;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity 0.15s;
+}
+
+.expand-btn:hover {
+  opacity: 0.75;
+}

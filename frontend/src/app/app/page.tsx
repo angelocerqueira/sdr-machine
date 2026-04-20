@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { getDashboardStats, getDashboardTrends } from "@/lib/api";
 import type { DashboardTrends } from "@/lib/api";
 import { StatsCard } from "@/components/stats-card";
+import { ProfileDistribution } from "@/components/dashboard/profile-distribution";
+import { NichoDistribution } from "@/components/dashboard/nicho-distribution";
 import type { DashboardStats } from "@/lib/types";
 
 function LeadsIcon() {
@@ -133,6 +135,12 @@ export default function DashboardPage() {
             <p className="text-text-muted text-xs mt-1">Execute o scraping no Kanban para começar</p>
           </div>
         )}
+      </div>
+
+      {/* Classification Distribution */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
+        <ProfileDistribution data={stats.profile_distribution ?? {}} />
+        <NichoDistribution data={stats.nicho_distribution ?? {}} />
       </div>
 
       {/* Trends Section */}

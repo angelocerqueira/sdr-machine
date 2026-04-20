@@ -92,10 +92,28 @@ def get_stats(db: Session = Depends(get_db)):
         converted = leads_by_status.get("closed", 0) + leads_by_status.get("delivered", 0)
         conversion_rate = round(converted / total_leads * 100, 2)
 
+    profile_dist_rows = (
+        db.query(Lead.perfil_lead, func.count(Lead.id))
+        .filter(Lead.perfil_lead.isnot(None))
+        .group_by(Lead.perfil_lead)
+        .all()
+    )
+    profile_distribution = {row[0]: row[1] for row in profile_dist_rows}
+
+    nicho_dist_rows = (
+        db.query(Lead.nicho_canonico, func.count(Lead.id))
+        .filter(Lead.nicho_canonico.isnot(None))
+        .group_by(Lead.nicho_canonico)
+        .all()
+    )
+    nicho_distribution = {row[0]: row[1] for row in nicho_dist_rows}
+
     return DashboardStats(
         total_leads=total_leads,
         leads_by_status=leads_by_status,
         avg_score=round(avg_score, 2) if avg_score is not None else None,
         total_jobs=total_jobs,
         conversion_rate=conversion_rate,
+        profile_distribution=profile_distribution,
+        nicho_distribution=nicho_distribution,
     )

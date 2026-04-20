@@ -129,6 +129,8 @@ export interface DashboardStats {
   avg_score: number | null;
   total_jobs: number;
   conversion_rate: number | null;
+  profile_distribution?: Record<string, number>;
+  nicho_distribution?: Record<string, number>;
 }
 
 export interface Settings {

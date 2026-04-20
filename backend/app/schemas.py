@@ -171,6 +171,8 @@ class DashboardStats(BaseModel):
     avg_score: float | None
     total_jobs: int
     conversion_rate: float | None
+    profile_distribution: dict[str, int] = {}
+    nicho_distribution: dict[str, int] = {}
 
 
 # === Landing Pages ===
