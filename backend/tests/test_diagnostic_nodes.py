@@ -94,3 +94,38 @@ class TestQualify:
         state = _make_state()
         result = qualify(state)
         assert len(result["final_result"].resumo_executivo) > 0
+
+
+def test_qualify_includes_marketing_diagnostic():
+    """Qualify repassa marketing_result pro final_result."""
+    from app.pipeline.diagnostic.state import (
+        MarketingDiagnostic, IAPotencial, FunnelStage, FunnelAction,
+    )
+
+    md = MarketingDiagnostic(
+        resumo_executivo="Resumo.",
+        momento_funil="descoberta",
+        potencial_ia_automacao=IAPotencial(score=60, oportunidades=["x"], justificativa="y"),
+        prioridades_top3=["a", "b", "c"],
+        funil={
+            "descoberta": FunnelStage(
+                diagnostico="d",
+                acoes_top2=[FunnelAction(acao="a1", resultado_esperado="r1", kpi="k1")],
+            ),
+        },
+    )
+
+    state = _make_state(marketing_result=md)
+    result = qualify(state)
+
+    final = result["final_result"]
+    assert final.diagnostico_marketing is not None
+    assert final.diagnostico_marketing.momento_funil == "descoberta"
+
+
+def test_qualify_marketing_none_stays_none():
+    """Quando marketing_result=None, diagnostico_marketing fica None."""
+    state = _make_state(marketing_result=None)
+    result = qualify(state)
+
+    assert result["final_result"].diagnostico_marketing is None

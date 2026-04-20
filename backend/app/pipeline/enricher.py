@@ -440,6 +440,8 @@ def enrich_lead_data(website: str, lead_info: dict | None = None, skip_pagespeed
 
         if service_levels:
             site_analysis["service_levels"] = service_levels.model_dump()
+            if service_levels.diagnostico_marketing:
+                site_analysis["diagnostico_marketing"] = service_levels.diagnostico_marketing.model_dump()
             qualified = service_levels.qualificado
 
     return {

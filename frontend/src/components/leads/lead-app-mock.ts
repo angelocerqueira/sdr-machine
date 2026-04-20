@@ -19,9 +19,10 @@ export const STATUS_LABELS: Record<string, string> = {
 };
 
 // ──────────────── Tabs (dynamic counts) ────────────────
-export function buildTabs(counts: { reasons: number; lpVersions: number; messages: number }): TabConfig[] {
+export function buildTabs(counts: { reasons: number; lpVersions: number; messages: number; hasStrategy?: boolean }): TabConfig[] {
   return [
     { key: "diag", label: "Diagnóstico", count: counts.reasons || undefined },
+    { key: "strategy", label: "Estratégia", count: counts.hasStrategy ? 1 : undefined },
     { key: "lp", label: "Landing Page", count: counts.lpVersions || undefined, suffix: "v" },
     { key: "msgs", label: "Mensagens", count: counts.messages || undefined },
     { key: "info", label: "Informações" },
@@ -30,6 +31,7 @@ export function buildTabs(counts: { reasons: number; lpVersions: number; message
 
 export const TAB_ACTIONS: Record<string, TabAction> = {
   diag: { primary: "Re-enriquecer", secondary: "Exportar diagnóstico" },
+  strategy: { primary: "Re-enriquecer", secondary: null },
   lp: { primary: "Regenerar LP", secondary: "Copiar link público" },
   msgs: { primary: "Gerar variação", secondary: "Exportar conversa" },
   info: { primary: null, secondary: "Editar" },

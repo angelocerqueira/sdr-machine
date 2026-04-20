@@ -10,18 +10,20 @@ import { LaHeader } from "@/components/leads/la-header";
 import { LaTabStrip } from "@/components/leads/la-tab-strip";
 import { LaRail } from "@/components/leads/la-rail";
 import { LaTabDiag } from "@/components/leads/la-tab-diagnostico";
+import { LaTabStrategy } from "@/components/leads/la-tab-strategy";
 import { LaTabLp } from "@/components/leads/la-tab-landing-page";
 import { LaTabMsgs } from "@/components/leads/la-tab-mensagens";
 import { LaTabInfo } from "@/components/leads/la-tab-informacoes";
 import { buildTabs, TAB_ACTIONS } from "@/components/leads/lead-app-mock";
 import { getLeadLandingPages, runEnrich, runGenerate, runOutreach, streamJob } from "@/lib/api";
 import { Icon } from "@/components/ui";
-import type { LeadAppDetail } from "@/components/leads/lead-app-types";
+import type { LeadAppDetail, DiagnosticoMarketing } from "@/components/leads/lead-app-types";
 import type { Lead, LandingPage, ServiceLevels } from "@/lib/types";
 
 /** Map real API Lead to the LeadAppDetail shape expected by tab components */
 function mapToDetail(lead: Lead, landingPages: LandingPage[]): LeadAppDetail {
   const sl = (lead.site_analysis as Record<string, unknown>)?.service_levels as ServiceLevels | undefined;
+  const dm = (lead.site_analysis as Record<string, unknown>)?.diagnostico_marketing as DiagnosticoMarketing | undefined;
 
   return {
     id: lead.id,
@@ -64,6 +66,7 @@ function mapToDetail(lead: Lead, landingPages: LandingPage[]): LeadAppDetail {
       label: lead.nivel_recomendado?.replace(/_/g, " ") || "Não definido",
     },
     service_levels: sl || null,
+    diagnostico_marketing: dm || undefined,
     lp_versions: landingPages.map((lp) => ({
       id: lp.id,
       v: lp.version,
@@ -133,8 +136,9 @@ export default function LeadPage() {
         reasons: lead.opportunity_reasons.length,
         lpVersions: lead.lp_versions.length,
         messages: lead.messages.length,
+        hasStrategy: !!lead.diagnostico_marketing,
       })
-    : buildTabs({ reasons: 0, lpVersions: 0, messages: 0 });
+    : buildTabs({ reasons: 0, lpVersions: 0, messages: 0, hasStrategy: false });
 
   // ---- Tab actions ----
   const [actionLoading, setActionLoading] = useState(false);
@@ -147,6 +151,7 @@ export default function LeadPage() {
       let onDone: () => void;
       switch (activeTab) {
         case "diag":
+        case "strategy":
           job = await runEnrich({ lead_ids: [lead.id] });
           onDone = () => { refreshLead(); refreshLeads(); };
           break;
@@ -159,6 +164,7 @@ export default function LeadPage() {
           onDone = () => { refreshMessages(); refreshLead(); refreshLeads(); };
           break;
         default:
+          setActionLoading(false);
           return;
       }
       // Stream SSE until job finishes, then refresh
@@ -179,6 +185,7 @@ export default function LeadPage() {
     if (!lead) return null;
     switch (activeTab) {
       case "diag": return <LaTabDiag lead={lead} />;
+      case "strategy": return <LaTabStrategy lead={lead} />;
       case "lp": return <LaTabLp lead={lead} onVersionActivated={fetchLandingPages} />;
       case "msgs": return <LaTabMsgs lead={lead} />;
       case "info": return <LaTabInfo lead={lead} />;
