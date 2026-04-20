@@ -2,6 +2,7 @@
 
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import { ProfileBadge } from "@/components/ui/profile-badge";
 import type { Lead } from "@/lib/types";
 
 interface KanbanCardProps {
@@ -36,6 +37,11 @@ export function KanbanCard({ lead, onSelect }: KanbanCardProps) {
     >
       <div onClick={() => onSelect(lead.id)} className="min-w-0">
         <p className="text-[13px] font-medium text-text truncate">{lead.nome}</p>
+        {lead.perfil_lead && (
+          <div className="mt-1.5">
+            <ProfileBadge profile={lead.perfil_lead} size="sm" />
+          </div>
+        )}
         <div className="flex items-center justify-between mt-2">
           <span className="text-[11px] text-text-muted font-mono truncate mr-2">{lead.nicho}</span>
           <span className={`tooltip text-[11px] font-semibold font-mono tabular-nums shrink-0 ${scoreClass}`}>

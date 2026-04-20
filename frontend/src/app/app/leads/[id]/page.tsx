@@ -102,6 +102,10 @@ export default function LeadPage() {
     handleSearch,
     statusFilter,
     handleFilter,
+    perfilFilter,
+    handlePerfilFilter,
+    nichoCanonFilter,
+    handleNichoCanonFilter,
     loadMore,
     refreshLead,
     refreshLeads,
@@ -208,6 +212,10 @@ export default function LeadPage() {
         onSearch={handleSearch}
         statusFilter={statusFilter}
         onFilter={handleFilter}
+        perfilFilter={perfilFilter}
+        onPerfilFilter={handlePerfilFilter}
+        nichoCanonFilter={nichoCanonFilter}
+        onNichoCanonFilter={handleNichoCanonFilter}
       />
 
       <div className="la-work">
