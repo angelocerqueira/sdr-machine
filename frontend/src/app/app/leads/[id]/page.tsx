@@ -227,7 +227,7 @@ export default function LeadPage() {
               railOpen={railOpen}
               setRailOpen={setRailOpen}
               position={currentIndex + 1}
-              total={total}
+              total={leads.length}
             />
             <LaHeader lead={lead} />
             <LaTabStrip

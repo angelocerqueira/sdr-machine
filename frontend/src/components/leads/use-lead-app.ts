@@ -95,7 +95,7 @@ export function useLeadApp(activeId: number | null) {
         setTotal(res.total);
         setPage(pageNum);
       })
-      .catch(() => {})
+      .catch(() => { if (!append) { setLeads([]); setTotal(0); } })
       .finally(() => {
         if (append) setLoadingMore(false);
         else setLeadsLoading(false);
