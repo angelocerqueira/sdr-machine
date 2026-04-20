@@ -87,16 +87,19 @@ export default function LeadPage() {
     setActiveTab,
     leads,
     leadsLoading,
+    loadingMore,
     lead: rawLead,
     leadLoading,
     leadError,
     messages,
     currentIndex,
     total,
+    hasMore,
     search,
     handleSearch,
     statusFilter,
     handleFilter,
+    loadMore,
     refreshLead,
     refreshLeads,
     refreshMessages,
@@ -190,6 +193,10 @@ export default function LeadPage() {
         onSelect={(id) => router.push(`/app/leads/${id}`)}
         leads={leads}
         loading={leadsLoading}
+        loadingMore={loadingMore}
+        hasMore={hasMore}
+        total={total}
+        onLoadMore={loadMore}
         search={search}
         onSearch={handleSearch}
         statusFilter={statusFilter}
@@ -220,7 +227,7 @@ export default function LeadPage() {
               railOpen={railOpen}
               setRailOpen={setRailOpen}
               position={currentIndex + 1}
-              total={total}
+              total={leads.length}
             />
             <LaHeader lead={lead} />
             <LaTabStrip

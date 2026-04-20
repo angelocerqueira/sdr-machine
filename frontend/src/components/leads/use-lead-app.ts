@@ -62,40 +62,67 @@ export function useLeadApp(activeId: number | null) {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // ---- Leads list (from API) ----
+  const PER_PAGE = 30;
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [leads, setLeads] = useState<LeadListItem[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(true);
 
-  const fetchLeads = useCallback((searchTerm: string, filter: string) => {
-    const params: Record<string, string> = { per_page: "100", order_by: "score_desc" };
+  const fetchLeads = useCallback((
+    searchTerm: string,
+    filter: string,
+    pageNum: number,
+    append: boolean,
+  ) => {
+    const params: Record<string, string> = {
+      per_page: String(PER_PAGE),
+      page: String(pageNum),
+      order_by: "score_desc",
+    };
     if (searchTerm) params.search = searchTerm;
     if (filter === "hot") params.score_min = "80";
     else if (filter === "enriched") params.status = "enriched";
     else if (filter === "new") params.status = "scraped";
 
-    setLeadsLoading(true);
+    if (append) setLoadingMore(true);
+    else setLeadsLoading(true);
+
     getLeads(params)
-      .then((res) => setLeads(res.items.map(mapLeadToItem)))
-      .catch(() => {})
-      .finally(() => setLeadsLoading(false));
+      .then((res) => {
+        const items = res.items.map(mapLeadToItem);
+        setLeads((prev) => (append ? [...prev, ...items] : items));
+        setTotal(res.total);
+        setPage(pageNum);
+      })
+      .catch(() => { if (!append) { setLeads([]); setTotal(0); } })
+      .finally(() => {
+        if (append) setLoadingMore(false);
+        else setLeadsLoading(false);
+      });
   }, []);
 
   // Initial fetch
-  useEffect(() => { fetchLeads("", "all"); }, [fetchLeads]); // eslint-disable-line react-hooks/set-state-in-effect -- intentional: fetch on mount
+  useEffect(() => { fetchLeads("", "all", 1, false); }, [fetchLeads]); // eslint-disable-line react-hooks/set-state-in-effect -- intentional: fetch on mount
 
   const handleSearch = useCallback((q: string) => {
     setSearch(q);
     clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => fetchLeads(q, statusFilter), 300);
+    debounceRef.current = setTimeout(() => fetchLeads(q, statusFilter, 1, false), 300);
   }, [fetchLeads, statusFilter]);
 
   const handleFilter = useCallback((f: string) => {
     setStatusFilter(f);
-    fetchLeads(search, f);
+    fetchLeads(search, f, 1, false);
   }, [fetchLeads, search]);
 
   const refreshLeads = useCallback(() => {
-    fetchLeads(search, statusFilter);
+    fetchLeads(search, statusFilter, 1, false);
   }, [fetchLeads, search, statusFilter]);
+
+  const loadMore = useCallback(() => {
+    fetchLeads(search, statusFilter, page + 1, true);
+  }, [fetchLeads, search, statusFilter, page]);
 
   // ---- Lead detail (from API) ----
   const [lead, setLead] = useState<Lead | null>(null);
@@ -163,16 +190,19 @@ export function useLeadApp(activeId: number | null) {
     setActiveTab,
     leads,
     leadsLoading,
+    loadingMore,
     lead,
     leadLoading,
     leadError,
     messages,
     currentIndex,
-    total: leads.length,
+    total,
+    hasMore: leads.length < total,
     search,
     handleSearch,
     statusFilter,
     handleFilter,
+    loadMore,
     refreshLead,
     refreshLeads,
     refreshMessages,

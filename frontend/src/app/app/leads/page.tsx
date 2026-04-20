@@ -7,7 +7,18 @@ import { useRouter } from "next/navigation";
 
 export default function LeadsEmptyPage() {
   const router = useRouter();
-  const { leads, leadsLoading, search, handleSearch, statusFilter, handleFilter } = useLeadApp(null);
+  const {
+    leads,
+    leadsLoading,
+    loadingMore,
+    total,
+    hasMore,
+    search,
+    handleSearch,
+    statusFilter,
+    handleFilter,
+    loadMore,
+  } = useLeadApp(null);
 
   return (
     <>
@@ -16,6 +27,10 @@ export default function LeadsEmptyPage() {
         onSelect={(id) => router.push(`/app/leads/${id}`)}
         leads={leads}
         loading={leadsLoading}
+        loadingMore={loadingMore}
+        hasMore={hasMore}
+        total={total}
+        onLoadMore={loadMore}
         search={search}
         onSearch={handleSearch}
         statusFilter={statusFilter}
