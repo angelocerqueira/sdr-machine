@@ -1,3 +1,49 @@
+export type LeadProfile =
+  | "hot_no_site"
+  | "hot_bad_site"
+  | "warm"
+  | "cold"
+  | "disqualified";
+
+export type NichoCanonico =
+  | "dentista" | "estetica" | "salao_barbearia" | "restaurante"
+  | "petshop_vet" | "academia" | "contabilidade" | "imobiliaria"
+  | "loja_roupas" | "auto_escola" | "advocacia" | "industria"
+  | "clinica_medica" | "escola_curso" | "outros";
+
+export type NichoSource =
+  | "apify_category" | "fuzzy_match" | "llm_inferred" | "manual" | "failed";
+
+export type PacoteSugerido = "essencial" | "profissional" | "premium" | "skip";
+
+export type Prioridade = "maxima" | "alta" | "media" | "baixa" | "pular";
+
+export const LEAD_PROFILE_LABEL: Record<LeadProfile, string> = {
+  hot_no_site: "Sem site validado",
+  hot_bad_site: "Site ruim",
+  warm: "Oportunidade média",
+  cold: "Site ok",
+  disqualified: "Desqualificado",
+};
+
+export const NICHO_LABEL: Record<NichoCanonico, string> = {
+  dentista: "Odontologia",
+  estetica: "Estética",
+  salao_barbearia: "Salão / Barbearia",
+  restaurante: "Restaurante / Bar",
+  petshop_vet: "Pet shop / Vet",
+  academia: "Academia",
+  contabilidade: "Contabilidade",
+  imobiliaria: "Imobiliária",
+  loja_roupas: "Loja de roupas",
+  auto_escola: "Autoescola",
+  advocacia: "Advocacia",
+  industria: "Indústria",
+  clinica_medica: "Clínica médica",
+  escola_curso: "Escola / Curso",
+  outros: "Outros",
+};
+
 export interface Lead {
   id: number;
   public_id: string;
@@ -40,6 +86,15 @@ export interface Lead {
   job_id: number | null;
   created_at: string;
   updated_at: string;
+  // Classification fields
+  perfil_lead: LeadProfile | null;
+  nicho_canonico: NichoCanonico | null;
+  nicho_source: NichoSource | null;
+  nicho_confidence: number | null;
+  pacote_sugerido: PacoteSugerido | null;
+  prioridade: Prioridade | null;
+  has_instagram: boolean | null;
+  classified_at: string | null;
 }
 
 export interface LeadListResponse {

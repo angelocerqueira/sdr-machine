@@ -1,4 +1,4 @@
-import type { LeadListResponse, Lead, Job, JobListResponse, DashboardStats, Settings, OutreachMessage, LandingPage, EnrichRequest } from "./types";
+import type { LeadListResponse, Lead, Job, JobListResponse, DashboardStats, Settings, OutreachMessage, LandingPage, EnrichRequest, LeadProfile, NichoCanonico } from "./types";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -116,8 +116,12 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 // Leads
-export const getLeads = (params?: Record<string, string>) => {
-  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+export const getLeads = (params?: Record<string, string> & {
+  perfil_lead?: LeadProfile;
+  nicho_canonico?: NichoCanonico;
+  order_by?: "prioridade" | string;
+}) => {
+  const qs = params ? "?" + new URLSearchParams(params as Record<string, string>).toString() : "";
   return fetchAPI<LeadListResponse>(`/api/leads${qs}`);
 };
 
@@ -281,4 +285,34 @@ export async function importCSV(file: File, nicho: string, cidade: string): Prom
   }
 
   return res.json();
+}
+
+// Classification
+export async function classifyLeads(params: {
+  scope: "unclassified" | "all" | "by_job" | "by_status";
+  scope_filter?: Record<string, unknown>;
+  force?: boolean;
+}): Promise<{ id: number }> {
+  return fetchAPI("/api/pipeline/classify", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export async function reclassifyLead(id: number, force = true): Promise<Lead> {
+  return fetchAPI<Lead>(`/api/leads/${id}/reclassify`, {
+    method: "POST",
+    body: JSON.stringify({ force }),
+  });
+}
+
+export async function getLeadsForReview(params?: {
+  page?: number;
+  per_page?: number;
+}): Promise<{ items: Lead[]; total: number; page: number; per_page: number }> {
+  const qs = new URLSearchParams();
+  if (params?.page) qs.set("page", String(params.page));
+  if (params?.per_page) qs.set("per_page", String(params.per_page));
+  const query = qs.toString();
+  return fetchAPI(`/api/leads/review${query ? `?${query}` : ""}`);
 }
