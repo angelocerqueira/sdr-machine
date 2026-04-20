@@ -1,7 +1,7 @@
 """add lead classification fields
 
 Revision ID: k04_classification
-Revises: j03_dimensional_scoring
+Revises: j03
 Create Date: 2026-04-20 00:00:00
 """
 from alembic import op
