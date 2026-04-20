@@ -104,7 +104,7 @@ export function LaTabLp({ lead, onVersionActivated }: LaTabLpProps) {
                     disabled={activating === v.id}
                     onClick={() => handleActivate(v.id)}
                   >
-                    {activating === v.id ? "Ativando\u2026" : "Ativar"}
+                    {activating === v.id ? "Ativando…" : "Ativar"}
                   </button>
                 )}
               </div>

@@ -68,7 +68,7 @@ function mapToDetail(lead: Lead, landingPages: LandingPage[]): LeadAppDetail {
       id: lp.id,
       v: lp.version,
       created: new Date(lp.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) +
-        " \u00b7 " +
+        " · " +
         new Date(lp.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
       active: lp.is_active,
     })),
