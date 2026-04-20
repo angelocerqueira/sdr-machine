@@ -107,48 +107,58 @@ def test_orchestrator_execute_writes_classification_fields():
 
 
 from app.pipeline.enricher import enrich_lead_via_orchestrator
+from app.routers.pipeline import _run_enrich
+from app.models import Job
 
 
-def test_enricher_persists_classification_fields(db):
-    """Smoke test: full pipeline writes perfil_lead et al. to the Lead row."""
+def test_run_enrich_persists_classification_fields(db):
+    """Exercises the real _run_enrich path end-to-end (not bypassed).
+
+    _run_enrich creates its own SessionLocal() internally, which is a
+    different session from the test's `db` fixture.  We patch
+    app.routers.pipeline.SessionLocal to return the *same* test session
+    so both sides share one DB connection and can see each other's commits.
+    """
+    from unittest.mock import patch
     from app.models import Lead
-    from datetime import datetime
+    from tests.conftest import TestSession  # same sessionmaker the fixture uses
+
+    # Create a Job and a Lead in the test DB
+    job = Job(type="enrich", status="pending", params={})
+    db.add(job)
+    db.commit()
+
     lead = Lead(
         nome="Pizzaria Bella",
         telefone="11999999999",
         rating=4.5,
         reviews_count=60,
         nicho="Pizzaria",
+        job_id=job.id,
+        status="scraped",
     )
     db.add(lead)
     db.commit()
+    lead_id = lead.id
 
-    out = enrich_lead_via_orchestrator(
-        lead,
-        skip_providers=[
-            "cnpj_enricher", "website_crawler", "schema_extractor",
-            "tech_stack", "email_discoverer", "apollo",
-        ],
-    )
+    # Patch SessionLocal inside pipeline.py so _run_enrich shares the same
+    # SQLite file-based DB that the test fixture already populated.
+    with patch("app.routers.pipeline.SessionLocal", new=TestSession):
+        _run_enrich(job.id, {
+            "lead_ids": [lead_id],
+            "skip_providers": [
+                "cnpj_enricher", "website_crawler", "schema_extractor",
+                "tech_stack", "email_discoverer", "apollo",
+            ],
+        })
 
-    # Apply classification fields the same way _run_enrich does
-    for attr in (
-        "perfil_lead", "nicho_canonico", "nicho_source",
-        "nicho_confidence", "pacote_sugerido", "prioridade",
-        "classification_hash",
-    ):
-        if attr in out and out[attr] is not None:
-            setattr(lead, attr, out[attr])
+    # _run_enrich committed via its own session; force our session to reload.
+    db.expire_all()
+    lead_fresh = db.get(Lead, lead_id)
 
-    if "perfil_lead" in out:
-        lead.classified_at = datetime.utcnow()
-
-    db.commit()
-    db.refresh(lead)
-
-    assert lead.perfil_lead == "hot_no_site"
-    assert lead.nicho_canonico == "restaurante"
-    assert lead.pacote_sugerido is not None
-    assert lead.prioridade is not None
-    assert lead.classification_hash is not None
-    assert lead.classified_at is not None
+    assert lead_fresh.perfil_lead == "hot_no_site"
+    assert lead_fresh.nicho_canonico == "restaurante"
+    assert lead_fresh.pacote_sugerido is not None
+    assert lead_fresh.prioridade is not None
+    assert lead_fresh.classification_hash is not None
+    assert lead_fresh.classified_at is not None
