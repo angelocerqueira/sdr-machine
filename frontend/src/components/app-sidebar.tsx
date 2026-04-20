@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { Icon, type IconName } from "@/components/ui";
 import { CommandSearch } from "./command-search";
 import { authClient } from "@/lib/auth-client";
+import { getLeadsForReview } from "@/lib/api";
 
 const NAV_ITEMS: { key: string; icon: IconName; label: string; href: string }[] = [
   { key: "home", icon: "home", label: "Dashboard", href: "/app" },
@@ -12,6 +13,46 @@ const NAV_ITEMS: { key: string; icon: IconName; label: string; href: string }[] 
   { key: "leads", icon: "lead", label: "Leads", href: "/app/leads" },
   { key: "job", icon: "job", label: "Jobs", href: "/app/jobs" },
 ];
+
+function ReviewNavCount() {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const r = await getLeadsForReview({ per_page: 1 });
+        if (active) setCount(r.total);
+      } catch {
+        // ignore — sidebar badge is best-effort
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+  if (!count) return null;
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minWidth: "18px",
+        height: "18px",
+        padding: "0 4px",
+        borderRadius: "9px",
+        background: "var(--accent)",
+        color: "#fff",
+        fontSize: "10px",
+        fontWeight: 700,
+        lineHeight: 1,
+        fontFamily: "var(--font-mono)",
+      }}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
 
 export function AppSidebar() {
   const router = useRouter();
@@ -62,10 +103,12 @@ export function AppSidebar() {
     return () => window.removeEventListener("keydown", handleKey);
   }, []);
 
-  const isActive = (href: string) =>
-    href === "/app"
-      ? pathname === "/app"
-      : pathname.startsWith(href);
+  const isActive = (href: string) => {
+    if (href === "/app") return pathname === "/app";
+    // Leads nav should not highlight when on the review sub-page
+    if (href === "/app/leads") return pathname.startsWith("/app/leads") && !pathname.startsWith("/app/leads/review");
+    return pathname.startsWith(href);
+  };
 
   return (
     <>
@@ -115,6 +158,20 @@ export function AppSidebar() {
             <span className="app-sidebar-tip">{it.label}</span>
           </button>
         ))}
+        <button
+          className={`app-sidebar-btn ${isActive("/app/leads/review") ? "active" : ""}`}
+          onClick={() => {
+            router.push("/app/leads/review");
+            setMobileOpen(false);
+          }}
+        >
+          <Icon name="lead" size={18} />
+          <span className="app-sidebar-label" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            Revisão
+            <ReviewNavCount />
+          </span>
+          <span className="app-sidebar-tip">Revisão</span>
+        </button>
         <div className="app-sidebar-sep" />
         <button
           className="app-sidebar-btn"
