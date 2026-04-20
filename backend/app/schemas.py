@@ -91,6 +91,17 @@ class LeadUpdate(BaseModel):
     endereco: str | None = None
     cidade: str | None = None
     nicho: str | None = None
+    nicho_canonico: str | None = None
+
+
+class ReclassifyRequest(BaseModel):
+    force: bool = True
+
+
+class ClassifyRequest(BaseModel):
+    scope: str = "unclassified"  # unclassified | all | by_job | by_status
+    scope_filter: dict | None = None
+    force: bool = False
 
 
 class LeadListOut(BaseModel):

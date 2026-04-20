@@ -54,6 +54,12 @@ def client(db):
 
 
 @pytest.fixture
+def db_session(db):
+    """Alias for the `db` fixture — used in batch-classification tests."""
+    return db
+
+
+@pytest.fixture
 def sample_lead(db):
     lead = Lead(
         nome="Odonto Sorriso",

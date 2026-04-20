@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy import func, or_
@@ -5,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Job, LandingPage, Lead
-from app.schemas import JobOut, LandingPageOut, LeadListOut, LeadOut, LeadSummaryOut, LeadUpdate, OutreachMessageOut
+from app.schemas import JobOut, LandingPageOut, LeadListOut, LeadOut, LeadSummaryOut, LeadUpdate, OutreachMessageOut, ReclassifyRequest
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
 
@@ -217,6 +219,38 @@ def get_lead_jobs(lead_id: int, db: Session = Depends(get_db)):
     return result
 
 
+@router.post("/{lead_id}/reclassify", response_model=LeadOut)
+def reclassify_lead(
+    lead_id: int,
+    body: ReclassifyRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    from app.pipeline.enrichment.classifier import classify
+    from app.pipeline.enrichment.providers.classification_provider import (
+        consolidate_lead_for_classification,
+    )
+
+    lead = db.get(Lead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Best-effort lock; SQLite (tests) ignores
+    try:
+        db.query(Lead).filter(Lead.id == lead_id).with_for_update(nowait=False).first()
+    except Exception:
+        pass
+
+    lead_data = consolidate_lead_for_classification(lead)
+    result = classify(lead_data)
+    for k, v in result.to_dict().items():
+        if hasattr(lead, k) and v is not None:
+            setattr(lead, k, v)
+    lead.classified_at = datetime.utcnow()
+    db.commit()
+    db.refresh(lead)
+    return lead
+
+
 @router.patch("/{lead_id}", response_model=LeadOut)
 def update_lead(lead_id: int, payload: LeadUpdate, db: Session = Depends(get_db)):
     lead = db.get(Lead, lead_id)
@@ -230,9 +264,13 @@ def update_lead(lead_id: int, payload: LeadUpdate, db: Session = Depends(get_db)
                 detail=f"Invalid status '{payload.status}'. Must be one of: {sorted(VALID_STATUSES)}",
             )
 
-    update_data = payload.model_dump(exclude_none=True)
+    update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(lead, field, value)
+
+    if "nicho_canonico" in update_data:
+        lead.nicho_source = "manual"
+        lead.nicho_confidence = 1.0
 
     db.commit()
     db.refresh(lead)
