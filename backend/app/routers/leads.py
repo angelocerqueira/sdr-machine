@@ -61,7 +61,15 @@ def lead_counts(
     if score_min is not None:
         query = query.filter(Lead.opportunity_score >= score_min)
     if search:
-        query = query.filter(or_(Lead.nome.ilike(f"%{search}%"), Lead.telefone.ilike(f"%{search}%")))
+        term = f"%{search}%"
+        query = query.filter(or_(
+            Lead.nome.ilike(term),
+            Lead.telefone.ilike(term),
+            Lead.nicho.ilike(term),
+            Lead.cidade.ilike(term),
+            Lead.email.ilike(term),
+            Lead.razao_social.ilike(term),
+        ))
 
     rows = query.group_by(Lead.status).all()
     result: dict[str, int] = {}
@@ -99,7 +107,15 @@ def list_leads(
     if score_min is not None:
         query = query.filter(Lead.opportunity_score >= score_min)
     if search:
-        query = query.filter(or_(Lead.nome.ilike(f"%{search}%"), Lead.telefone.ilike(f"%{search}%")))
+        term = f"%{search}%"
+        query = query.filter(or_(
+            Lead.nome.ilike(term),
+            Lead.telefone.ilike(term),
+            Lead.nicho.ilike(term),
+            Lead.cidade.ilike(term),
+            Lead.email.ilike(term),
+            Lead.razao_social.ilike(term),
+        ))
 
     query = query.order_by(ORDER_MAP[order_by])
 
