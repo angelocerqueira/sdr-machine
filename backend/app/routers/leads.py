@@ -83,6 +83,31 @@ def lead_counts(
     return result
 
 
+@router.get("/review", response_model=LeadListOut)
+def list_leads_for_review(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """Return leads that need manual review: nicho=outros, nicho_source=failed, or low confidence."""
+    from sqlalchemy import case as sa_case
+    query = db.query(Lead).filter(
+        or_(
+            Lead.nicho_canonico == "outros",
+            Lead.nicho_source == "failed",
+            Lead.nicho_confidence < 0.5,
+        )
+    )
+    total = query.count()
+    items = query.offset((page - 1) * per_page).limit(per_page).all()
+    return LeadListOut(
+        items=[LeadSummaryOut.model_validate(item) for item in items],
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
+
+
 @router.get("", response_model=LeadListOut)
 def list_leads(
     status: str | None = None,
@@ -90,7 +115,9 @@ def list_leads(
     cidade: str | None = None,
     score_min: int | None = None,
     search: str | None = None,
-    order_by: str = Query("score_desc", pattern="^(score_desc|score_asc|name_asc|created_desc|updated_desc)$"),
+    perfil_lead: str | None = None,
+    nicho_canonico: str | None = None,
+    order_by: str = Query("score_desc", pattern="^(score_desc|score_asc|name_asc|created_desc|updated_desc|prioridade)$"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -118,8 +145,24 @@ def list_leads(
             Lead.email.ilike(term),
             Lead.razao_social.ilike(term),
         ))
+    if perfil_lead:
+        query = query.filter(Lead.perfil_lead == perfil_lead)
+    if nicho_canonico:
+        query = query.filter(Lead.nicho_canonico == nicho_canonico)
 
-    query = query.order_by(ORDER_MAP[order_by])
+    if order_by == "prioridade":
+        from sqlalchemy import case as sa_case
+        prio_order = sa_case(
+            (Lead.prioridade == "maxima", 1),
+            (Lead.prioridade == "alta", 2),
+            (Lead.prioridade == "media", 3),
+            (Lead.prioridade == "baixa", 4),
+            (Lead.prioridade == "pular", 5),
+            else_=6,
+        )
+        query = query.order_by(prio_order, Lead.opportunity_score.desc())
+    else:
+        query = query.order_by(ORDER_MAP[order_by])
 
     total = query.count()
     items = query.offset((page - 1) * per_page).limit(per_page).all()
