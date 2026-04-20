@@ -228,6 +228,16 @@ export default function LeadPage() {
               setRailOpen={setRailOpen}
               position={currentIndex + 1}
               total={leads.length}
+              onPrev={
+                currentIndex > 0
+                  ? () => router.push(`/app/leads/${leads[currentIndex - 1].id}`)
+                  : undefined
+              }
+              onNext={
+                currentIndex < leads.length - 1 && currentIndex >= 0
+                  ? () => router.push(`/app/leads/${leads[currentIndex + 1].id}`)
+                  : undefined
+              }
             />
             <LaHeader lead={lead} />
             <LaTabStrip
