@@ -73,6 +73,7 @@ def qualify(state: GraphState, disqualify_threshold: int | None = None) -> dict:
         qualificado=qualificado,
         motivo_desqualificacao=motivo,
         resumo_executivo=resumo,
+        diagnostico_marketing=state.marketing_result,
     )
 
     return {"final_result": final}
