@@ -9,7 +9,7 @@ from app.pipeline.enrichment.classifier_enums import (
 
 
 # Profile cascade thresholds
-PROFILE_THRESHOLDS: dict = {
+PROFILE_THRESHOLDS: dict[str, float | int] = {
     "disqualified_min_rating": 3.0,
     "disqualified_min_reviews_without_phone": 3,
     "hot_no_site_min_rating": 4.0,
@@ -20,7 +20,7 @@ PROFILE_THRESHOLDS: dict = {
 }
 
 # Mapping perfil → (pacote_sugerido, prioridade)
-PROFILE_TO_DERIVED: dict = {
+PROFILE_TO_DERIVED: dict[LeadProfile, tuple[PacoteSugerido, Prioridade]] = {
     LeadProfile.HOT_NO_SITE: (PacoteSugerido.ESSENCIAL, Prioridade.MAXIMA),
     LeadProfile.HOT_BAD_SITE: (PacoteSugerido.PROFISSIONAL, Prioridade.ALTA),
     LeadProfile.WARM: (PacoteSugerido.ESSENCIAL, Prioridade.MEDIA),
@@ -104,8 +104,8 @@ def fuzzy_match_nicho(raw: str | None) -> tuple[NichoCanonico, float] | None:
     best: tuple[NichoCanonico, float] | None = None
     for bucket, aliases in NICHO_ALIASES.items():
         for alias in aliases:
-            # Exact substring match → confidence 1.0
-            if alias in text:
+            # Exact substring match → confidence 1.0 (only for aliases long enough to be unambiguous)
+            if len(alias) >= 4 and alias in text:
                 return (bucket, 1.0)
             # Fuzzy ratio
             ratio = SequenceMatcher(None, alias, text).ratio()
