@@ -152,6 +152,43 @@ def test_circuit_breaker_does_not_fire_below_threshold(
 # 4. Idempotency via hash
 # ---------------------------------------------------------------------------
 
+def test_circuit_breaker_ignores_nicho_failed_soft_errors(
+    db_session, classify_sessionlocal_patch
+):
+    """Many leads ending in nicho_source='failed' must NOT trip the circuit breaker.
+    Soft failures (no LLM client, unrecognized nicho) are not exceptions — the pipeline
+    succeeded but couldn't classify the nicho. Only hard exceptions should trip the breaker.
+    """
+    from app.routers.pipeline import _run_classify
+
+    # 25 leads with bizarre nicho that won't match any alias, and no LLM client available
+    for i in range(25):
+        db_session.add(Lead(
+            nome=f"L{i}", telefone="11", rating=4.0, reviews_count=30,
+            nicho="Quantum entanglement services provider xpto",
+        ))
+    db_session.commit()
+
+    job = Job(type="classification", status="pending", params={})
+    db_session.add(job)
+    db_session.commit()
+    job_id = job.id
+
+    with classify_sessionlocal_patch:
+        # No llm_client available (no API key in test env) → all leads return nicho_source=failed
+        # but classify() never raises — so exceptions counter stays at 0
+        _run_classify(job_id, {"scope": "unclassified"})
+
+    db_session.expire_all()
+    job_fresh = db_session.get(Job, job_id)
+    # Circuit breaker should NOT fire — these are soft failures, not exceptions
+    assert job_fresh.status in ("done", "done_with_errors"), (
+        f"Expected done/done_with_errors, got {job_fresh.status}. "
+        "Soft nicho failures should not trip the circuit breaker."
+    )
+    assert job_fresh.status != "stalled"
+
+
 def test_idempotency_via_hash(client, db_session, classify_sessionlocal_patch):
     """Running classification twice over the same lead → second run skips it.
 

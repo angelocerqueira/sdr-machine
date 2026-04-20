@@ -99,7 +99,7 @@ def list_leads_for_review(
         )
     )
     total = query.count()
-    items = query.offset((page - 1) * per_page).limit(per_page).all()
+    items = query.order_by(Lead.id).offset((page - 1) * per_page).limit(per_page).all()
     return LeadListOut(
         items=[LeadSummaryOut.model_validate(item) for item in items],
         total=total,
