@@ -15,6 +15,7 @@ from app.pipeline.diagnostic.nodes.analyzers import (
     analyze_advanced,
     analyze_os,
 )
+from app.pipeline.diagnostic.nodes.marketing import analyze_marketing
 from app.pipeline.diagnostic.nodes.qualify import qualify
 
 logger = logging.getLogger(__name__)
@@ -35,19 +36,22 @@ def _build_graph() -> StateGraph:
     graph.add_node("analyze_automation", analyze_automation)
     graph.add_node("analyze_advanced", analyze_advanced)
     graph.add_node("analyze_os", analyze_os)
+    graph.add_node("analyze_marketing", analyze_marketing)
     graph.add_node("qualify", qualify)
 
-    # Fan-out: START → all 4 analyzers in parallel
+    # Fan-out: START → all 5 analyzers in parallel
     graph.add_edge(START, "analyze_lp")
     graph.add_edge(START, "analyze_automation")
     graph.add_edge(START, "analyze_advanced")
     graph.add_edge(START, "analyze_os")
+    graph.add_edge(START, "analyze_marketing")
 
-    # Fan-in: all 4 analyzers → qualify
+    # Fan-in: all 5 analyzers → qualify
     graph.add_edge("analyze_lp", "qualify")
     graph.add_edge("analyze_automation", "qualify")
     graph.add_edge("analyze_advanced", "qualify")
     graph.add_edge("analyze_os", "qualify")
+    graph.add_edge("analyze_marketing", "qualify")
 
     # qualify → END
     graph.add_edge("qualify", END)
