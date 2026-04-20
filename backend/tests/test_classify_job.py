@@ -1,18 +1,6 @@
-from unittest.mock import patch
-
 import pytest
 
 from app.models import Job, Lead
-from tests.conftest import TestSession
-
-
-@pytest.fixture
-def classify_sessionlocal_patch():
-    """Patch SessionLocal in pipeline.py to use the same test DB session.
-
-    Mirrors the pattern used in test_classification_provider.py for _run_enrich.
-    """
-    return patch("app.routers.pipeline.SessionLocal", new=TestSession)
 
 
 def test_classify_job_endpoint_creates_job(client, db_session):

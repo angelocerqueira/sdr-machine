@@ -60,6 +60,17 @@ def db_session(db):
 
 
 @pytest.fixture
+def classify_sessionlocal_patch():
+    """Patch SessionLocal in pipeline.py to use the same test DB session.
+
+    Shared across test_classify_job.py and test_classification_resilience.py.
+    Mirrors the pattern used in test_classification_provider.py for _run_enrich.
+    """
+    from unittest.mock import patch
+    return patch("app.routers.pipeline.SessionLocal", new=TestSession)
+
+
+@pytest.fixture
 def sample_lead(db):
     lead = Lead(
         nome="Odonto Sorriso",
