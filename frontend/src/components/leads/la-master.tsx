@@ -27,13 +27,30 @@ interface LaMasterProps {
   onSelect: (id: number) => void;
   leads: LeadListItem[];
   loading?: boolean;
+  loadingMore?: boolean;
+  hasMore?: boolean;
+  total?: number;
+  onLoadMore?: () => void;
   search: string;
   onSearch: (q: string) => void;
   statusFilter: string;
   onFilter: (f: string) => void;
 }
 
-export function LaMaster({ activeId, onSelect, leads, loading, search, onSearch, statusFilter, onFilter }: LaMasterProps) {
+export function LaMaster({
+  activeId,
+  onSelect,
+  leads,
+  loading,
+  loadingMore,
+  hasMore,
+  total,
+  onLoadMore,
+  search,
+  onSearch,
+  statusFilter,
+  onFilter,
+}: LaMasterProps) {
   const groups = groupLeads(leads);
 
   return (
@@ -41,7 +58,7 @@ export function LaMaster({ activeId, onSelect, leads, loading, search, onSearch,
       <div className="la-master-head">
         <div className="la-master-title-row">
           <div className="la-master-title">Leads</div>
-          <div className="la-master-count">{leads.length}</div>
+          <div className="la-master-count">{total ?? leads.length}</div>
         </div>
         <div className="la-master-search">
           <span className="la-master-search-icon">
@@ -109,6 +126,17 @@ export function LaMaster({ activeId, onSelect, leads, loading, search, onSearch,
               ))}
             </div>
           ))
+        )}
+        {!loading && hasMore && onLoadMore && (
+          <div className="la-master-load-more">
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={onLoadMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? "Carregando…" : `Carregar mais (${(total ?? 0) - leads.length} restantes)`}
+            </button>
+          </div>
         )}
       </div>
     </aside>
