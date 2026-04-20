@@ -77,6 +77,7 @@ def _run_scrape(job_id: int, params: dict):
                     reviews_count=ld.get("reviews_count", 0),
                     google_maps_url=ld.get("google_maps_url"),
                     top_reviews=ld.get("top_reviews", []),
+                    has_instagram=ld.get("has_instagram"),
                     status="scraped",
                     job_id=job_id,
                 )
