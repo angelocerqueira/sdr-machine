@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 from pydantic import BaseModel
 
 
@@ -91,15 +92,20 @@ class LeadUpdate(BaseModel):
     endereco: str | None = None
     cidade: str | None = None
     nicho: str | None = None
-    nicho_canonico: str | None = None
+    nicho_canonico: Literal[
+        "dentista", "estetica", "salao_barbearia", "restaurante",
+        "petshop_vet", "academia", "contabilidade", "imobiliaria",
+        "loja_roupas", "auto_escola", "advocacia", "industria",
+        "clinica_medica", "escola_curso", "outros",
+    ] | None = None
 
 
 class ReclassifyRequest(BaseModel):
-    force: bool = True
+    force: bool = False  # default: preserve manual nicho (safest UX)
 
 
 class ClassifyRequest(BaseModel):
-    scope: str = "unclassified"  # unclassified | all | by_job | by_status
+    scope: Literal["unclassified", "all", "by_job", "by_status"] = "unclassified"
     scope_filter: dict | None = None
     force: bool = False
 

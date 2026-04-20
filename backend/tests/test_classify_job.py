@@ -80,3 +80,9 @@ def test_classify_job_returns_409_when_one_is_running(client, db_session):
     resp = client.post("/api/pipeline/classify", json={"scope": "unclassified"})
     assert resp.status_code == 409
     assert "already" in resp.json()["detail"].lower()
+
+
+def test_classify_job_rejects_unknown_scope(client, db_session):
+    """scope not in Literal → 422 from Pydantic validation."""
+    resp = client.post("/api/pipeline/classify", json={"scope": "byJob"})
+    assert resp.status_code == 422

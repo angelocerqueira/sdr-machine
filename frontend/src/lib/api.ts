@@ -299,7 +299,7 @@ export async function classifyLeads(params: {
   });
 }
 
-export async function reclassifyLead(id: number, force = true): Promise<Lead> {
+export async function reclassifyLead(id: number, force = false): Promise<Lead> {
   return fetchAPI<Lead>(`/api/leads/${id}/reclassify`, {
     method: "POST",
     body: JSON.stringify({ force }),

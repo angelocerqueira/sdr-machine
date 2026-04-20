@@ -30,7 +30,7 @@ export function ReviewTable() {
   async function setNicho(lead: Lead, nicho: NichoCanonico) {
     setBusyId(lead.id);
     try {
-      const updated = await updateLead(lead.id, { nicho_canonico: nicho, nicho_source: "manual" });
+      const updated = await updateLead(lead.id, { nicho_canonico: nicho });
       setLeads((ls) => ls.map((l) => (l.id === lead.id ? updated : l)));
     } catch (err) {
       console.error("Update nicho failed:", err);

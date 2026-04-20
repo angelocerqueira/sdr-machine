@@ -69,3 +69,31 @@ def test_patch_with_nicho_canonico_marks_manual_source(client, sample_lead):
     assert body["nicho_canonico"] == "dentista"
     assert body["nicho_source"] == "manual"
     assert body["nicho_confidence"] == 1.0
+
+
+def test_patch_rejects_invalid_nicho_canonico(client, sample_lead):
+    resp = client.patch(
+        f"/api/leads/{sample_lead.id}",
+        json={"nicho_canonico": "anything_foo_bar"},
+    )
+    assert resp.status_code == 422
+
+
+def test_reclassify_default_preserves_manual_nicho(client, db_session):
+    """Default (no body / no force) now preserves manual nicho — safest UX."""
+    from app.models import Lead
+    lead = Lead(
+        nome="Mec X", telefone="11", rating=4.5, reviews_count=50,
+        nicho="Mecanica",
+        nicho_canonico="advocacia", nicho_source="manual", nicho_confidence=1.0,
+    )
+    db_session.add(lead)
+    db_session.commit()
+    lead_id = lead.id
+
+    # POST with no body — should preserve manual
+    resp = client.post(f"/api/leads/{lead_id}/reclassify")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["nicho_canonico"] == "advocacia"  # preserved
+    assert body["nicho_source"] == "manual"
