@@ -240,9 +240,19 @@ def reclassify_lead(
     except Exception:
         pass
 
+    force = body.force if body is not None else True  # endpoint default matches schema
+
     lead_data = consolidate_lead_for_classification(lead)
     result = classify(lead_data)
-    for k, v in result.to_dict().items():
+
+    # Preserve manual nicho when not forced
+    result_dict = result.to_dict()
+    if lead.nicho_source == "manual" and not force:
+        result_dict["nicho_canonico"] = lead.nicho_canonico
+        result_dict["nicho_source"] = lead.nicho_source
+        result_dict["nicho_confidence"] = lead.nicho_confidence
+
+    for k, v in result_dict.items():
         if hasattr(lead, k) and v is not None:
             setattr(lead, k, v)
     lead.classified_at = datetime.utcnow()

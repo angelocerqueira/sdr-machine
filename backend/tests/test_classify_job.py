@@ -81,3 +81,14 @@ def test_run_classify_isolates_lead_failures(db_session, classify_sessionlocal_p
     job_fresh = db_session.get(Job, job_id)
     # Even with an edge-case lead, job completes (not failed/stalled)
     assert job_fresh.status in ("done", "done_with_errors")
+
+
+def test_classify_job_returns_409_when_one_is_running(client, db_session):
+    from app.models import Job
+    running_job = Job(type="classification", status="running")
+    db_session.add(running_job)
+    db_session.commit()
+
+    resp = client.post("/api/pipeline/classify", json={"scope": "unclassified"})
+    assert resp.status_code == 409
+    assert "already" in resp.json()["detail"].lower()

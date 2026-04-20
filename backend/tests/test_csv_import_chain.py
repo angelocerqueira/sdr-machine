@@ -13,7 +13,6 @@ def _no_runner_mock():
     This module needs _run_csv_import to actually execute so the classification
     chain fires. We restore the real _RUNNERS here.
     """
-    from app.routers import pipeline as p
     import app.routers.pipeline as pipeline_module
 
     real_runners = {

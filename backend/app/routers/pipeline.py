@@ -672,6 +672,17 @@ def start_classify_job(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
+    # Guard against concurrent classification jobs
+    existing = db.query(Job).filter(
+        Job.type == "classification",
+        Job.status.in_(["pending", "running"]),
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"classification job already in progress (id={existing.id})",
+        )
+
     job = Job(type="classification", status="pending", params=body.model_dump())
     db.add(job)
     db.commit()
