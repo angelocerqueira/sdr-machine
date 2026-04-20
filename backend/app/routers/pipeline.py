@@ -444,6 +444,27 @@ def _run_csv_import(job_id: int, params: dict):
         }
         job.finished_at = datetime.utcnow()
         db.commit()
+
+        # Chain: trigger classification over the imported batch
+        try:
+            classify_job = Job(
+                type="classification", status="pending",
+                params={
+                    "scope": "by_job",
+                    "scope_filter": {"job_id": job_id},
+                    "force": False,
+                },
+            )
+            db.add(classify_job)
+            db.commit()
+            threading.Thread(
+                target=_run_classify,
+                args=(classify_job.id, classify_job.params),
+                daemon=True,
+            ).start()
+        except Exception as exc:
+            logger.warning("failed to chain classification: %s", exc)
+
         _emit(job_id, {"type": "done", "summary": job.result_summary})
     except Exception as exc:
         job = db.get(Job, job_id)
