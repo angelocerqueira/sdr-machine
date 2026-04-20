@@ -98,3 +98,59 @@ class TestDeleteLead:
     def test_delete_not_found(self, client):
         resp = client.delete("/api/leads/9999")
         assert resp.status_code == 404
+
+
+class TestSearchExpanded:
+    def test_search_by_nicho(self, client, db):
+        from app.models import Lead
+        db.add_all([
+            Lead(nome="Boiger Beauty", nicho="salão de beleza", cidade="Curitiba", telefone="1"),
+            Lead(nome="Clinica XYZ", nicho="clínica estética", cidade="Curitiba", telefone="2"),
+            Lead(nome="Bar do Zé", nicho="bar", cidade="Porto Alegre", telefone="3"),
+        ])
+        db.commit()
+
+        resp = client.get("/api/leads?search=salão")
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+        assert len(items) == 1
+        assert items[0]["nome"] == "Boiger Beauty"
+
+    def test_search_by_cidade(self, client, db):
+        from app.models import Lead
+        db.add_all([
+            Lead(nome="A", nicho="x", cidade="Porto Alegre", telefone="1"),
+            Lead(nome="B", nicho="y", cidade="Curitiba", telefone="2"),
+        ])
+        db.commit()
+
+        resp = client.get("/api/leads?search=porto")
+        items = resp.json()["items"]
+        assert len(items) == 1
+        assert items[0]["cidade"] == "Porto Alegre"
+
+    def test_search_by_email(self, client, db):
+        from app.models import Lead
+        db.add_all([
+            Lead(nome="X", telefone="1", email="contato@loja.com"),
+            Lead(nome="Y", telefone="2", email="outro@empresa.com"),
+        ])
+        db.commit()
+
+        resp = client.get("/api/leads?search=loja.com")
+        items = resp.json()["items"]
+        assert len(items) == 1
+        assert items[0]["email"] == "contato@loja.com"
+
+    def test_search_by_razao_social(self, client, db):
+        from app.models import Lead
+        db.add_all([
+            Lead(nome="X", telefone="1", razao_social="Empresa Alpha LTDA"),
+            Lead(nome="Y", telefone="2", razao_social="Beta Comercio ME"),
+        ])
+        db.commit()
+
+        resp = client.get("/api/leads?search=Alpha")
+        items = resp.json()["items"]
+        assert len(items) == 1
+        assert items[0]["razao_social"] == "Empresa Alpha LTDA"

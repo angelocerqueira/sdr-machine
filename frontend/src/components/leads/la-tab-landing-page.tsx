@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Icon } from "@/components/ui";
-import { getLeadLpUrl, activateLandingPage } from "@/lib/api";
+import { getLeadLpUrlByPublicId, activateLandingPage } from "@/lib/api";
 import type { LeadAppDetail } from "./lead-app-types";
 
 interface LaTabLpProps {
@@ -27,7 +27,7 @@ export function LaTabLp({ lead, onVersionActivated }: LaTabLpProps) {
     );
   }
 
-  const lpUrl = getLeadLpUrl(lead.id);
+  const lpUrl = getLeadLpUrlByPublicId(lead.public_id);
 
   async function handleActivate(lpId: number) {
     setActivating(lpId);
@@ -104,7 +104,7 @@ export function LaTabLp({ lead, onVersionActivated }: LaTabLpProps) {
                     disabled={activating === v.id}
                     onClick={() => handleActivate(v.id)}
                   >
-                    {activating === v.id ? "Ativando\u2026" : "Ativar"}
+                    {activating === v.id ? "Ativando…" : "Ativar"}
                   </button>
                 )}
               </div>

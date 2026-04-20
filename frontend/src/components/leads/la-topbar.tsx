@@ -9,6 +9,8 @@ interface LaTopbarProps {
   setRailOpen: (open: boolean) => void;
   position?: number;
   total?: number;
+  onPrev?: () => void;
+  onNext?: () => void;
 }
 
 export function LaTopbar({
@@ -17,6 +19,8 @@ export function LaTopbar({
   setRailOpen,
   position = 1,
   total = 1,
+  onPrev,
+  onNext,
 }: LaTopbarProps) {
   return (
     <div className="la-topbar">
@@ -31,7 +35,12 @@ export function LaTopbar({
       </div>
       <div className="la-topbar-spacer" />
       <div className="la-topbar-nav">
-        <button className="la-topbar-nav-btn" aria-label="Anterior">
+        <button
+          className="la-topbar-nav-btn"
+          aria-label="Anterior"
+          onClick={onPrev}
+          disabled={!onPrev}
+        >
           <Icon
             name="chevron-r"
             size={16}
@@ -39,7 +48,12 @@ export function LaTopbar({
           />
         </button>
         <span className="la-topbar-nav-pos">{position} / {total}</span>
-        <button className="la-topbar-nav-btn" aria-label="Próximo">
+        <button
+          className="la-topbar-nav-btn"
+          aria-label="Próximo"
+          onClick={onNext}
+          disabled={!onNext}
+        >
           <Icon name="chevron-r" size={16} />
         </button>
       </div>

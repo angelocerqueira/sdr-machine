@@ -65,11 +65,11 @@ export function LaMaster({
             <Icon name="search" size={14} />
           </span>
           <input
-            placeholder="Buscar por nome, nicho, cidade\u2026"
+            placeholder="Buscar por nome, nicho, cidade, email…"
             value={search}
             onChange={(e) => onSearch(e.target.value)}
           />
-          <span className="la-master-search-kbd">\u2318K</span>
+          <span className="la-master-search-kbd">⌘K</span>
         </div>
       </div>
       <div className="la-master-filters">
@@ -99,7 +99,7 @@ export function LaMaster({
             <div key={g.key}>
               <div className="la-master-group">
                 {g.title}
-                <span className="count">\u00b7 {g.items.length}</span>
+                <span className="count">· {g.items.length}</span>
               </div>
               {g.items.map((l) => (
                 <button
@@ -113,7 +113,7 @@ export function LaMaster({
                   <div style={{ minWidth: 0 }}>
                     <div className="la-master-name">{l.name}</div>
                     <div className="la-master-meta">
-                      {l.niche} \u00b7 {l.city}
+                      {l.niche} · {l.city}
                     </div>
                   </div>
                   <div
