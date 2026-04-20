@@ -44,7 +44,12 @@ class FunnelAction(BaseModel):
 class FunnelStage(BaseModel):
     """Diagnóstico + ações top 2 pra uma etapa do funil."""
     diagnostico: str
-    acoes_top2: list[FunnelAction] = Field(default_factory=list, max_length=2)
+    acoes_top2: list[FunnelAction] = Field(default_factory=list)
+
+    @field_validator("acoes_top2", mode="before")
+    @classmethod
+    def truncate_acoes(cls, v: list) -> list:
+        return v[:2] if isinstance(v, list) else v
 
 
 class IAPotencial(BaseModel):
@@ -67,8 +72,13 @@ class MarketingDiagnostic(BaseModel):
     resumo_executivo: str
     momento_funil: MomentoFunil
     potencial_ia_automacao: IAPotencial
-    prioridades_top3: list[str] = Field(default_factory=list, max_length=3)
+    prioridades_top3: list[str] = Field(default_factory=list)
     funil: dict[str, FunnelStage] = Field(default_factory=dict)
+
+    @field_validator("prioridades_top3", mode="before")
+    @classmethod
+    def truncate_prioridades(cls, v: list) -> list:
+        return v[:3] if isinstance(v, list) else v
 
 
 class ServiceLevelAnalysis(BaseModel):

@@ -1,4 +1,4 @@
-"""Qualifier node — consolidates 4 analyzer results into final recommendation."""
+"""Qualifier node — consolidates 5 analyzer results into final recommendation."""
 
 from app.config import settings
 from app.pipeline.diagnostic.state import (
@@ -21,7 +21,7 @@ VIABLE_THRESHOLD = 40
 
 
 def qualify(state: GraphState, disqualify_threshold: int | None = None) -> dict:
-    """Consolidate 4 analyzer results into a ServiceLevelAnalysis."""
+    """Consolidate 5 analyzer results into a ServiceLevelAnalysis."""
     threshold = disqualify_threshold if disqualify_threshold is not None else settings.disqualify_threshold
 
     results: dict[NivelKey, NivelScore] = {}

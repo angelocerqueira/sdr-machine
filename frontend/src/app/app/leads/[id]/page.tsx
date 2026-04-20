@@ -17,14 +17,13 @@ import { LaTabInfo } from "@/components/leads/la-tab-informacoes";
 import { buildTabs, TAB_ACTIONS } from "@/components/leads/lead-app-mock";
 import { getLeadLandingPages, runEnrich, runGenerate, runOutreach, streamJob } from "@/lib/api";
 import { Icon } from "@/components/ui";
-import type { LeadAppDetail } from "@/components/leads/lead-app-types";
+import type { LeadAppDetail, DiagnosticoMarketing } from "@/components/leads/lead-app-types";
 import type { Lead, LandingPage, ServiceLevels } from "@/lib/types";
 
 /** Map real API Lead to the LeadAppDetail shape expected by tab components */
 function mapToDetail(lead: Lead, landingPages: LandingPage[]): LeadAppDetail {
   const sl = (lead.site_analysis as Record<string, unknown>)?.service_levels as ServiceLevels | undefined;
-  const dm = (lead.site_analysis as Record<string, unknown>)?.diagnostico_marketing as
-    import("@/components/leads/lead-app-types").DiagnosticoMarketing | undefined;
+  const dm = (lead.site_analysis as Record<string, unknown>)?.diagnostico_marketing as DiagnosticoMarketing | undefined;
 
   return {
     id: lead.id,
@@ -165,6 +164,7 @@ export default function LeadPage() {
           onDone = () => { refreshMessages(); refreshLead(); refreshLeads(); };
           break;
         default:
+          setActionLoading(false);
           return;
       }
       // Stream SSE until job finishes, then refresh
