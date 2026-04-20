@@ -51,6 +51,8 @@ def lead_counts(
     cidade: str | None = None,
     score_min: int | None = None,
     search: str | None = None,
+    perfil_lead: str | None = None,
+    nicho_canonico: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Return lead counts grouped by status. Used by Kanban column headers."""
@@ -72,6 +74,10 @@ def lead_counts(
             Lead.email.ilike(term),
             Lead.razao_social.ilike(term),
         ))
+    if perfil_lead:
+        query = query.filter(Lead.perfil_lead == perfil_lead)
+    if nicho_canonico:
+        query = query.filter(Lead.nicho_canonico == nicho_canonico)
 
     rows = query.group_by(Lead.status).all()
     result: dict[str, int] = {}

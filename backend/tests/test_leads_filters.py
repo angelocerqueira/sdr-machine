@@ -35,6 +35,29 @@ def test_order_by_prioridade(client, db_session):
     assert names == ["H", "W", "D"]
 
 
+def test_lead_counts_respects_perfil_lead_filter(client, db_session):
+    db_session.add(Lead(nome="A", telefone="1", status="scraped", perfil_lead="hot_no_site"))
+    db_session.add(Lead(nome="B", telefone="2", status="scraped", perfil_lead="warm"))
+    db_session.commit()
+
+    resp = client.get("/api/leads/counts?perfil_lead=hot_no_site")
+    assert resp.status_code == 200
+    counts = resp.json()
+    # Only the hot_no_site lead should count
+    assert counts.get("scraped", 0) == 1
+
+
+def test_lead_counts_respects_nicho_canonico_filter(client, db_session):
+    db_session.add(Lead(nome="X", telefone="1", status="enriched", nicho_canonico="dentista"))
+    db_session.add(Lead(nome="Y", telefone="2", status="enriched", nicho_canonico="restaurante"))
+    db_session.commit()
+
+    resp = client.get("/api/leads/counts?nicho_canonico=dentista")
+    assert resp.status_code == 200
+    counts = resp.json()
+    assert counts.get("enriched", 0) == 1
+
+
 def test_review_endpoint_returns_problematic_leads(client, db_session):
     db_session.add(Lead(
         nome="In review", telefone="1",

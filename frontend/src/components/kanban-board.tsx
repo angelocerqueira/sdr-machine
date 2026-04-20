@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { DndContext, DragEndEvent, PointerSensor, pointerWithin, useSensor, useSensors } from "@dnd-kit/core";
 import { KanbanColumn } from "./kanban-column";
 import { LeadSheet } from "./lead-sheet";
@@ -9,6 +10,8 @@ import { KANBAN_COLUMNS, LEAD_PROFILE_LABEL, NICHO_LABEL } from "@/lib/types";
 import type { Lead, LeadProfile, NichoCanonico } from "@/lib/types";
 
 export function KanbanBoard() {
+  const searchParams = useSearchParams();
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
@@ -19,8 +22,12 @@ export function KanbanBoard() {
   const [filterNicho, setFilterNicho] = useState("");
   const [filterCidade, setFilterCidade] = useState("");
   const [filterScoreMin, setFilterScoreMin] = useState("");
-  const [filterPerfil, setFilterPerfil] = useState<LeadProfile | "">("");
-  const [filterNichoCanon, setFilterNichoCanon] = useState<NichoCanonico | "">("");
+  const [filterPerfil, setFilterPerfil] = useState<LeadProfile | "">(
+    (searchParams.get("perfil_lead") as LeadProfile) || "",
+  );
+  const [filterNichoCanon, setFilterNichoCanon] = useState<NichoCanonico | "">(
+    (searchParams.get("nicho_canonico") as NichoCanonico) || "",
+  );
   const [search, setSearch] = useState("");
   const [orderBy, setOrderBy] = useState("score_desc");
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
