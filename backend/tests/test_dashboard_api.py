@@ -1,6 +1,21 @@
 from app.models import Job, Lead
 
 
+def test_dashboard_stats_includes_profile_and_nicho_distribution(client, db):
+    db.add(Lead(nome="A", telefone="1", perfil_lead="hot_no_site", nicho_canonico="dentista"))
+    db.add(Lead(nome="B", telefone="2", perfil_lead="warm", nicho_canonico="restaurante"))
+    db.add(Lead(nome="C", telefone="3", perfil_lead="hot_no_site", nicho_canonico="dentista"))
+    db.commit()
+
+    resp = client.get("/api/dashboard/stats")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["profile_distribution"]["hot_no_site"] == 2
+    assert body["profile_distribution"]["warm"] == 1
+    assert body["nicho_distribution"]["dentista"] == 2
+    assert body["nicho_distribution"]["restaurante"] == 1
+
+
 class TestDashboardStats:
     def test_empty(self, client):
         resp = client.get("/api/dashboard/stats")

@@ -3,7 +3,7 @@ import string
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, Column, Integer, String, Text, Numeric,
+    Boolean, Column, Integer, String, Text, Numeric, Float,
     DateTime, Date, ForeignKey, Index, JSON, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
@@ -68,6 +68,16 @@ class Lead(Base):
     score_automacao = Column(Integer, default=0, server_default="0")
     score_mapa = Column(Integer, default=0, server_default="0")
     nivel_recomendado = Column(String(20), nullable=True)
+    # Classification fields (see classifier.py / classifier_enums.py)
+    perfil_lead = Column(String(30), nullable=True)
+    nicho_canonico = Column(String(30), nullable=True)
+    nicho_source = Column(String(30), nullable=True)
+    nicho_confidence = Column(Float, nullable=True)
+    pacote_sugerido = Column(String(30), nullable=True)
+    prioridade = Column(String(20), nullable=True)
+    classification_hash = Column(String(32), nullable=True)
+    classified_at = Column(DateTime, nullable=True)
+    has_instagram = Column(Boolean, nullable=True)
     lp_html = Column(Text)
     job_id = Column(Integer, ForeignKey("jobs.id", ondelete="SET NULL"))
     created_at = Column(DateTime, default=func.now())
@@ -84,6 +94,10 @@ class Lead(Base):
         Index("idx_leads_score", "opportunity_score"),
         Index("idx_leads_email", "email"),
         Index("idx_leads_cnpj", "cnpj"),
+        Index("idx_leads_perfil_lead", "perfil_lead"),
+        Index("idx_leads_nicho_canonico", "nicho_canonico"),
+        Index("idx_leads_pacote_sugerido", "pacote_sugerido"),
+        Index("idx_leads_prioridade", "prioridade"),
     )
 
 

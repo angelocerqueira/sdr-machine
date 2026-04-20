@@ -1,6 +1,8 @@
 "use client";
 
-import { Icon } from "@/components/ui";
+import { Icon, ProfileBadge } from "@/components/ui";
+import { LEAD_PROFILE_LABEL, NICHO_LABEL } from "@/lib/types";
+import type { LeadProfile, NichoCanonico } from "@/lib/types";
 import { scoreClass } from "./lead-app-mock";
 import { groupLeads, type LeadListItem } from "./use-lead-app";
 
@@ -35,6 +37,10 @@ interface LaMasterProps {
   onSearch: (q: string) => void;
   statusFilter: string;
   onFilter: (f: string) => void;
+  perfilFilter?: LeadProfile | "";
+  onPerfilFilter?: (p: LeadProfile | "") => void;
+  nichoCanonFilter?: NichoCanonico | "";
+  onNichoCanonFilter?: (n: NichoCanonico | "") => void;
 }
 
 export function LaMaster({
@@ -50,6 +56,10 @@ export function LaMaster({
   onSearch,
   statusFilter,
   onFilter,
+  perfilFilter = "",
+  onPerfilFilter,
+  nichoCanonFilter = "",
+  onNichoCanonFilter,
 }: LaMasterProps) {
   const groups = groupLeads(leads);
 
@@ -83,6 +93,34 @@ export function LaMaster({
           </button>
         ))}
       </div>
+      {(onPerfilFilter || onNichoCanonFilter) && (
+        <div className="la-master-filters" style={{ gap: 6, paddingTop: 0 }}>
+          {onPerfilFilter && (
+            <select
+              value={perfilFilter}
+              onChange={(e) => onPerfilFilter(e.target.value as LeadProfile | "")}
+              className="la-master-filter-select"
+            >
+              <option value="">Todos os perfis</option>
+              {(Object.entries(LEAD_PROFILE_LABEL) as [LeadProfile, string][]).map(([k, label]) => (
+                <option key={k} value={k}>{label}</option>
+              ))}
+            </select>
+          )}
+          {onNichoCanonFilter && (
+            <select
+              value={nichoCanonFilter}
+              onChange={(e) => onNichoCanonFilter(e.target.value as NichoCanonico | "")}
+              className="la-master-filter-select"
+            >
+              <option value="">Todos os nichos</option>
+              {(Object.entries(NICHO_LABEL) as [NichoCanonico, string][]).map(([k, label]) => (
+                <option key={k} value={k}>{label}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
       <div className="la-master-body">
         {loading ? (
           <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -115,6 +153,9 @@ export function LaMaster({
                     <div className="la-master-meta">
                       {l.niche} · {l.city}
                     </div>
+                    {l.perfil_lead && (
+                      <ProfileBadge profile={l.perfil_lead} size="sm" showEmoji={false} className="mt-0.5" />
+                    )}
                   </div>
                   <div
                     className="la-master-status"

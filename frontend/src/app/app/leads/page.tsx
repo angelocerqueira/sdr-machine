@@ -17,6 +17,10 @@ export default function LeadsEmptyPage() {
     handleSearch,
     statusFilter,
     handleFilter,
+    perfilFilter,
+    handlePerfilFilter,
+    nichoCanonFilter,
+    handleNichoCanonFilter,
     loadMore,
   } = useLeadApp(null);
 
@@ -35,6 +39,10 @@ export default function LeadsEmptyPage() {
         onSearch={handleSearch}
         statusFilter={statusFilter}
         onFilter={handleFilter}
+        perfilFilter={perfilFilter}
+        onPerfilFilter={handlePerfilFilter}
+        nichoCanonFilter={nichoCanonFilter}
+        onNichoCanonFilter={handleNichoCanonFilter}
       />
       <div className="la-work" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div className="state">

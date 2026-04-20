@@ -16,6 +16,8 @@ interface KanbanColumnProps {
   filterNicho?: string;
   filterCidade?: string;
   filterScoreMin?: string;
+  filterPerfil?: string;
+  filterNichoCanon?: string;
   search?: string;
   orderBy?: string;
   onSelectLead: (id: number) => void;
@@ -29,6 +31,8 @@ export function KanbanColumn({
   filterNicho,
   filterCidade,
   filterScoreMin,
+  filterPerfil,
+  filterNichoCanon,
   search,
   orderBy,
   onSelectLead,
@@ -51,10 +55,12 @@ export function KanbanColumn({
     if (filterNicho) params.nicho = filterNicho;
     if (filterCidade) params.cidade = filterCidade;
     if (filterScoreMin) params.score_min = filterScoreMin;
+    if (filterPerfil) params.perfil_lead = filterPerfil;
+    if (filterNichoCanon) params.nicho_canonico = filterNichoCanon;
     if (search) params.search = search;
     params.order_by = orderBy || "score_desc";
     return params;
-  }, [id, filterNicho, filterCidade, filterScoreMin, search, orderBy]);
+  }, [id, filterNicho, filterCidade, filterScoreMin, filterPerfil, filterNichoCanon, search, orderBy]);
 
   // Load first page (also re-runs on filter change or refreshKey bump)
   useEffect(() => {

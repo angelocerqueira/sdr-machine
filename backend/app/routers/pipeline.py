@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import threading
 from datetime import datetime
 
@@ -10,11 +11,15 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.database import get_db, SessionLocal
 from app.models import LandingPage, Lead, Job, OutreachMessage
+from app.pipeline.enrichment.classifier_enums import NichoSource
 from app.schemas import (
     ScrapeRequest, EnrichRequest, GenerateRequest, OutreachRequest,
     JobOut, JobListOut, PipelineStatusOut,
+    ClassifyRequest,
 )
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["pipeline"])
 
@@ -77,6 +82,7 @@ def _run_scrape(job_id: int, params: dict):
                     reviews_count=ld.get("reviews_count", 0),
                     google_maps_url=ld.get("google_maps_url"),
                     top_reviews=ld.get("top_reviews", []),
+                    has_instagram=ld.get("has_instagram"),
                     status="scraped",
                     job_id=job_id,
                 )
@@ -171,6 +177,19 @@ def _run_enrich(job_id: int, params: dict):
                     lead.socios = result["socios"]
                 if result.get("website") and not lead.website:
                     lead.website = result["website"]
+
+                # --- Classification fields (from ClassificationProvider) ---
+                for attr in (
+                    "perfil_lead", "nicho_canonico", "nicho_source",
+                    "nicho_confidence", "pacote_sugerido", "prioridade",
+                    "classification_hash",
+                ):
+                    if attr in result and result[attr] is not None:
+                        setattr(lead, attr, result[attr])
+
+                if result.get("perfil_lead") is not None:
+                    lead.classified_at = datetime.utcnow()
+
                 lead.status = "enriched"
                 enriched += 1
                 db.commit()
@@ -426,6 +445,38 @@ def _run_csv_import(job_id: int, params: dict):
         }
         job.finished_at = datetime.utcnow()
         db.commit()
+
+        # Chain: trigger classification over the imported batch
+        try:
+            # Respect concurrency guard — skip if another classification is already running
+            existing_classify = db.query(Job).filter(
+                Job.type == "classification",
+                Job.status.in_(["pending", "running"]),
+            ).first()
+            if existing_classify:
+                logger.info(
+                    "skipping auto-chain: classification job %s still %s",
+                    existing_classify.id, existing_classify.status,
+                )
+            else:
+                classify_job = Job(
+                    type="classification", status="pending",
+                    params={
+                        "scope": "by_job",
+                        "scope_filter": {"job_id": job_id},
+                        "force": False,
+                    },
+                )
+                db.add(classify_job)
+                db.commit()
+                threading.Thread(
+                    target=_run_classify,
+                    args=(classify_job.id, classify_job.params),
+                    daemon=True,
+                ).start()
+        except Exception as exc:
+            logger.warning("failed to chain classification: %s", exc)
+
         _emit(job_id, {"type": "done", "summary": job.result_summary})
     except Exception as exc:
         job = db.get(Job, job_id)
@@ -435,6 +486,132 @@ def _run_csv_import(job_id: int, params: dict):
             job.finished_at = datetime.utcnow()
             db.commit()
         _emit(job_id, {"type": "error", "message": str(exc)[:200]})
+    finally:
+        db.close()
+
+
+def _run_classify(job_id: int, params: dict):
+    """Background runner for batch classification.
+
+    Isolates failures per-lead. Circuit breaker at 50% exception rate after 20 leads.
+    Soft nicho failures (nicho_source=failed) do NOT count toward circuit breaker.
+    """
+    from app.pipeline.enrichment.classifier import classify, build_classifier_llm_client
+    from app.pipeline.enrichment.providers.classification_provider import (
+        consolidate_lead_for_classification,
+    )
+
+    db = SessionLocal()
+    llm_client = build_classifier_llm_client()
+    try:
+        job = db.get(Job, job_id)
+        job.status = "running"
+        job.started_at = datetime.utcnow()
+        db.commit()
+        _emit(job_id, {"type": "started", "job_id": job_id})
+
+        scope = params.get("scope", "unclassified")
+        scope_filter = params.get("scope_filter") or {}
+        force = params.get("force", False)
+
+        query = db.query(Lead)
+        if scope == "unclassified":
+            query = query.filter(Lead.perfil_lead.is_(None))
+        elif scope == "by_job":
+            jid = scope_filter.get("job_id")
+            if jid is None:
+                raise ValueError("scope=by_job requires scope_filter.job_id")
+            query = query.filter(Lead.job_id == jid)
+        elif scope == "by_status":
+            st = scope_filter.get("status")
+            if not st:
+                raise ValueError("scope=by_status requires scope_filter.status")
+            query = query.filter(Lead.status == st)
+        elif scope != "all":
+            raise ValueError(f"unknown classification scope: {scope!r}")
+        # "all" → no filter
+
+        leads = query.all()
+        total = len(leads)
+        _emit(job_id, {"type": "progress", "current": 0, "total": total})
+
+        results = {"ok": 0, "failed": 0, "skipped": 0, "errors": {}}
+        exceptions = 0  # separate counter — only hard exceptions count toward circuit breaker
+
+        for idx, lead in enumerate(leads):
+            try:
+                lead_data = consolidate_lead_for_classification(lead)
+                result = classify(lead_data, llm_client=llm_client)
+
+                # Idempotency: skip if hash unchanged (and not forced)
+                if (lead.classification_hash == result.classification_hash
+                        and not force):
+                    results["skipped"] += 1
+                else:
+                    # Preserve manual nicho unless forced
+                    if lead.nicho_source == "manual" and not force:
+                        result.nicho_canonico = lead.nicho_canonico
+                        result.nicho_source = lead.nicho_source
+                        result.nicho_confidence = lead.nicho_confidence
+
+                    result_dict = result.to_dict()
+                    # Don't persist hash for failed runs — lets future runs retry
+                    if result.nicho_source == NichoSource.FAILED or (
+                        hasattr(result.nicho_source, "value")
+                        and result.nicho_source.value == "failed"
+                    ) or result.nicho_source == "failed":
+                        result_dict.pop("classification_hash", None)
+
+                    for k, v in result_dict.items():
+                        if hasattr(lead, k) and v is not None:
+                            setattr(lead, k, v)
+                    lead.classified_at = datetime.utcnow()
+                    db.commit()
+
+                    if result.nicho_source == NichoSource.FAILED or result.nicho_source == "failed":
+                        results["failed"] += 1
+                    else:
+                        results["ok"] += 1
+            except Exception as exc:
+                db.rollback()
+                results["failed"] += 1
+                exceptions += 1  # only hard exceptions count toward breaker
+                results["errors"][lead.id] = str(exc)[:200]
+
+            # Circuit breaker: >50% hard exceptions after 20 processed
+            if idx + 1 >= 20:
+                exception_rate = exceptions / (idx + 1)
+                if exception_rate > 0.5:
+                    job.status = "stalled"
+                    job.result_summary = {**results, "reason": "too_many_failures", "exceptions": exceptions}
+                    job.finished_at = datetime.utcnow()
+                    db.commit()
+                    _emit(job_id, {"type": "error", "message": "too_many_failures"})
+                    return
+
+            # Progress every 5 leads (or on last)
+            if (idx + 1) % 5 == 0 or (idx + 1) == total:
+                _emit(job_id, {
+                    "type": "progress",
+                    "current": idx + 1, "total": total,
+                    "summary": results,
+                })
+
+        job.status = "done_with_errors" if results["failed"] else "done"
+        job.result_summary = results
+        job.finished_at = datetime.utcnow()
+        db.commit()
+        _emit(job_id, {"type": "done", "summary": results})
+
+    except Exception as exc:
+        db.rollback()
+        job = db.get(Job, job_id)
+        if job:
+            job.status = "failed"
+            job.error_message = str(exc)[:500]
+            job.finished_at = datetime.utcnow()
+            db.commit()
+        _emit(job_id, {"type": "error", "message": str(exc)[:500]})
     finally:
         db.close()
 
@@ -449,6 +626,7 @@ _RUNNERS = {
     "generate": _run_generate,
     "outreach": _run_outreach,
     "csv_import": _run_csv_import,
+    "classification": _run_classify,
 }
 
 
@@ -513,6 +691,31 @@ def run_generate(req: GenerateRequest, bg: BackgroundTasks, db: Session = Depend
 def run_outreach(req: OutreachRequest, bg: BackgroundTasks, db: Session = Depends(get_db)):
     params = req.model_dump()
     job = _start_job("outreach", params, bg, db)
+    return job
+
+
+@router.post("/pipeline/classify", response_model=JobOut)
+def start_classify_job(
+    body: ClassifyRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    # Guard against concurrent classification jobs
+    existing = db.query(Job).filter(
+        Job.type == "classification",
+        Job.status.in_(["pending", "running"]),
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"classification job already in progress (id={existing.id})",
+        )
+
+    job = Job(type="classification", status="pending", params=body.model_dump())
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    background_tasks.add_task(_run_classify, job.id, body.model_dump())
     return job
 
 

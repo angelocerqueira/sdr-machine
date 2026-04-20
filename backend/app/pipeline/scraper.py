@@ -10,6 +10,39 @@ from app.config import settings
 from app.pipeline.cnpj_scraper import scrape_cnpj
 
 
+def extract_has_instagram(payload: dict | None) -> bool:
+    """Check if Apify Google Maps payload indicates Instagram presence.
+
+    Checks common fields: 'instagramUrl', 'socialLinks' entries, and
+    description/website text for instagram.com references. Never raises.
+    """
+    if not payload or not isinstance(payload, dict):
+        return False
+
+    # Direct field from some Apify actors
+    if payload.get("instagramUrl"):
+        return True
+
+    # socialLinks array (compass actor format)
+    social = payload.get("socialLinks") or []
+    if isinstance(social, list):
+        for entry in social:
+            if not isinstance(entry, dict):
+                continue
+            service = (entry.get("service") or entry.get("platform") or "").lower()
+            url = (entry.get("url") or "").lower()
+            if "instagram" in service or "instagram.com" in url:
+                return True
+
+    # Inline instagram link in website or description fields
+    for key in ("website", "websiteUri", "url", "description"):
+        v = payload.get(key)
+        if isinstance(v, str) and "instagram.com" in v.lower():
+            return True
+
+    return False
+
+
 def scrape_google_maps(niche: str, city: str, max_results: int | None = None) -> list[dict]:
     """
     Scrape Google Maps via Apify Actor 'compass/crawler-google-places'.
@@ -66,6 +99,7 @@ def scrape_google_maps(niche: str, city: str, max_results: int | None = None) ->
                 for r in (item.get("reviews", []) or [])[:3]
                 if r.get("text")
             ],
+            "has_instagram": extract_has_instagram(item),
         }
 
         if lead["nome"]:

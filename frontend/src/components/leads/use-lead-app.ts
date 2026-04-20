@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getLeads, getLead, getLeadMessages } from "@/lib/api";
-import type { Lead, OutreachMessage } from "@/lib/types";
+import type { Lead, OutreachMessage, LeadProfile, NichoCanonico } from "@/lib/types";
 
 export interface LeadListItem {
   id: number;
@@ -12,6 +12,7 @@ export interface LeadListItem {
   city: string;
   score: number;
   status: string;
+  perfil_lead: LeadProfile | null;
 }
 
 function mapLeadToItem(l: Lead): LeadListItem {
@@ -22,6 +23,7 @@ function mapLeadToItem(l: Lead): LeadListItem {
     city: l.cidade || "",
     score: l.opportunity_score ?? 0,
     status: l.status,
+    perfil_lead: l.perfil_lead ?? null,
   };
 }
 
@@ -59,6 +61,8 @@ export function useLeadApp(activeId: number | null) {
   // ---- Search + filter ----
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [perfilFilter, setPerfilFilter] = useState<LeadProfile | "">("");
+  const [nichoCanonFilter, setNichoCanonFilter] = useState<NichoCanonico | "">("");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // ---- Leads list (from API) ----
@@ -74,6 +78,8 @@ export function useLeadApp(activeId: number | null) {
     filter: string,
     pageNum: number,
     append: boolean,
+    perfil: LeadProfile | "" = "",
+    nichoCanon: NichoCanonico | "" = "",
   ) => {
     const params: Record<string, string> = {
       per_page: String(PER_PAGE),
@@ -84,6 +90,8 @@ export function useLeadApp(activeId: number | null) {
     if (filter === "hot") params.score_min = "80";
     else if (filter === "enriched") params.status = "enriched";
     else if (filter === "new") params.status = "scraped";
+    if (perfil) params.perfil_lead = perfil;
+    if (nichoCanon) params.nicho_canonico = nichoCanon;
 
     if (append) setLoadingMore(true);
     else setLeadsLoading(true);
@@ -103,26 +111,36 @@ export function useLeadApp(activeId: number | null) {
   }, []);
 
   // Initial fetch
-  useEffect(() => { fetchLeads("", "all", 1, false); }, [fetchLeads]); // eslint-disable-line react-hooks/set-state-in-effect -- intentional: fetch on mount
+  useEffect(() => { fetchLeads("", "all", 1, false, "", ""); }, [fetchLeads]); // eslint-disable-line react-hooks/set-state-in-effect -- intentional: fetch on mount
 
   const handleSearch = useCallback((q: string) => {
     setSearch(q);
     clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => fetchLeads(q, statusFilter, 1, false), 300);
-  }, [fetchLeads, statusFilter]);
+    debounceRef.current = setTimeout(() => fetchLeads(q, statusFilter, 1, false, perfilFilter, nichoCanonFilter), 300);
+  }, [fetchLeads, statusFilter, perfilFilter, nichoCanonFilter]);
 
   const handleFilter = useCallback((f: string) => {
     setStatusFilter(f);
-    fetchLeads(search, f, 1, false);
-  }, [fetchLeads, search]);
+    fetchLeads(search, f, 1, false, perfilFilter, nichoCanonFilter);
+  }, [fetchLeads, search, perfilFilter, nichoCanonFilter]);
+
+  const handlePerfilFilter = useCallback((p: LeadProfile | "") => {
+    setPerfilFilter(p);
+    fetchLeads(search, statusFilter, 1, false, p, nichoCanonFilter);
+  }, [fetchLeads, search, statusFilter, nichoCanonFilter]);
+
+  const handleNichoCanonFilter = useCallback((n: NichoCanonico | "") => {
+    setNichoCanonFilter(n);
+    fetchLeads(search, statusFilter, 1, false, perfilFilter, n);
+  }, [fetchLeads, search, statusFilter, perfilFilter]);
 
   const refreshLeads = useCallback(() => {
-    fetchLeads(search, statusFilter, 1, false);
-  }, [fetchLeads, search, statusFilter]);
+    fetchLeads(search, statusFilter, 1, false, perfilFilter, nichoCanonFilter);
+  }, [fetchLeads, search, statusFilter, perfilFilter, nichoCanonFilter]);
 
   const loadMore = useCallback(() => {
-    fetchLeads(search, statusFilter, page + 1, true);
-  }, [fetchLeads, search, statusFilter, page]);
+    fetchLeads(search, statusFilter, page + 1, true, perfilFilter, nichoCanonFilter);
+  }, [fetchLeads, search, statusFilter, page, perfilFilter, nichoCanonFilter]);
 
   // ---- Lead detail (from API) ----
   const [lead, setLead] = useState<Lead | null>(null);
@@ -202,6 +220,10 @@ export function useLeadApp(activeId: number | null) {
     handleSearch,
     statusFilter,
     handleFilter,
+    perfilFilter,
+    handlePerfilFilter,
+    nichoCanonFilter,
+    handleNichoCanonFilter,
     loadMore,
     refreshLead,
     refreshLeads,

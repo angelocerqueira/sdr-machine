@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy import func, or_
@@ -5,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Job, LandingPage, Lead
-from app.schemas import JobOut, LandingPageOut, LeadListOut, LeadOut, LeadSummaryOut, LeadUpdate, OutreachMessageOut
+from app.schemas import JobOut, LandingPageOut, LeadListOut, LeadOut, LeadSummaryOut, LeadUpdate, OutreachMessageOut, ReclassifyRequest
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
 
@@ -49,6 +51,8 @@ def lead_counts(
     cidade: str | None = None,
     score_min: int | None = None,
     search: str | None = None,
+    perfil_lead: str | None = None,
+    nicho_canonico: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Return lead counts grouped by status. Used by Kanban column headers."""
@@ -70,6 +74,10 @@ def lead_counts(
             Lead.email.ilike(term),
             Lead.razao_social.ilike(term),
         ))
+    if perfil_lead:
+        query = query.filter(Lead.perfil_lead == perfil_lead)
+    if nicho_canonico:
+        query = query.filter(Lead.nicho_canonico == nicho_canonico)
 
     rows = query.group_by(Lead.status).all()
     result: dict[str, int] = {}
@@ -81,6 +89,31 @@ def lead_counts(
     return result
 
 
+@router.get("/review", response_model=LeadListOut)
+def list_leads_for_review(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """Return leads that need manual review: nicho=outros, nicho_source=failed, or low confidence."""
+    from sqlalchemy import case as sa_case
+    query = db.query(Lead).filter(
+        or_(
+            Lead.nicho_canonico == "outros",
+            Lead.nicho_source == "failed",
+            Lead.nicho_confidence < 0.5,
+        )
+    )
+    total = query.count()
+    items = query.order_by(Lead.id).offset((page - 1) * per_page).limit(per_page).all()
+    return LeadListOut(
+        items=[LeadSummaryOut.model_validate(item) for item in items],
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
+
+
 @router.get("", response_model=LeadListOut)
 def list_leads(
     status: str | None = None,
@@ -88,7 +121,9 @@ def list_leads(
     cidade: str | None = None,
     score_min: int | None = None,
     search: str | None = None,
-    order_by: str = Query("score_desc", pattern="^(score_desc|score_asc|name_asc|created_desc|updated_desc)$"),
+    perfil_lead: str | None = None,
+    nicho_canonico: str | None = None,
+    order_by: str = Query("score_desc", pattern="^(score_desc|score_asc|name_asc|created_desc|updated_desc|prioridade)$"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -116,8 +151,24 @@ def list_leads(
             Lead.email.ilike(term),
             Lead.razao_social.ilike(term),
         ))
+    if perfil_lead:
+        query = query.filter(Lead.perfil_lead == perfil_lead)
+    if nicho_canonico:
+        query = query.filter(Lead.nicho_canonico == nicho_canonico)
 
-    query = query.order_by(ORDER_MAP[order_by])
+    if order_by == "prioridade":
+        from sqlalchemy import case as sa_case
+        prio_order = sa_case(
+            (Lead.prioridade == "maxima", 1),
+            (Lead.prioridade == "alta", 2),
+            (Lead.prioridade == "media", 3),
+            (Lead.prioridade == "baixa", 4),
+            (Lead.prioridade == "pular", 5),
+            else_=6,
+        )
+        query = query.order_by(prio_order, Lead.opportunity_score.desc())
+    else:
+        query = query.order_by(ORDER_MAP[order_by])
 
     total = query.count()
     items = query.offset((page - 1) * per_page).limit(per_page).all()
@@ -217,6 +268,53 @@ def get_lead_jobs(lead_id: int, db: Session = Depends(get_db)):
     return result
 
 
+@router.post("/{lead_id}/reclassify", response_model=LeadOut)
+def reclassify_lead(
+    lead_id: int,
+    body: ReclassifyRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    from app.pipeline.enrichment.classifier import classify
+    from app.pipeline.enrichment.providers.classification_provider import (
+        consolidate_lead_for_classification,
+    )
+
+    lead = db.get(Lead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Best-effort lock; SQLite (tests) ignores
+    try:
+        db.query(Lead).filter(Lead.id == lead_id).with_for_update(nowait=False).first()
+    except Exception:
+        pass
+
+    force = body.force if body is not None else False  # default: preserve manual nicho
+
+    from app.pipeline.enrichment.classifier import build_classifier_llm_client
+    lead_data = consolidate_lead_for_classification(lead)
+    result = classify(lead_data, llm_client=build_classifier_llm_client())
+
+    # Preserve manual nicho when not forced
+    result_dict = result.to_dict()
+    if lead.nicho_source == "manual" and not force:
+        result_dict["nicho_canonico"] = lead.nicho_canonico
+        result_dict["nicho_source"] = lead.nicho_source
+        result_dict["nicho_confidence"] = lead.nicho_confidence
+
+    # Don't persist hash for failed runs — lets future runs retry after aliases/LLM improve
+    if result_dict.get("nicho_source") == "failed":
+        result_dict.pop("classification_hash", None)
+
+    for k, v in result_dict.items():
+        if hasattr(lead, k) and v is not None:
+            setattr(lead, k, v)
+    lead.classified_at = datetime.utcnow()
+    db.commit()
+    db.refresh(lead)
+    return lead
+
+
 @router.patch("/{lead_id}", response_model=LeadOut)
 def update_lead(lead_id: int, payload: LeadUpdate, db: Session = Depends(get_db)):
     lead = db.get(Lead, lead_id)
@@ -230,9 +328,13 @@ def update_lead(lead_id: int, payload: LeadUpdate, db: Session = Depends(get_db)
                 detail=f"Invalid status '{payload.status}'. Must be one of: {sorted(VALID_STATUSES)}",
             )
 
-    update_data = payload.model_dump(exclude_none=True)
+    update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(lead, field, value)
+
+    if "nicho_canonico" in update_data:
+        lead.nicho_source = "manual"
+        lead.nicho_confidence = 1.0
 
     db.commit()
     db.refresh(lead)

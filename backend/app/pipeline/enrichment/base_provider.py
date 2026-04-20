@@ -1,4 +1,6 @@
 """Base types for enrichment providers."""
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -17,6 +19,7 @@ class EnrichmentContext:
     html_content: str | None = None
     response_headers: dict = field(default_factory=dict)
     discovered_website: str | None = None
+    computed_score: int | None = None  # set by orchestrator after scoring, before classification
 
 
 @dataclass

@@ -1,14 +1,17 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { DndContext, DragEndEvent, PointerSensor, pointerWithin, useSensor, useSensors } from "@dnd-kit/core";
 import { KanbanColumn } from "./kanban-column";
 import { LeadSheet } from "./lead-sheet";
 import { getLeadCounts, getLeadFilters, updateLead } from "@/lib/api";
-import { KANBAN_COLUMNS } from "@/lib/types";
-import type { Lead } from "@/lib/types";
+import { KANBAN_COLUMNS, LEAD_PROFILE_LABEL, NICHO_LABEL } from "@/lib/types";
+import type { Lead, LeadProfile, NichoCanonico } from "@/lib/types";
 
 export function KanbanBoard() {
+  const searchParams = useSearchParams();
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
@@ -19,6 +22,12 @@ export function KanbanBoard() {
   const [filterNicho, setFilterNicho] = useState("");
   const [filterCidade, setFilterCidade] = useState("");
   const [filterScoreMin, setFilterScoreMin] = useState("");
+  const [filterPerfil, setFilterPerfil] = useState<LeadProfile | "">(
+    (searchParams.get("perfil_lead") as LeadProfile) || "",
+  );
+  const [filterNichoCanon, setFilterNichoCanon] = useState<NichoCanonico | "">(
+    (searchParams.get("nicho_canonico") as NichoCanonico) || "",
+  );
   const [search, setSearch] = useState("");
   const [orderBy, setOrderBy] = useState("score_desc");
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
@@ -32,6 +41,8 @@ export function KanbanBoard() {
       if (filterNicho) params.nicho = filterNicho;
       if (filterCidade) params.cidade = filterCidade;
       if (filterScoreMin) params.score_min = filterScoreMin;
+      if (filterPerfil) params.perfil_lead = filterPerfil;
+      if (filterNichoCanon) params.nicho_canonico = filterNichoCanon;
       if (search) params.search = search;
 
       const [countsData, filtersData] = await Promise.all([
@@ -49,7 +60,7 @@ export function KanbanBoard() {
     } finally {
       setLoading(false);
     }
-  }, [filterNicho, filterCidade, filterScoreMin, search]);
+  }, [filterNicho, filterCidade, filterScoreMin, filterPerfil, filterNichoCanon, search]);
 
   useEffect(() => {
     fetchData();
@@ -148,12 +159,33 @@ export function KanbanBoard() {
           className={inputClass}
         />
         <select
+          value={filterPerfil}
+          onChange={(e) => setFilterPerfil(e.target.value as LeadProfile | "")}
+          className={selectClass}
+        >
+          <option value="">Todos os perfis</option>
+          {(Object.entries(LEAD_PROFILE_LABEL) as [LeadProfile, string][]).map(([k, label]) => (
+            <option key={k} value={k}>{label}</option>
+          ))}
+        </select>
+        <select
+          value={filterNichoCanon}
+          onChange={(e) => setFilterNichoCanon(e.target.value as NichoCanonico | "")}
+          className={selectClass}
+        >
+          <option value="">Todos os nichos</option>
+          {(Object.entries(NICHO_LABEL) as [NichoCanonico, string][]).map(([k, label]) => (
+            <option key={k} value={k}>{label}</option>
+          ))}
+        </select>
+        <select
           value={orderBy}
           onChange={(e) => setOrderBy(e.target.value)}
           className={selectClass}
         >
           <option value="score_desc">Maior score</option>
           <option value="score_asc">Menor score</option>
+          <option value="prioridade">Prioridade</option>
           <option value="created_desc">Mais recente</option>
           <option value="updated_desc">Atualizado recente</option>
           <option value="name_asc">Nome A-Z</option>
@@ -173,6 +205,8 @@ export function KanbanBoard() {
               filterNicho={filterNicho || undefined}
               filterCidade={filterCidade || undefined}
               filterScoreMin={filterScoreMin || undefined}
+              filterPerfil={filterPerfil || undefined}
+              filterNichoCanon={filterNichoCanon || undefined}
               search={search || undefined}
               orderBy={orderBy}
               onSelectLead={setSelectedLeadId}

@@ -25,6 +25,10 @@ from app.pipeline.enrichment.providers.tech_stack import TechStackProvider
 from app.pipeline.enrichment.providers.cnpj_enricher import CnpjProvider
 from app.pipeline.enrichment.providers.email_discoverer import EmailDiscovererProvider
 from app.pipeline.enrichment.providers.apollo_enricher import ApolloProvider
+from app.pipeline.enrichment.providers.classification_provider import (
+    ClassificationProvider,
+)
+from app.pipeline.enrichment.classifier import build_classifier_llm_client
 from app.pipeline.enrichment.scoring import calculate_score
 
 logger = logging.getLogger(__name__)
@@ -43,6 +47,7 @@ def _default_providers() -> list[BaseProvider]:
         TechStackProvider(),
         EmailDiscovererProvider(),
         ApolloProvider(),
+        ClassificationProvider(llm_client=build_classifier_llm_client()),
     ]
 
 
@@ -53,6 +58,7 @@ _PHASE_ORDER = [
     "tech_stack",
     "email_discoverer",
     "apollo",
+    "classification",
 ]
 
 
@@ -107,6 +113,7 @@ class EnrichmentOrchestrator:
             if include_crawl_chain
             else set()
         )
+        optimistic_names.add("classification")  # classificação sempre roda
 
         for name in _PHASE_ORDER:
             provider = self._providers_by_name.get(name)
@@ -156,6 +163,9 @@ class EnrichmentOrchestrator:
         }
 
         for provider in plan.providers:
+            if provider.name == "classification":
+                continue  # handled after scoring with fresh score
+
             source_entry: dict = {
                 "provider": provider.name,
                 "status": "ok",
@@ -250,6 +260,45 @@ class EnrichmentOrchestrator:
             tech_stack=merged_tech_stack,
             data_fundacao=data_fundacao_date,
         )
+
+        # --- Classification runs LAST with fresh score ---
+        classification_provider = None
+        for provider in plan.providers:
+            if provider.name == "classification":
+                classification_provider = provider
+                break
+
+        if classification_provider is not None:
+            context.computed_score = dimensional.composite
+            source_entry: dict = {
+                "provider": "classification",
+                "status": "ok",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            try:
+                if classification_provider.can_run(lead, context=context):
+                    class_result = classification_provider.run(lead, context)
+                    if class_result.success:
+                        data = class_result.data or {}
+                        for k in (
+                            "perfil_lead", "nicho_canonico", "nicho_source",
+                            "nicho_confidence", "pacote_sugerido", "prioridade",
+                            "classification_hash",
+                        ):
+                            if k in data:
+                                flat[k] = data[k]
+                    else:
+                        source_entry["status"] = "skipped"
+                        if class_result.errors:
+                            source_entry["error"] = "; ".join(class_result.errors)[:200]
+                else:
+                    source_entry["status"] = "skipped"
+                    source_entry["error"] = "preconditions not met"
+            except Exception as exc:
+                logger.exception("classification provider crashed: %s", exc)
+                source_entry["status"] = "error"
+                source_entry["error"] = str(exc)[:200]
+            enrichment_sources.append(source_entry)
 
         return {
             "opportunity_score": dimensional.composite,

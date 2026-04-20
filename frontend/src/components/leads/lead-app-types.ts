@@ -33,6 +33,8 @@ export interface LeadAppItem {
   phone: string;
 }
 
+import type { LeadProfile, NichoCanonico, NichoSource, PacoteSugerido, Prioridade } from "@/lib/types";
+
 export interface LeadAppDetail {
   id: number;
   public_id: string;
@@ -80,6 +82,13 @@ export interface LeadAppDetail {
     active?: boolean;
   }>;
   created_at: string;
+  // Classification fields
+  perfil_lead: LeadProfile | null;
+  nicho_canonico: NichoCanonico | null;
+  nicho_source: NichoSource | null;
+  nicho_confidence: number | null;
+  pacote_sugerido: PacoteSugerido | null;
+  prioridade: Prioridade | null;
 }
 
 export interface LeadGroup {

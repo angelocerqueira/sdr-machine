@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { KanbanBoard } from "@/components/kanban-board";
 import { PipelineControls } from "@/components/pipeline-controls";
 
@@ -11,7 +12,9 @@ export default function KanbanPage() {
         <p className="text-text-secondary text-sm mt-1">Gerencie leads pelo pipeline</p>
       </div>
       <PipelineControls onJobDone={() => window.location.reload()} />
-      <KanbanBoard />
+      <Suspense fallback={<div className="text-text-muted text-sm py-8 text-center">Carregando...</div>}>
+        <KanbanBoard />
+      </Suspense>
     </div>
   );
 }

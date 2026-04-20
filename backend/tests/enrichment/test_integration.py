@@ -81,5 +81,6 @@ def test_full_pipeline_skips_providers_via_override():
     lead = FakeLead(website="https://example.com")
     orch = EnrichmentOrchestrator()
     plan = orch.plan(lead, skip_providers=["apollo", "email_discoverer", "website_crawler",
-                                             "schema_extractor", "tech_stack", "cnpj_enricher"])
+                                             "schema_extractor", "tech_stack", "cnpj_enricher",
+                                             "classification"])
     assert plan.providers == []

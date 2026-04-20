@@ -89,6 +89,7 @@ def mock_runners():
         "generate": noop,
         "outreach": noop,
         "csv_import": noop,
+        "classification": noop,
     }
     with patch("app.routers.pipeline._RUNNERS", fake_runners):
         yield fake_runners
