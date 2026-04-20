@@ -171,6 +171,20 @@ def _run_enrich(job_id: int, params: dict):
                     lead.socios = result["socios"]
                 if result.get("website") and not lead.website:
                     lead.website = result["website"]
+
+                # --- Classification fields (from ClassificationProvider) ---
+                for attr in (
+                    "perfil_lead", "nicho_canonico", "nicho_source",
+                    "nicho_confidence", "pacote_sugerido", "prioridade",
+                    "classification_hash",
+                ):
+                    if attr in result and result[attr] is not None:
+                        setattr(lead, attr, result[attr])
+
+                if "perfil_lead" in result:
+                    from datetime import datetime as _dt
+                    lead.classified_at = _dt.utcnow()
+
                 lead.status = "enriched"
                 enriched += 1
                 db.commit()

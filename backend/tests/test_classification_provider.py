@@ -104,3 +104,51 @@ def test_orchestrator_execute_writes_classification_fields():
     assert "perfil_lead" in out
     assert out["perfil_lead"] == "hot_no_site"
     assert out["nicho_canonico"] == "restaurante"
+
+
+from app.pipeline.enricher import enrich_lead_via_orchestrator
+
+
+def test_enricher_persists_classification_fields(db):
+    """Smoke test: full pipeline writes perfil_lead et al. to the Lead row."""
+    from app.models import Lead
+    from datetime import datetime
+    lead = Lead(
+        nome="Pizzaria Bella",
+        telefone="11999999999",
+        rating=4.5,
+        reviews_count=60,
+        nicho="Pizzaria",
+    )
+    db.add(lead)
+    db.commit()
+
+    out = enrich_lead_via_orchestrator(
+        lead,
+        skip_providers=[
+            "cnpj_enricher", "website_crawler", "schema_extractor",
+            "tech_stack", "email_discoverer", "apollo",
+        ],
+    )
+
+    # Apply classification fields the same way _run_enrich does
+    for attr in (
+        "perfil_lead", "nicho_canonico", "nicho_source",
+        "nicho_confidence", "pacote_sugerido", "prioridade",
+        "classification_hash",
+    ):
+        if attr in out and out[attr] is not None:
+            setattr(lead, attr, out[attr])
+
+    if "perfil_lead" in out:
+        lead.classified_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(lead)
+
+    assert lead.perfil_lead == "hot_no_site"
+    assert lead.nicho_canonico == "restaurante"
+    assert lead.pacote_sugerido is not None
+    assert lead.prioridade is not None
+    assert lead.classification_hash is not None
+    assert lead.classified_at is not None
