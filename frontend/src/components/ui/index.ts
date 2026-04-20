@@ -5,3 +5,4 @@ export { Kbd } from "./kbd";
 export { StatusPill } from "./status-pill";
 export { ScoreRing } from "./score-ring";
 export { PipeMini } from "./pipe-mini";
+export { ProfileBadge } from "./profile-badge";
