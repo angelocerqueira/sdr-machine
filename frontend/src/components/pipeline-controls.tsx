@@ -6,6 +6,7 @@ import { JobProgress } from "./job-progress";
 import { ConfirmModal } from "./confirm-modal";
 import { ScrapeModal } from "./scrape-modal";
 import { CsvImportModal } from "./csv-import-modal";
+import { ClassifyModal } from "./pipeline/classify-modal";
 import type { Job } from "@/lib/types";
 import { ENRICH_PROVIDERS } from "@/lib/types";
 
@@ -34,6 +35,7 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
   const [runningJobs, setRunningJobs] = useState<string[]>([]);
   const [pendingPhase, setPendingPhase] = useState<typeof PHASES[number] | null>(null);
   const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [classifyModalOpen, setClassifyModalOpen] = useState(false);
   const [enabledProviders, setEnabledProviders] = useState<Set<string>>(
     new Set(ENRICH_PROVIDERS.map((p) => p.name))
   );
@@ -103,6 +105,13 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
     }
   }, []);
 
+  const handleClassifyStarted = useCallback((jobId: number) => {
+    setClassifyModalOpen(false);
+    setError(null);
+    // classifyLeads returns {id}, so we build a minimal Job to pass to JobProgress
+    setActiveJob({ id: jobId } as Job);
+  }, []);
+
   return (
     <div className="rounded-xl border border-border bg-surface p-5">
       <div className="flex items-center gap-3 mb-4">
@@ -146,6 +155,23 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
             </button>
           );
         })}
+
+        {/* Classify button */}
+        <button
+          onClick={() => setClassifyModalOpen(true)}
+          disabled={activeJob !== null || runningJobs.includes("classify")}
+          className="group flex items-center gap-3 px-4 py-2.5 bg-surface-raised hover:bg-surface-overlay disabled:opacity-30 disabled:cursor-not-allowed border border-border hover:border-text-muted/30 rounded-lg transition-default"
+        >
+          <span className="flex items-center justify-center w-5 h-5 rounded-md bg-surface-overlay text-[10px] font-bold text-text-muted font-[family-name:var(--font-mono)] group-hover:text-accent group-hover:bg-accent-subtle transition-default">
+            5
+          </span>
+          <div className="text-left">
+            <p className="text-[13px] font-medium text-text group-hover:text-text transition-default">
+              Classificar
+            </p>
+            <p className="text-[10px] text-text-muted">Perfil de lead</p>
+          </div>
+        </button>
       </div>
 
       {/* CSV Import button */}
@@ -225,6 +251,11 @@ export function PipelineControls({ onJobDone }: PipelineControlsProps) {
         open={csvModalOpen}
         onConfirm={handleCsvImport}
         onCancel={() => setCsvModalOpen(false)}
+      />
+      <ClassifyModal
+        open={classifyModalOpen}
+        onStarted={handleClassifyStarted}
+        onCancel={() => setClassifyModalOpen(false)}
       />
     </div>
   );
