@@ -417,6 +417,47 @@ class TestScrapeProfiles:
 # Tests: _scrape_instagram_profile
 # ---------------------------------------------------------------------------
 
+def test_enrich_writes_diagnostico_marketing_to_site_analysis():
+    """Quando service_levels tem diagnostico_marketing, é copiado pra site_analysis."""
+    from app.pipeline.diagnostic.state import (
+        ServiceLevelAnalysis, NivelScore, MarketingDiagnostic,
+        IAPotencial, FunnelStage, FunnelAction,
+    )
+
+    md = MarketingDiagnostic(
+        resumo_executivo="r",
+        momento_funil="descoberta",
+        potencial_ia_automacao=IAPotencial(score=70, oportunidades=[], justificativa="j"),
+        prioridades_top3=["a", "b", "c"],
+        funil={"descoberta": FunnelStage(
+            diagnostico="d",
+            acoes_top2=[FunnelAction(acao="a", resultado_esperado="r", kpi="k")],
+        )},
+    )
+    sla = ServiceLevelAnalysis(
+        lp=NivelScore(score=60, sinais=[], oportunidades=[], justificativa=""),
+        automacao_basica=NivelScore(score=60, sinais=[], oportunidades=[], justificativa=""),
+        mapa_automacoes=NivelScore(score=60, sinais=[], oportunidades=[], justificativa=""),
+        vertical_os=NivelScore(score=60, sinais=[], oportunidades=[], justificativa=""),
+        nivel_recomendado="lp",
+        qualificado=True,
+        resumo_executivo="r",
+        diagnostico_marketing=md,
+    )
+
+    with patch("app.pipeline.enricher.run_diagnostic", return_value=sla), \
+         patch("app.pipeline.enricher.fetch_website", return_value={"status": "ok", "html": ""}), \
+         patch("app.pipeline.enricher.check_pagespeed", return_value={}):
+
+        result = enrich_lead_data(
+            "http://example.com",
+            lead_info={"nome": "T", "nicho": "x", "cidade": "y"},
+        )
+
+    assert "diagnostico_marketing" in result["site_analysis"]
+    assert result["site_analysis"]["diagnostico_marketing"]["momento_funil"] == "descoberta"
+
+
 class TestScrapeInstagram:
     @patch("app.pipeline.enricher.settings")
     def test_skips_without_apify_token(self, mock_settings):
