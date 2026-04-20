@@ -13,9 +13,20 @@ from typing import Any
 from app.pipeline.enrichment.classifier_enums import (
     LeadProfile, NichoCanonico, NichoSource, PacoteSugerido, Prioridade,
 )
+from tenacity import (
+    Retrying, stop_after_attempt, wait_exponential_jitter,
+    retry_if_exception_type,
+)
+
+from app.pipeline.enrichment.classifier_prompts import (
+    build_nicho_prompt, NICHO_TOOL_SCHEMA,
+)
 from app.pipeline.enrichment.classifier_rules import (
     PROFILE_THRESHOLDS, PROFILE_TO_DERIVED, fuzzy_match_nicho,
 )
+
+
+_VALID_NICHOS = {n.value for n in NichoCanonico}
 
 logger = logging.getLogger(__name__)
 
@@ -184,16 +195,64 @@ def classify(lead_data: dict, *, llm_client=None) -> ClassificationResult:
     )
 
 
+def _call_llm_for_nicho(llm_client, lead_data: dict) -> tuple[NichoCanonico, float]:
+    """Single LLM call with retry on transient failures.
+
+    Returns (bucket, confidence). Raises on hard failure after retries.
+    """
+    prompt = build_nicho_prompt(
+        nome=lead_data.get("nome") or "",
+        nicho_raw=lead_data.get("nicho_raw") or "",
+        descricao=lead_data.get("descricao") or "",
+        reviews=lead_data.get("reviews") or [],
+    )
+
+    retryer = Retrying(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=1, max=8),
+        retry=retry_if_exception_type((TimeoutError, ConnectionError, OSError)),
+        reraise=True,
+    )
+
+    last_response = None
+    for attempt in retryer:
+        with attempt:
+            last_response = llm_client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=256,
+                tools=[NICHO_TOOL_SCHEMA],
+                tool_choice={"type": "tool", "name": "classify_nicho"},
+                messages=[{"role": "user", "content": prompt}],
+                timeout=15,
+            )
+
+    # Parse response
+    tool_blocks = [b for b in last_response.content if getattr(b, "type", None) == "tool_use"]
+    if not tool_blocks:
+        raise ValueError("no tool_use block in response")
+
+    data = tool_blocks[0].input or {}
+    nicho_raw = data.get("nicho_canonico")
+    if nicho_raw not in _VALID_NICHOS:
+        raise ValueError(f"invalid enum value: {nicho_raw!r}")
+
+    confidence = data.get("confidence", 0.5)
+    try:
+        confidence = float(confidence)
+    except (TypeError, ValueError):
+        confidence = 0.5
+    confidence = max(0.0, min(1.0, confidence))
+
+    return (NichoCanonico(nicho_raw), confidence)
+
+
 def _classify_nicho(
     lead_data: dict, *, llm_client=None,
 ) -> tuple[NichoCanonico, NichoSource, float]:
-    """3-layer nicho inference. LLM layer wired in Task 6.
-
-    This stub covers layers 1 and 2 only; layer 3 returns OUTROS/failed.
-    """
+    """3-layer nicho inference."""
     raw = lead_data.get("nicho_raw") or ""
 
-    # Layer 1+2: fuzzy match (implements exact substring at confidence=1.0)
+    # Layers 1 + 2: fuzzy match (exact substring = 1.0, fuzzy ratio >= 0.75)
     match = fuzzy_match_nicho(raw)
     if match is not None:
         bucket, conf = match
@@ -201,9 +260,13 @@ def _classify_nicho(
             return (bucket, NichoSource.APIFY_CATEGORY, 1.0)
         return (bucket, NichoSource.FUZZY_MATCH, conf)
 
-    # Layer 3: LLM (stub — implemented in Task 6)
-    if llm_client is not None:
-        # placeholder: real LLM path added next task
-        pass
+    # Layer 3: LLM
+    if llm_client is None:
+        return (NichoCanonico.OUTROS, NichoSource.FAILED, 0.0)
 
-    return (NichoCanonico.OUTROS, NichoSource.FAILED, 0.0)
+    try:
+        bucket, conf = _call_llm_for_nicho(llm_client, lead_data)
+        return (bucket, NichoSource.LLM_INFERRED, conf)
+    except Exception as exc:
+        logger.warning("LLM nicho classification failed: %s", exc)
+        return (NichoCanonico.OUTROS, NichoSource.FAILED, 0.0)

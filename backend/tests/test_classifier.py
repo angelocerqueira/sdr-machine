@@ -133,3 +133,86 @@ def test_never_raises_on_garbage_types():
         "has_website": "yes",
     })
     assert isinstance(result, ClassificationResult)
+
+
+from unittest.mock import MagicMock
+
+
+class _FakeToolUse:
+    """Mimics anthropic.types.ToolUseBlock."""
+    def __init__(self, input_dict):
+        self.type = "tool_use"
+        self.name = "classify_nicho"
+        self.input = input_dict
+
+
+class _FakeResponse:
+    def __init__(self, content_blocks):
+        self.content = content_blocks
+
+
+def _make_llm(nicho_val, confidence=0.9):
+    """Return a mock anthropic client that responds with a tool_use block."""
+    client = MagicMock()
+    client.messages.create.return_value = _FakeResponse([
+        _FakeToolUse({
+            "nicho_canonico": nicho_val,
+            "confidence": confidence,
+            "reasoning": "mock",
+        })
+    ])
+    return client
+
+
+def test_nicho_llm_fallback_used_when_fuzzy_fails():
+    llm = _make_llm("advocacia", 0.92)
+    result = classify(
+        _base_lead(nicho_raw="Consultoria jurídica especializada"),
+        llm_client=llm,
+    )
+    assert result.nicho_canonico == NichoCanonico.ADVOCACIA
+    assert result.nicho_source == NichoSource.LLM_INFERRED
+    assert result.nicho_confidence == 0.92
+
+
+def test_nicho_llm_invalid_enum_value_falls_back_to_outros():
+    llm = _make_llm("banco")  # not a valid bucket
+    result = classify(
+        _base_lead(nicho_raw="Agência bancária"),
+        llm_client=llm,
+    )
+    assert result.nicho_canonico == NichoCanonico.OUTROS
+    assert result.nicho_source == NichoSource.FAILED
+
+
+def test_nicho_llm_exception_falls_back():
+    llm = MagicMock()
+    llm.messages.create.side_effect = Exception("boom")
+    result = classify(
+        _base_lead(nicho_raw="Negocio desconhecido xpto"),
+        llm_client=llm,
+    )
+    assert result.nicho_canonico == NichoCanonico.OUTROS
+    assert result.nicho_source == NichoSource.FAILED
+
+
+def test_nicho_llm_not_called_when_fuzzy_matches():
+    llm = _make_llm("academia")  # this should NOT be invoked
+    result = classify(
+        _base_lead(nicho_raw="Clínica Odontológica Dr Silva"),
+        llm_client=llm,
+    )
+    # Fuzzy hits dentista directly; LLM is skipped
+    assert result.nicho_canonico == NichoCanonico.DENTISTA
+    llm.messages.create.assert_not_called()
+
+
+def test_nicho_llm_low_confidence_kept_as_llm_inferred():
+    llm = _make_llm("industria", 0.3)
+    result = classify(
+        _base_lead(nicho_raw="Fornecedor de peças automotivas B2B"),
+        llm_client=llm,
+    )
+    # Source stays as LLM_INFERRED; review table picks it up via confidence<0.5
+    assert result.nicho_source == NichoSource.LLM_INFERRED
+    assert result.nicho_confidence == 0.3
