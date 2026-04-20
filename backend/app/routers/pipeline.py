@@ -181,9 +181,8 @@ def _run_enrich(job_id: int, params: dict):
                     if attr in result and result[attr] is not None:
                         setattr(lead, attr, result[attr])
 
-                if "perfil_lead" in result:
-                    from datetime import datetime as _dt
-                    lead.classified_at = _dt.utcnow()
+                if result.get("perfil_lead") is not None:
+                    lead.classified_at = datetime.utcnow()
 
                 lead.status = "enriched"
                 enriched += 1

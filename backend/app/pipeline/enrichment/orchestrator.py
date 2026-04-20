@@ -162,6 +162,9 @@ class EnrichmentOrchestrator:
         }
 
         for provider in plan.providers:
+            if provider.name == "classification":
+                continue  # handled after scoring with fresh score
+
             source_entry: dict = {
                 "provider": provider.name,
                 "status": "ok",
@@ -193,16 +196,6 @@ class EnrichmentOrchestrator:
 
                 # --- Merge data ---
                 data = result.data or {}
-
-                # Capture classification-specific fields (flat merge)
-                if provider.name == "classification":
-                    for k in (
-                        "perfil_lead", "nicho_canonico", "nicho_source",
-                        "nicho_confidence", "pacote_sugerido", "prioridade",
-                        "classification_hash",
-                    ):
-                        if k in data:
-                            flat[k] = data[k]
 
                 sa = data.get("site_analysis") or {}
                 if sa:
@@ -266,6 +259,45 @@ class EnrichmentOrchestrator:
             tech_stack=merged_tech_stack,
             data_fundacao=data_fundacao_date,
         )
+
+        # --- Classification runs LAST with fresh score ---
+        classification_provider = None
+        for provider in plan.providers:
+            if provider.name == "classification":
+                classification_provider = provider
+                break
+
+        if classification_provider is not None:
+            context.computed_score = dimensional.composite
+            source_entry: dict = {
+                "provider": "classification",
+                "status": "ok",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            try:
+                if classification_provider.can_run(lead, context=context):
+                    class_result = classification_provider.run(lead, context)
+                    if class_result.success:
+                        data = class_result.data or {}
+                        for k in (
+                            "perfil_lead", "nicho_canonico", "nicho_source",
+                            "nicho_confidence", "pacote_sugerido", "prioridade",
+                            "classification_hash",
+                        ):
+                            if k in data:
+                                flat[k] = data[k]
+                    else:
+                        source_entry["status"] = "skipped"
+                        if class_result.errors:
+                            source_entry["error"] = "; ".join(class_result.errors)[:200]
+                else:
+                    source_entry["status"] = "skipped"
+                    source_entry["error"] = "preconditions not met"
+            except Exception as exc:
+                logger.exception("classification provider crashed: %s", exc)
+                source_entry["status"] = "error"
+                source_entry["error"] = str(exc)[:200]
+            enrichment_sources.append(source_entry)
 
         return {
             "opportunity_score": dimensional.composite,

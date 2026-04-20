@@ -19,6 +19,7 @@ class EnrichmentContext:
     html_content: str | None = None
     response_headers: dict = field(default_factory=dict)
     discovered_website: str | None = None
+    computed_score: int | None = None  # set by orchestrator after scoring, before classification
 
 
 @dataclass

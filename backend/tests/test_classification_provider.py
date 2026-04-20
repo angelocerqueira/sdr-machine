@@ -162,3 +162,58 @@ def test_run_enrich_persists_classification_fields(db):
     assert lead_fresh.prioridade is not None
     assert lead_fresh.classification_hash is not None
     assert lead_fresh.classified_at is not None
+
+
+def test_classification_uses_freshly_computed_score_not_stale():
+    """Regression test: classification must see the score computed by calculate_score()
+    in the current run, not the stale value on the lead object.
+
+    A lead with has_website=True and opportunity_score=None (never enriched) has
+    a stale/default score of 50 inside classify() — which falls below the
+    hot_bad_site threshold (60), producing WARM instead of HOT_BAD_SITE.
+
+    With the fix in place, the orchestrator sets context.computed_score to the
+    freshly-calculated composite BEFORE running ClassificationProvider, so the
+    classifier sees the real score (>= 60 here due to automation signals) and
+    returns hot_bad_site.
+
+    Lead setup (no real crawl — all providers except classification skipped):
+      - telefone "11999999999": valid mobile → acessibilidade = 75 (passes gate)
+      - website: set but no site_analysis populated (status None)
+        → lp_site scoring falls through with score=0
+      - automacao on empty site_analysis: +15+15+15+10+10+8 = 73
+      - mapa: no google_maps_url → 25
+      - composite = max(0, 73, 25) = 73 → fresh score = 73 >= 60
+      - has_instagram=True → HOT_BAD_SITE (no instagram review_count guard needed)
+
+    Without fix: score = None → default 50 → 50 < 60 → WARM (misclassified).
+    With fix: score = 73 → HOT_BAD_SITE (correct).
+    """
+    from app.models import Lead
+    lead = Lead(
+        nome="SiteBad",
+        telefone="11999999999",
+        website="https://slow-broken-site.test",
+        rating=4.2,
+        reviews_count=40,
+        nicho="Pizzaria",
+        has_instagram=True,
+        # opportunity_score intentionally None — simulates first enrichment
+    )
+    orch = EnrichmentOrchestrator()
+    plan = orch.plan(lead, skip_providers=[
+        "cnpj_enricher", "website_crawler", "schema_extractor",
+        "tech_stack", "email_discoverer", "apollo",
+    ])
+    out = orch.execute(lead, plan)
+
+    # Fresh score from calculate_score() should be >= 60 (automacao = 73)
+    assert out.get("opportunity_score", 0) >= 60, (
+        f"Expected fresh score >= 60, got {out.get('opportunity_score')}. "
+        "Scoring behaviour may have changed."
+    )
+    # Correct classification with fresh score: hot_bad_site (has_website + score >= 60 + has_instagram)
+    assert out["perfil_lead"] == "hot_bad_site", (
+        f"Expected hot_bad_site with fresh score, got {out['perfil_lead']!r}. "
+        "If warm, the stale score bug is still present."
+    )

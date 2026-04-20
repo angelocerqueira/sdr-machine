@@ -44,6 +44,14 @@ class LeadOut(LeadBase):
     job_id: int | None = None
     created_at: datetime
     updated_at: datetime
+    perfil_lead: str | None = None
+    nicho_canonico: str | None = None
+    nicho_source: str | None = None
+    nicho_confidence: float | None = None
+    pacote_sugerido: str | None = None
+    prioridade: str | None = None
+    has_instagram: bool | None = None
+    classified_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -65,6 +73,11 @@ class LeadSummaryOut(LeadBase):
     job_id: int | None = None
     created_at: datetime
     updated_at: datetime
+    perfil_lead: str | None = None
+    nicho_canonico: str | None = None
+    pacote_sugerido: str | None = None
+    prioridade: str | None = None
+    has_instagram: bool | None = None
 
     model_config = {"from_attributes": True}
 

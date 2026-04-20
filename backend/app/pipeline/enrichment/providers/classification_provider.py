@@ -12,6 +12,48 @@ from app.pipeline.enrichment.classifier import classify
 logger = logging.getLogger(__name__)
 
 
+def consolidate_lead_for_classification(lead, context: EnrichmentContext | None = None) -> dict:
+    """Build the dict passed to classify(). Module-level pure function.
+
+    Prefers ``context.computed_score`` (set by the orchestrator after scoring)
+    over the stale ``lead.opportunity_score`` value to avoid misclassification
+    on first enrichment runs.
+    """
+    # Prefer freshly-computed score from context if orchestrator provided it
+    if context is not None and context.computed_score is not None:
+        score = context.computed_score
+    else:
+        score = getattr(lead, "opportunity_score", None)
+
+    sa = getattr(lead, "site_analysis", None) or {}
+    top_reviews = getattr(lead, "top_reviews", None) or []
+    reviews_text = []
+    for r in top_reviews[:3]:
+        if isinstance(r, dict):
+            reviews_text.append(r.get("text") or r.get("comment") or "")
+        elif isinstance(r, str):
+            reviews_text.append(r)
+
+    rating = getattr(lead, "rating", None)
+    return {
+        "has_website": bool(getattr(lead, "website", None)),
+        "score": score,
+        "rating": float(rating) if rating is not None else None,
+        "review_count": getattr(lead, "reviews_count", None),
+        "has_ssl": sa.get("has_ssl"),
+        "has_analytics": sa.get("has_analytics"),
+        "has_chatbot": sa.get("has_chatbot"),
+        "has_whatsapp_cta": sa.get("has_whatsapp_cta"),
+        "has_instagram": getattr(lead, "has_instagram", None),
+        "nicho_raw": getattr(lead, "nicho", None) or getattr(lead, "categoria", None),
+        "nome": getattr(lead, "nome", None),
+        "descricao": sa.get("description") or "",
+        "reviews": [r for r in reviews_text if r],
+        "telefone": getattr(lead, "telefone", None),
+        "endereco": getattr(lead, "endereco", None),
+    }
+
+
 class ClassificationProvider(BaseProvider):
     name = "classification"
     display_name = "Lead Profile & Nicho Classification"
@@ -26,7 +68,7 @@ class ClassificationProvider(BaseProvider):
 
     def run(self, lead, context: EnrichmentContext) -> ProviderResult:
         try:
-            lead_data = self._consolidate(lead)
+            lead_data = consolidate_lead_for_classification(lead, context)
             result = classify(lead_data, llm_client=self._llm_client)
             return ProviderResult(
                 success=True,
@@ -43,32 +85,6 @@ class ClassificationProvider(BaseProvider):
                 source=self.name,
             )
 
-    def _consolidate(self, lead) -> dict:
-        """Build the dict passed to classify()."""
-        sa = getattr(lead, "site_analysis", None) or {}
-        top_reviews = getattr(lead, "top_reviews", None) or []
-        reviews_text = []
-        for r in top_reviews[:3]:
-            if isinstance(r, dict):
-                reviews_text.append(r.get("text") or r.get("comment") or "")
-            elif isinstance(r, str):
-                reviews_text.append(r)
-
-        rating = getattr(lead, "rating", None)
-        return {
-            "has_website": bool(getattr(lead, "website", None)),
-            "score": getattr(lead, "opportunity_score", None),
-            "rating": float(rating) if rating is not None else None,
-            "review_count": getattr(lead, "reviews_count", None),
-            "has_ssl": sa.get("has_ssl"),
-            "has_analytics": sa.get("has_analytics"),
-            "has_chatbot": sa.get("has_chatbot"),
-            "has_whatsapp_cta": sa.get("has_whatsapp_cta"),
-            "has_instagram": getattr(lead, "has_instagram", None),
-            "nicho_raw": getattr(lead, "nicho", None) or getattr(lead, "categoria", None),
-            "nome": getattr(lead, "nome", None),
-            "descricao": sa.get("description") or "",
-            "reviews": [r for r in reviews_text if r],
-            "telefone": getattr(lead, "telefone", None),
-            "endereco": getattr(lead, "endereco", None),
-        }
+    def _consolidate(self, lead, context: EnrichmentContext | None = None) -> dict:
+        """Backwards-compat wrapper. Prefer module-level consolidate_lead_for_classification."""
+        return consolidate_lead_for_classification(lead, context)
