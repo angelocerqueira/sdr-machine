@@ -18,6 +18,7 @@ def _base_lead(**overrides) -> dict:
         "nicho_raw": "qualquer coisa",
         "nome": "Lead Teste", "descricao": "", "reviews": [],
         "telefone": "11999999999",
+        "endereco": None,
     }
     base.update(overrides)
     return base
@@ -128,6 +129,24 @@ def test_classification_hash_is_deterministic():
 def test_classification_hash_changes_when_key_field_changes():
     r1 = classify(_base_lead(score=40))
     r2 = classify(_base_lead(score=70))
+    assert r1.classification_hash != r2.classification_hash
+
+
+def test_classification_hash_changes_when_telefone_changes():
+    r1 = classify(_base_lead(telefone="11111"))
+    r2 = classify(_base_lead(telefone="22222"))
+    assert r1.classification_hash != r2.classification_hash
+
+
+def test_classification_hash_changes_when_endereco_changes():
+    r1 = classify(_base_lead(endereco="Rua A, 123"))
+    r2 = classify(_base_lead(endereco="Rua B, 456"))
+    assert r1.classification_hash != r2.classification_hash
+
+
+def test_classification_hash_changes_when_has_whatsapp_cta_changes():
+    r1 = classify(_base_lead(has_whatsapp_cta=True))
+    r2 = classify(_base_lead(has_whatsapp_cta=False))
     assert r1.classification_hash != r2.classification_hash
 
 

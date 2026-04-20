@@ -31,6 +31,23 @@ _VALID_NICHOS = {n.value for n in NichoCanonico}
 logger = logging.getLogger(__name__)
 
 
+def build_classifier_llm_client():
+    """Return an Anthropic client for nicho LLM fallback, or None if not configured.
+
+    Lazily imports anthropic to keep test environments without the SDK working.
+    Note: uses settings.llm_api_key which maps from LLM_API_KEY or ANTHROPIC_API_KEY env vars.
+    """
+    from app.config import settings
+    api_key = getattr(settings, "llm_api_key", None)
+    if not api_key:
+        return None
+    try:
+        import anthropic
+        return anthropic.Anthropic(api_key=api_key)
+    except Exception:
+        return None
+
+
 @dataclass
 class ClassificationResult:
     perfil_lead: LeadProfile
@@ -99,9 +116,12 @@ def _compute_hash(lead_data: dict) -> str:
         str(_coerce_bool(lead_data.get("has_ssl"), False)),
         str(_coerce_bool(lead_data.get("has_analytics"), False)),
         str(_coerce_bool(lead_data.get("has_chatbot"), False)),
+        str(_coerce_bool(lead_data.get("has_whatsapp_cta"), False)),
         str(_coerce_bool(lead_data.get("has_instagram"), False)),
         str(lead_data.get("nicho_raw") or ""),
         str(lead_data.get("nome") or ""),
+        str(lead_data.get("telefone") or ""),
+        str(lead_data.get("endereco") or ""),
     ])
     return hashlib.md5(key.encode("utf-8")).hexdigest()
 

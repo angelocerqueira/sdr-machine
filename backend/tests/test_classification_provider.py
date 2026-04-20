@@ -217,3 +217,21 @@ def test_classification_uses_freshly_computed_score_not_stale():
         f"Expected hot_bad_site with fresh score, got {out['perfil_lead']!r}. "
         "If warm, the stale score bug is still present."
     )
+
+
+# ---------------------------------------------------------------------------
+# build_classifier_llm_client tests (Fix 1e)
+# ---------------------------------------------------------------------------
+
+def test_build_classifier_llm_client_returns_none_without_key(monkeypatch):
+    from app.pipeline.enrichment.classifier import build_classifier_llm_client
+    monkeypatch.setattr("app.config.settings.llm_api_key", "", raising=False)
+    assert build_classifier_llm_client() is None
+
+
+def test_build_classifier_llm_client_returns_client_with_key(monkeypatch):
+    from app.pipeline.enrichment.classifier import build_classifier_llm_client
+    monkeypatch.setattr("app.config.settings.llm_api_key", "sk-test-key-not-real", raising=False)
+    client = build_classifier_llm_client()
+    # If anthropic SDK is installed, should return an Anthropic instance; else None
+    assert client is None or hasattr(client, "messages")

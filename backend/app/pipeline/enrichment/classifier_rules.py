@@ -1,6 +1,8 @@
 """Thresholds and aliases for lead classification — externalized for tuning."""
 from __future__ import annotations
 
+import re
+import unicodedata
 from difflib import SequenceMatcher
 
 from app.pipeline.enrichment.classifier_enums import (
@@ -88,8 +90,13 @@ NICHO_ALIASES: dict[NichoCanonico, list[str]] = {
 FUZZY_MATCH_THRESHOLD = 0.75
 
 
-def _normalize(s: str) -> str:
-    return (s or "").strip().lower()
+def _normalize(s: str | None) -> str:
+    if not s:
+        return ""
+    # NFKD + strip combining marks → diacritic folding
+    nfkd = unicodedata.normalize("NFKD", s)
+    stripped = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return stripped.strip().lower()
 
 
 def fuzzy_match_nicho(raw: str | None) -> tuple[NichoCanonico, float] | None:
@@ -104,11 +111,19 @@ def fuzzy_match_nicho(raw: str | None) -> tuple[NichoCanonico, float] | None:
     best: tuple[NichoCanonico, float] | None = None
     for bucket, aliases in NICHO_ALIASES.items():
         for alias in aliases:
-            # Exact substring match → confidence 1.0 (only for aliases long enough to be unambiguous)
-            if len(alias) >= 4 and alias in text:
+            alias_norm = _normalize(alias)
+            if not alias_norm:
+                continue
+            # Long aliases (>=4 chars): substring match at confidence 1.0
+            if len(alias_norm) >= 4 and alias_norm in text:
                 return (bucket, 1.0)
-            # Fuzzy ratio
-            ratio = SequenceMatcher(None, alias, text).ratio()
+            # Short aliases (<4 chars): require word boundary match
+            if len(alias_norm) < 4:
+                if re.search(rf"\b{re.escape(alias_norm)}\b", text):
+                    return (bucket, 1.0)
+                continue  # don't run fuzzy on short aliases — ratio too noisy
+            # Fuzzy ratio on longer aliases
+            ratio = SequenceMatcher(None, alias_norm, text).ratio()
             if ratio >= FUZZY_MATCH_THRESHOLD:
                 if best is None or ratio > best[1]:
                     best = (bucket, ratio)

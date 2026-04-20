@@ -28,6 +28,7 @@ from app.pipeline.enrichment.providers.apollo_enricher import ApolloProvider
 from app.pipeline.enrichment.providers.classification_provider import (
     ClassificationProvider,
 )
+from app.pipeline.enrichment.classifier import build_classifier_llm_client
 from app.pipeline.enrichment.scoring import calculate_score
 
 logger = logging.getLogger(__name__)
@@ -46,7 +47,7 @@ def _default_providers() -> list[BaseProvider]:
         TechStackProvider(),
         EmailDiscovererProvider(),
         ApolloProvider(),
-        ClassificationProvider(),
+        ClassificationProvider(llm_client=build_classifier_llm_client()),
     ]
 
 

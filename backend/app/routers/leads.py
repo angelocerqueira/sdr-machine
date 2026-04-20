@@ -283,10 +283,11 @@ def reclassify_lead(
     except Exception:
         pass
 
-    force = body.force if body is not None else True  # endpoint default matches schema
+    force = body.force if body is not None else False  # default: preserve manual nicho
 
+    from app.pipeline.enrichment.classifier import build_classifier_llm_client
     lead_data = consolidate_lead_for_classification(lead)
-    result = classify(lead_data)
+    result = classify(lead_data, llm_client=build_classifier_llm_client())
 
     # Preserve manual nicho when not forced
     result_dict = result.to_dict()
@@ -294,6 +295,10 @@ def reclassify_lead(
         result_dict["nicho_canonico"] = lead.nicho_canonico
         result_dict["nicho_source"] = lead.nicho_source
         result_dict["nicho_confidence"] = lead.nicho_confidence
+
+    # Don't persist hash for failed runs — lets future runs retry after aliases/LLM improve
+    if result_dict.get("nicho_source") == "failed":
+        result_dict.pop("classification_hash", None)
 
     for k, v in result_dict.items():
         if hasattr(lead, k) and v is not None:

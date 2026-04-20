@@ -46,3 +46,36 @@ def test_profile_to_derived_complete():
         pacote, prioridade = PROFILE_TO_DERIVED[profile]
         assert pacote is not None
         assert prioridade is not None
+
+
+def test_fuzzy_match_accent_folding():
+    # "Harmonização facial" (accented) must match ESTETICA via folded "harmonizacao"
+    result = fuzzy_match_nicho("Harmonização facial")
+    assert result is not None
+    bucket, conf = result
+    assert bucket == NichoCanonico.ESTETICA
+
+
+def test_fuzzy_match_cfc_autoescola_not_escola_curso():
+    # "CFC Escola Bom Dia" is a driving school — 'cfc' word boundary → AUTO_ESCOLA
+    # (not ESCOLA_CURSO via 'escola' substring)
+    result = fuzzy_match_nicho("CFC Escola Bom Dia")
+    assert result is not None
+    bucket, _ = result
+    assert bucket == NichoCanonico.AUTO_ESCOLA
+
+
+def test_fuzzy_match_pet_word_boundary():
+    # "Pet Shop Amigo" should match PETSHOP_VET
+    result = fuzzy_match_nicho("Pet Shop Amigo")
+    assert result is not None
+    bucket, _ = result
+    assert bucket == NichoCanonico.PETSHOP_VET
+
+
+def test_fuzzy_match_short_alias_does_not_match_arbitrary_substring():
+    # 'pet' should NOT match "carpete" (3-char alias requires word boundary)
+    result = fuzzy_match_nicho("Loja de Carpete")
+    if result is not None:
+        bucket, _ = result
+        assert bucket != NichoCanonico.PETSHOP_VET

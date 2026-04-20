@@ -11,6 +11,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.database import get_db, SessionLocal
 from app.models import LandingPage, Lead, Job, OutreachMessage
+from app.pipeline.enrichment.classifier_enums import NichoSource
 from app.schemas import (
     ScrapeRequest, EnrichRequest, GenerateRequest, OutreachRequest,
     JobOut, JobListOut, PipelineStatusOut,
@@ -447,21 +448,32 @@ def _run_csv_import(job_id: int, params: dict):
 
         # Chain: trigger classification over the imported batch
         try:
-            classify_job = Job(
-                type="classification", status="pending",
-                params={
-                    "scope": "by_job",
-                    "scope_filter": {"job_id": job_id},
-                    "force": False,
-                },
-            )
-            db.add(classify_job)
-            db.commit()
-            threading.Thread(
-                target=_run_classify,
-                args=(classify_job.id, classify_job.params),
-                daemon=True,
-            ).start()
+            # Respect concurrency guard — skip if another classification is already running
+            existing_classify = db.query(Job).filter(
+                Job.type == "classification",
+                Job.status.in_(["pending", "running"]),
+            ).first()
+            if existing_classify:
+                logger.info(
+                    "skipping auto-chain: classification job %s still %s",
+                    existing_classify.id, existing_classify.status,
+                )
+            else:
+                classify_job = Job(
+                    type="classification", status="pending",
+                    params={
+                        "scope": "by_job",
+                        "scope_filter": {"job_id": job_id},
+                        "force": False,
+                    },
+                )
+                db.add(classify_job)
+                db.commit()
+                threading.Thread(
+                    target=_run_classify,
+                    args=(classify_job.id, classify_job.params),
+                    daemon=True,
+                ).start()
         except Exception as exc:
             logger.warning("failed to chain classification: %s", exc)
 
@@ -481,14 +493,16 @@ def _run_csv_import(job_id: int, params: dict):
 def _run_classify(job_id: int, params: dict):
     """Background runner for batch classification.
 
-    Isolates failures per-lead. Circuit breaker at 50% failure rate after 20 leads.
+    Isolates failures per-lead. Circuit breaker at 50% exception rate after 20 leads.
+    Soft nicho failures (nicho_source=failed) do NOT count toward circuit breaker.
     """
-    from app.pipeline.enrichment.classifier import classify
+    from app.pipeline.enrichment.classifier import classify, build_classifier_llm_client
     from app.pipeline.enrichment.providers.classification_provider import (
         consolidate_lead_for_classification,
     )
 
     db = SessionLocal()
+    llm_client = build_classifier_llm_client()
     try:
         job = db.get(Job, job_id)
         job.status = "running"
@@ -505,12 +519,16 @@ def _run_classify(job_id: int, params: dict):
             query = query.filter(Lead.perfil_lead.is_(None))
         elif scope == "by_job":
             jid = scope_filter.get("job_id")
-            if jid is not None:
-                query = query.filter(Lead.job_id == jid)
+            if jid is None:
+                raise ValueError("scope=by_job requires scope_filter.job_id")
+            query = query.filter(Lead.job_id == jid)
         elif scope == "by_status":
             st = scope_filter.get("status")
-            if st:
-                query = query.filter(Lead.status == st)
+            if not st:
+                raise ValueError("scope=by_status requires scope_filter.status")
+            query = query.filter(Lead.status == st)
+        elif scope != "all":
+            raise ValueError(f"unknown classification scope: {scope!r}")
         # "all" → no filter
 
         leads = query.all()
@@ -518,11 +536,12 @@ def _run_classify(job_id: int, params: dict):
         _emit(job_id, {"type": "progress", "current": 0, "total": total})
 
         results = {"ok": 0, "failed": 0, "skipped": 0, "errors": {}}
+        exceptions = 0  # separate counter — only hard exceptions count toward circuit breaker
 
         for idx, lead in enumerate(leads):
             try:
                 lead_data = consolidate_lead_for_classification(lead)
-                result = classify(lead_data)
+                result = classify(lead_data, llm_client=llm_client)
 
                 # Idempotency: skip if hash unchanged (and not forced)
                 if (lead.classification_hash == result.classification_hash
@@ -535,27 +554,36 @@ def _run_classify(job_id: int, params: dict):
                         result.nicho_source = lead.nicho_source
                         result.nicho_confidence = lead.nicho_confidence
 
-                    for k, v in result.to_dict().items():
+                    result_dict = result.to_dict()
+                    # Don't persist hash for failed runs — lets future runs retry
+                    if result.nicho_source == NichoSource.FAILED or (
+                        hasattr(result.nicho_source, "value")
+                        and result.nicho_source.value == "failed"
+                    ) or result.nicho_source == "failed":
+                        result_dict.pop("classification_hash", None)
+
+                    for k, v in result_dict.items():
                         if hasattr(lead, k) and v is not None:
                             setattr(lead, k, v)
                     lead.classified_at = datetime.utcnow()
                     db.commit()
 
-                    if result.nicho_source == "failed":
+                    if result.nicho_source == NichoSource.FAILED or result.nicho_source == "failed":
                         results["failed"] += 1
                     else:
                         results["ok"] += 1
             except Exception as exc:
                 db.rollback()
                 results["failed"] += 1
+                exceptions += 1  # only hard exceptions count toward breaker
                 results["errors"][lead.id] = str(exc)[:200]
 
-            # Circuit breaker: >50% failures after 20 processed
+            # Circuit breaker: >50% hard exceptions after 20 processed
             if idx + 1 >= 20:
-                failure_rate = results["failed"] / (idx + 1)
-                if failure_rate > 0.5:
+                exception_rate = exceptions / (idx + 1)
+                if exception_rate > 0.5:
                     job.status = "stalled"
-                    job.result_summary = {**results, "reason": "too_many_failures"}
+                    job.result_summary = {**results, "reason": "too_many_failures", "exceptions": exceptions}
                     job.finished_at = datetime.utcnow()
                     db.commit()
                     _emit(job_id, {"type": "error", "message": "too_many_failures"})
