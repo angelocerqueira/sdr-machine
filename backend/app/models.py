@@ -78,6 +78,9 @@ class Lead(Base):
     classification_hash = Column(String(32), nullable=True)
     classified_at = Column(DateTime, nullable=True)
     has_instagram = Column(Boolean, nullable=True)
+    parent_lead_id = Column(Integer, ForeignKey("leads.id", ondelete="SET NULL"), nullable=True)
+    nome_limpo = Column(String(255), nullable=True)
+    place_id = Column(String(100), nullable=True)
     lp_html = Column(Text)
     job_id = Column(Integer, ForeignKey("jobs.id", ondelete="SET NULL"))
     created_at = Column(DateTime, default=func.now())
@@ -98,6 +101,8 @@ class Lead(Base):
         Index("idx_leads_nicho_canonico", "nicho_canonico"),
         Index("idx_leads_pacote_sugerido", "pacote_sugerido"),
         Index("idx_leads_prioridade", "prioridade"),
+        Index("idx_leads_parent_lead_id", "parent_lead_id"),
+        Index("idx_leads_place_id", "place_id"),
     )
 
 

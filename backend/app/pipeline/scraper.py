@@ -10,6 +10,17 @@ from app.config import settings
 from app.pipeline.cnpj_scraper import scrape_cnpj
 
 
+def extract_place_id(url: str | None) -> str | None:
+    """Extract the Google place_id from a Google Maps URL."""
+    if not url:
+        return None
+    match = re.search(r"[?&]query_place_id=([^&]+)", url)
+    if match:
+        return match.group(1)
+    match = re.search(r"!1s([^!]+)", url)
+    return match.group(1) if match else None
+
+
 def extract_has_instagram(payload: dict | None) -> bool:
     """Check if Apify Google Maps payload indicates Instagram presence.
 
@@ -83,6 +94,7 @@ def scrape_google_maps(niche: str, city: str, max_results: int | None = None) ->
         if rating < settings.min_rating:
             continue
 
+        google_maps_url = item.get("url", "")
         lead = {
             "nome": item.get("title", "").strip(),
             "telefone": item.get("phone", ""),
@@ -92,7 +104,8 @@ def scrape_google_maps(niche: str, city: str, max_results: int | None = None) ->
             "nicho": niche,
             "rating": rating,
             "reviews_count": item.get("reviewsCount", 0),
-            "google_maps_url": item.get("url", ""),
+            "google_maps_url": google_maps_url,
+            "place_id": item.get("placeId") or extract_place_id(google_maps_url),
             "categoria": item.get("categoryName", ""),
             "top_reviews": [
                 r.get("text", "")[:200]
@@ -131,6 +144,9 @@ def scrape_all(
     seen: set[str] = set()
 
     def _dedup_key(lead: dict) -> str | None:
+        place_id = lead.get("place_id")
+        if place_id:
+            return f"pid:{place_id}"
         tel = re.sub(r"\D", "", lead.get("telefone") or "")
         cnpj = re.sub(r"\D", "", lead.get("cnpj") or "")
         return tel or cnpj or None
