@@ -1,9 +1,9 @@
 """Backfill `place_id` column from google_maps_url.
 
-Must run before migration m06 (which enforces UNIQUE on place_id) so every
-existing row gets a value. Leads without a parseable place_id stay NULL —
-the UNIQUE constraint allows multiple NULLs, so that's fine; operators
-should inspect and decide case by case.
+Redundant in the happy path — migration m06 does the same backfill via SQL
+before creating the UNIQUE constraint. Keep this script around for:
+- debugging / inspecting which rows have no parseable place_id;
+- re-running with the Python regex after manual edits to google_maps_url.
 
 Usage:
     python -m scripts.backfill_place_id          # dry-run

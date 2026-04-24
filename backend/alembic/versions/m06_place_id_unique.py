@@ -1,8 +1,13 @@
-"""add UNIQUE constraint on place_id
+"""backfill place_id from google_maps_url and add UNIQUE constraint
 
-Depends on scripts.backfill_place_id having been executed first so existing
-rows carry a place_id value (NULL rows are allowed by the partial uniqueness
-semantics of the constraint).
+This migration is self-contained: it populates ``place_id`` for existing
+rows using a regex extraction from ``google_maps_url`` BEFORE adding the
+UNIQUE constraint. That way auto-deploy (``alembic upgrade head`` in the
+Railway Dockerfile) does the right thing without needing a manual
+backfill step between migrations.
+
+Rows where no place_id can be extracted stay NULL — Postgres treats
+multiple NULLs as distinct for UNIQUE, so that's allowed.
 
 Revision ID: m06_place_id_unique
 Revises: l05_cleanup_fields
@@ -18,6 +23,25 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # 1. Backfill place_id from the canonical ``?query_place_id=...`` param.
+    op.execute(
+        """
+        UPDATE leads
+           SET place_id = substring(google_maps_url FROM 'query_place_id=([^&]+)')
+         WHERE place_id IS NULL
+           AND google_maps_url ~ 'query_place_id='
+        """
+    )
+    # 2. Fallback: the embedded !1s<id> token used by some map URLs.
+    op.execute(
+        """
+        UPDATE leads
+           SET place_id = substring(google_maps_url FROM '!1s([^!]+)')
+         WHERE place_id IS NULL
+           AND google_maps_url ~ '!1s'
+        """
+    )
+    # 3. Now enforce uniqueness — new scrapes rely on it.
     op.create_unique_constraint(
         "uq_leads_place_id",
         "leads",
