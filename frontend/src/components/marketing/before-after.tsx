@@ -1,7 +1,6 @@
 "use client";
 
-import { useRef } from "react";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion } from "framer-motion";
 
 interface TransformPair {
   before: { label: string; detail: string };
@@ -27,24 +26,15 @@ const TRANSFORMS: TransformPair[] = [
   },
 ];
 
-function TransformItem({ pair }: { pair: TransformPair }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ["start 0.8", "start 0.3"],
-  });
-
-  const beforeOpacity = useTransform(scrollYProgress, [0, 0.4, 0.6, 1], [0, 1, 1, 0]);
-  const afterOpacity = useTransform(scrollYProgress, [0.5, 0.8, 1], [0, 0.5, 1]);
-  const beforeX = useTransform(scrollYProgress, [0.6, 1], [0, -30]);
-  const afterX = useTransform(scrollYProgress, [0.5, 1], [30, 0]);
-
+function TransformItem({ pair, idx }: { pair: TransformPair; idx: number }) {
   return (
-    <div ref={ref} className="min-h-[50vh] flex items-center justify-center px-6 py-12">
+    <div className="flex items-center justify-center px-6 py-5">
       <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-        {/* Before */}
         <motion.div
-          style={{ opacity: beforeOpacity, x: beforeX }}
+          initial={{ opacity: 0, x: -20 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true, amount: 0.4 }}
+          transition={{ duration: 0.5, delay: idx * 0.05 }}
           className="rounded-xl border border-danger/20 bg-danger/[0.03] p-6"
         >
           <div className="text-[10px] uppercase tracking-[3px] text-danger font-medium mb-3">Antes</div>
@@ -52,9 +42,11 @@ function TransformItem({ pair }: { pair: TransformPair }) {
           <p className="text-sm text-text-muted">{pair.before.detail}</p>
         </motion.div>
 
-        {/* After */}
         <motion.div
-          style={{ opacity: afterOpacity, x: afterX }}
+          initial={{ opacity: 0, x: 20 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true, amount: 0.4 }}
+          transition={{ duration: 0.5, delay: idx * 0.05 + 0.1 }}
           className="rounded-xl border border-accent/20 bg-accent-subtle p-6"
         >
           <div className="text-[10px] uppercase tracking-[3px] text-accent font-medium mb-3">Depois</div>
@@ -89,7 +81,7 @@ export function BeforeAfter() {
       </div>
 
       {TRANSFORMS.map((pair, i) => (
-        <TransformItem key={i} pair={pair} />
+        <TransformItem key={i} pair={pair} idx={i} />
       ))}
     </section>
   );

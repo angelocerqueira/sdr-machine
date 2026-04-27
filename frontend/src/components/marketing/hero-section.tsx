@@ -19,26 +19,26 @@ const HeroComposition = dynamic(
 export function HeroSection() {
   return (
     <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
-      {/* Remotion background */}
-      <div className="absolute inset-0 z-0">
-        <div className="w-full h-full" suppressHydrationWarning>
-          {typeof window !== "undefined" && (
-            <Player
-              component={HeroComposition}
-              compositionWidth={1920}
-              compositionHeight={1080}
-              durationInFrames={360}
-              fps={30}
-              style={{ width: "100%", height: "100%" }}
-              autoPlay
-              loop
-              controls={false}
-              showVolumeControls={false}
-            />
-          )}
+      {/* Remotion background — landscape desktop only, decorative */}
+      <div className="absolute inset-0 z-0 overflow-hidden">
+        <div className="hidden lg:block absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 min-w-full min-h-full aspect-video">
+          <Player
+            component={HeroComposition}
+            compositionWidth={1920}
+            compositionHeight={1080}
+            durationInFrames={360}
+            fps={30}
+            style={{ width: "100%", height: "100%" }}
+            autoPlay
+            loop
+            controls={false}
+            showVolumeControls={false}
+          />
         </div>
         {/* Gradient overlay for text readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-bg/40 via-bg/60 to-bg" />
+        <div className="absolute inset-0 bg-gradient-to-b from-bg/55 via-bg/45 to-bg" />
+        {/* Soft radial spotlight to lift hero copy off the busy starfield */}
+        <div className="absolute inset-0 [background:radial-gradient(ellipse_60%_50%_at_50%_45%,var(--bg)_0%,transparent_70%)] opacity-60" />
       </div>
 
       {/* Content */}
@@ -64,7 +64,7 @@ export function HeroSection() {
         </motion.h1>
 
         <motion.p
-          className="text-base sm:text-lg text-text-secondary max-w-xl mx-auto mb-10 leading-relaxed"
+          className="text-base sm:text-lg text-text max-w-xl mx-auto mb-10 leading-relaxed"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.5 }}
@@ -81,13 +81,13 @@ export function HeroSection() {
         >
           <a
             href="#agendar"
-            className="bg-accent text-bg font-bold text-base rounded-lg px-7 py-3.5 hover:bg-accent-dim transition-colors shadow-[0_0_30px_rgba(52,211,153,0.2)]"
+            className="bg-accent text-bg font-bold text-base rounded-lg px-7 py-3.5 hover:bg-accent-dim transition-colors shadow-[0_8px_30px_-8px_var(--accent)]"
           >
             Agendar Demo
           </a>
           <a
             href="#como-funciona"
-            className="border border-border text-text font-medium text-base rounded-lg px-7 py-3.5 hover:bg-surface-raised transition-colors"
+            className="border border-text/30 backdrop-blur-sm bg-bg/40 text-text font-medium text-base rounded-lg px-7 py-3.5 hover:bg-bg/70 hover:border-text/50 transition-colors"
           >
             Ver em Ação ↓
           </a>

@@ -272,7 +272,8 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-strong);
 }
 
-a { color: inherit; text-decoration: none; }
+a:where(:not([class*="text-"])) { color: inherit; }
+a { text-decoration: none; }
 
 ::selection {
   background: var(--accent-soft);
