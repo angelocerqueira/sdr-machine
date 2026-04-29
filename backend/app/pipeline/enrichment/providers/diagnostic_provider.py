@@ -19,6 +19,28 @@ from app.pipeline.diagnostic import run_diagnostic
 logger = logging.getLogger(__name__)
 
 
+def _normalize_top_reviews(raw, limit: int = 3) -> list[str]:
+    """Coerce stored top_reviews into a list[str] for prompts.
+
+    Lead.top_reviews is JSON — usually list[str] from the scraper, but legacy
+    CSV imports can store list[dict] (with `text` or `comment` keys). The LLM
+    prompt formats each entry directly, so dicts must be flattened first.
+    """
+    if not raw:
+        return []
+    out: list[str] = []
+    for r in raw[:limit]:
+        if isinstance(r, dict):
+            text = r.get("text") or r.get("comment") or ""
+        elif isinstance(r, str):
+            text = r
+        else:
+            text = ""
+        if text:
+            out.append(text)
+    return out
+
+
 class DiagnosticProvider(BaseProvider):
     name = "diagnostic"
     display_name = "Service Level + Marketing Diagnostic"
@@ -35,13 +57,16 @@ class DiagnosticProvider(BaseProvider):
         try:
             lead_info = {
                 "nome": getattr(lead, "nome", "") or "",
-                "nicho": getattr(lead, "nicho", "") or getattr(lead, "categoria", "") or "",
+                "nicho": getattr(lead, "nicho", "") or "",
+                "categoria": getattr(lead, "categoria", "") or "",
                 "cidade": getattr(lead, "cidade", "") or "",
                 "telefone": getattr(lead, "telefone", "") or "",
                 "endereco": getattr(lead, "endereco", "") or "",
                 "rating": getattr(lead, "rating", None),
                 "reviews_count": getattr(lead, "reviews_count", 0) or 0,
-                "top_reviews": getattr(lead, "top_reviews", None) or [],
+                "top_reviews": _normalize_top_reviews(
+                    getattr(lead, "top_reviews", None)
+                ),
             }
 
             service_levels = run_diagnostic(

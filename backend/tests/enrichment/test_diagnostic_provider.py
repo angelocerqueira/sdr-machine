@@ -104,3 +104,65 @@ def test_run_isolated_from_diagnostic_exceptions():
 
     assert result.success is False
     assert any("boom" in e for e in result.errors)
+
+
+def test_lead_info_passes_nicho_and_categoria_separately():
+    """Prompt em diagnostic/prompts/shared.py usa AMBOS os campos:
+    `Nicho/Categoria: {nicho} / {categoria}`. Eles devem chegar separados."""
+    provider = DiagnosticProvider()
+    lead = FakeLead(nicho="dentista", categoria="Dentista")
+    ctx = EnrichmentContext(html_content="<html></html>")
+    ctx.site_data = {"status": "ok"}
+    ctx.html_analysis = {}
+    ctx.pagespeed = {}
+
+    captured: dict = {}
+
+    def _capture(lead_info, **kwargs):
+        captured.update(lead_info)
+        return None  # short-circuit; we only care about lead_info shape
+
+    with patch(
+        "app.pipeline.enrichment.providers.diagnostic_provider.run_diagnostic",
+        side_effect=_capture,
+    ):
+        provider.run(lead, ctx)
+
+    assert captured.get("nicho") == "dentista"
+    assert captured.get("categoria") == "Dentista"
+
+
+def test_top_reviews_normalized_when_stored_as_dicts():
+    """Some leads have top_reviews as list[dict] (CSV import / legacy data).
+    Provider must extract the text so the prompt doesn't print raw dicts."""
+    provider = DiagnosticProvider()
+    lead = FakeLead()
+    lead.top_reviews = [
+        {"text": "Excelente atendimento!", "rating": 5},
+        {"comment": "Muito profissional"},
+        "Já vem normalizado",
+        {"text": ""},  # empty text should be dropped
+    ]
+    ctx = EnrichmentContext(html_content="<html></html>")
+    ctx.site_data = {"status": "ok"}
+    ctx.html_analysis = {}
+    ctx.pagespeed = {}
+
+    captured: dict = {}
+
+    def _capture(lead_info, **kwargs):
+        captured.update(lead_info)
+        return None
+
+    with patch(
+        "app.pipeline.enrichment.providers.diagnostic_provider.run_diagnostic",
+        side_effect=_capture,
+    ):
+        provider.run(lead, ctx)
+
+    reviews = captured.get("top_reviews")
+    assert reviews == [
+        "Excelente atendimento!",
+        "Muito profissional",
+        "Já vem normalizado",
+    ]

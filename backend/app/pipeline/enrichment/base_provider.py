@@ -52,7 +52,7 @@ class BaseProvider(ABC):
     name: str = ""
     display_name: str = ""
     required_fields: list[str] = []
-    cost: str = "free"  # "free" | "freemium"
+    cost: str = "free"  # "free" | "freemium" | "paid"
 
     @abstractmethod
     def can_run(self, lead: "Lead", context: "EnrichmentContext | None" = None) -> bool:
