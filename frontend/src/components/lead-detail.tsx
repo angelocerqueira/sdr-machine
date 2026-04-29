@@ -1,7 +1,7 @@
 "use client";
 
 import type { Lead, ServiceLevels } from "@/lib/types";
-import { getLeadLpUrl } from "@/lib/api";
+import { getLeadLpUrlByPublicId } from "@/lib/api";
 import { DiagnosticPanel } from "./diagnostic-panel";
 import { ServiceLevelTabs } from "./service-level-tabs";
 
@@ -103,7 +103,7 @@ export function LeadDetail({ lead }: LeadDetailProps) {
             </a>
           </div>
           <iframe
-            src={getLeadLpUrl(lead.id)}
+            src={getLeadLpUrlByPublicId(lead.public_id)}
             className="w-full h-[500px] bg-white"
             title={`LP Preview - ${lead.nome}`}
           />

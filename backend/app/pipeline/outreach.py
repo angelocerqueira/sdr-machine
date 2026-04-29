@@ -20,9 +20,9 @@ def _clean_phone(phone: str) -> str:
     return cleaned
 
 
-def _lp_url(lead_id: int | str) -> str:
-    """Constrói a URL da landing page para o lead."""
-    return f"{settings.api_url}/api/leads/{lead_id}/lp"
+def _lp_url(public_id: str) -> str:
+    """Constrói a URL pública da landing page (frontend, public_id)."""
+    return f"{settings.frontend_url}/lp/{public_id}"
 
 
 def _get_diagnostic(lead_data: dict) -> dict | None:
@@ -241,12 +241,12 @@ Bom trabalho pra vocês!
 # ---------------------------------------------------------------------------
 
 
-def generate_messages(lead_id: int | str, lead_data: dict) -> list[dict]:
+def generate_messages(public_id: str, lead_data: dict) -> list[dict]:
     """
     Gera lista de 3 mensagens (initial, followup_48h, followup_final).
     Usa IA quando diagnóstico disponível, senão usa templates fallback.
     """
-    lp = _lp_url(lead_id)
+    lp = _lp_url(public_id)
     phone = _clean_phone(lead_data.get("telefone", ""))
     has_site = lead_data.get("website") and lead_data.get("site_analysis", {}).get("status") == "ok"
     has_diagnostic = _get_diagnostic(lead_data) is not None
