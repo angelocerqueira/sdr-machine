@@ -100,6 +100,28 @@ def test_pass2_does_not_retry_on_4xx():
     assert result == ""
 
 
+def test_pass2_does_not_retry_on_5xx():
+    """C: 5xx propagates without retry too — by design (same whitelist as 4xx).
+
+    Regression guard: protects against someone adding HTTPError to the transient
+    list under the assumption "5xx is provider flake". If we ever do want 5xx
+    retries, that decision should be explicit and tested separately.
+    """
+    resp_503 = MagicMock()
+    resp_503.status_code = 503
+    resp_503.raise_for_status.side_effect = requests.exceptions.HTTPError(
+        "503 Service Unavailable", response=resp_503,
+    )
+    with patch(
+        "app.pipeline.generator.requests.post",
+        return_value=resp_503,
+    ) as mock_post:
+        result = _generate_html(_MIN_LEAD, "Advocacia", _MIN_BRIEF, "11999998888", "")
+
+    assert mock_post.call_count == 1
+    assert result == ""
+
+
 def test_pass1_includes_max_tokens_in_request_body():
     """B (Pass 1, defensive): brief generation also caps output."""
     from app.pipeline.generator import _generate_creative_brief

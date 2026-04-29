@@ -39,23 +39,19 @@ def _llm_post(url: str, headers: dict, body: dict, timeout: int) -> requests.Res
 
     Caller still wraps in try/except for other failures (parsing, 4xx, 5xx).
     """
-    last_exc: Exception | None = None
-    for attempt in range(2):  # initial + 1 retry
+    for attempt in (0, 1):  # initial attempt + 1 retry
         try:
             resp = requests.post(url, headers=headers, json=body, timeout=timeout)
             resp.raise_for_status()
             return resp
         except _TRANSIENT_HTTP_ERRORS as exc:
-            last_exc = exc
             if attempt == 0:
                 logger.warning(
-                    "LLM call %s — attempt %d failed (%s); retrying once",
-                    url, attempt + 1, type(exc).__name__,
+                    "LLM call %s — attempt 1 failed (%s); retrying once",
+                    url, type(exc).__name__,
                 )
                 continue
-            raise
-    # Unreachable: loop either returns or raises.
-    raise last_exc  # type: ignore[misc]
+            raise  # 2nd attempt failed — propagate to caller
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
