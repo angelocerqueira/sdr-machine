@@ -31,15 +31,13 @@ def _ok_response(html: str = "<!DOCTYPE html><html><body>x</body></html>") -> Ma
     return resp
 
 
-def test_pass2_includes_max_tokens_in_request_body():
-    """B: HTML generation must cap output via max_tokens to avoid runaway LLM."""
+def test_pass2_omits_max_tokens_in_request_body():
+    """HTML generation must NOT cap output — caps truncated rich LPs mid-CSS."""
     with patch("app.pipeline.generator.requests.post", return_value=_ok_response()) as mock_post:
         _generate_html(_MIN_LEAD, "Advocacia", _MIN_BRIEF, "11999998888", "")
 
     body = mock_post.call_args.kwargs["json"]
-    assert "max_tokens" in body
-    # 8000 is enough for a rich LP HTML, well below the runaway scenarios we hit in prod
-    assert body["max_tokens"] == 8000
+    assert "max_tokens" not in body
 
 
 def test_pass2_retries_once_on_read_timeout():
@@ -122,8 +120,8 @@ def test_pass2_does_not_retry_on_5xx():
     assert result == ""
 
 
-def test_pass1_includes_max_tokens_in_request_body():
-    """B (Pass 1, defensive): brief generation also caps output."""
+def test_pass1_omits_max_tokens_in_request_body():
+    """Brief generation must NOT cap output — symmetric with Pass 2."""
     from app.pipeline.generator import _generate_creative_brief
 
     brief_json = (
@@ -148,4 +146,4 @@ def test_pass1_includes_max_tokens_in_request_body():
         )
 
     body = mock_post.call_args.kwargs["json"]
-    assert "max_tokens" in body
+    assert "max_tokens" not in body

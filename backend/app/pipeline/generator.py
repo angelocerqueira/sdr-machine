@@ -459,9 +459,6 @@ REGRAS CRÍTICAS:
             body={
                 "model": settings.llm_model,
                 "temperature": 0.85,
-                # Brief is a small JSON object (~600-1200 tokens). Cap defensively
-                # so a runaway model can't hang the request.
-                "max_tokens": 4000,
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
@@ -649,9 +646,6 @@ Gere o HTML completo agora."""
             body={
                 "model": settings.llm_model,
                 "temperature": 0.7,
-                # Cap output. Rich LP HTML fits in ~6-8k tokens; uncapped MiniMax
-                # can run for minutes and trip the 240s timeout (lead 645 case).
-                "max_tokens": 8000,
                 "messages": messages,
             },
             timeout=240,
