@@ -25,6 +25,35 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+# Transient errors worth a single retry — provider blip / TCP reset / slow tail.
+# 4xx/5xx HTTPError don't retry: not flaky, payload or auth is wrong.
+_TRANSIENT_HTTP_ERRORS = (
+    requests.exceptions.ReadTimeout,
+    requests.exceptions.ConnectTimeout,
+    requests.exceptions.ConnectionError,
+)
+
+
+def _llm_post(url: str, headers: dict, body: dict, timeout: int) -> requests.Response:
+    """POST to an LLM endpoint with one retry on transient network errors.
+
+    Caller still wraps in try/except for other failures (parsing, 4xx, 5xx).
+    """
+    for attempt in (0, 1):  # initial attempt + 1 retry
+        try:
+            resp = requests.post(url, headers=headers, json=body, timeout=timeout)
+            resp.raise_for_status()
+            return resp
+        except _TRANSIENT_HTTP_ERRORS as exc:
+            if attempt == 0:
+                logger.warning(
+                    "LLM call %s — attempt 1 failed (%s); retrying once",
+                    url, type(exc).__name__,
+                )
+                continue
+            raise  # 2nd attempt failed — propagate to caller
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # SVG ICON LIBRARY — Ícones inline premium, stroke-based, viewBox 0 0 24 24
 # O modelo escolhe por nome no Pass 1, e insere o SVG real no Pass 2.
@@ -424,12 +453,15 @@ REGRAS CRÍTICAS:
     }
 
     try:
-        resp = requests.post(
+        resp = _llm_post(
             f"{settings.llm_base_url}/chat/completions",
             headers=headers,
-            json={
+            body={
                 "model": settings.llm_model,
                 "temperature": 0.85,
+                # Brief is a small JSON object (~600-1200 tokens). Cap defensively
+                # so a runaway model can't hang the request.
+                "max_tokens": 4000,
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
@@ -437,7 +469,6 @@ REGRAS CRÍTICAS:
             },
             timeout=60,
         )
-        resp.raise_for_status()
         data = resp.json()
         logger.debug("Pass 1 raw response keys: %s", list(data.keys()))
 
@@ -609,20 +640,22 @@ Gere o HTML completo agora."""
     ]
 
     try:
-        resp = requests.post(
+        resp = _llm_post(
             f"{settings.llm_base_url}/chat/completions",
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {settings.llm_api_key}",
             },
-            json={
+            body={
                 "model": settings.llm_model,
                 "temperature": 0.7,
+                # Cap output. Rich LP HTML fits in ~6-8k tokens; uncapped MiniMax
+                # can run for minutes and trip the 240s timeout (lead 645 case).
+                "max_tokens": 8000,
                 "messages": messages,
             },
             timeout=240,
         )
-        resp.raise_for_status()
         data = resp.json()
 
         # Extrair conteúdo — suporta formato OpenAI e Anthropic
