@@ -20,6 +20,12 @@ class EnrichmentContext:
     response_headers: dict = field(default_factory=dict)
     discovered_website: str | None = None
     computed_score: int | None = None  # set by orchestrator after scoring, before classification
+    # Raw crawl intermediates stashed by WebsiteCrawlerProvider so the
+    # DiagnosticProvider can call run_diagnostic without re-crawling.
+    site_data: dict | None = None
+    html_analysis: dict | None = None
+    pagespeed: dict | None = None
+    social_profiles: dict | None = None
 
 
 @dataclass

@@ -56,6 +56,16 @@ def test_plan_with_website_runs_crawler_chain():
     assert "website_crawler" in names
     assert "schema_extractor" in names
     assert "tech_stack" in names
+    assert "diagnostic" in names
+
+
+def test_plan_without_website_skips_diagnostic():
+    """Sem crawl chain (sem website nem cnpj), diagnostic não deve ser planejado."""
+    lead = FakeLead(nome="Solo", telefone="+554999")
+    orch = EnrichmentOrchestrator()
+    plan = orch.plan(lead)
+    names = [p.name for p in plan.providers]
+    assert "diagnostic" not in names
 
 
 def test_plan_without_website_but_with_cnpj_discovers_first():
