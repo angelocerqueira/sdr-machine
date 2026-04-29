@@ -315,7 +315,7 @@ def _run_outreach(job_id: int, params: dict):
                     "opportunity_reasons": lead.opportunity_reasons or [],
                     "site_analysis": lead.site_analysis or {},
                 }
-                messages = generate_messages(lead.id, lead_data)
+                messages = generate_messages(lead.public_id, lead_data)
                 for msg in messages:
                     om = OutreachMessage(
                         lead_id=lead.id,

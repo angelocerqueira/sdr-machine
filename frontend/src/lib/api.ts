@@ -147,8 +147,6 @@ export const deleteLead = async (id: number) => {
   return res;
 };
 
-export const getLeadLpUrl = (id: number) => `${API}/api/leads/${id}/lp`;
-
 export const getLeadByPublicId = (publicId: string) =>
   fetchAPI<Lead>(`/api/leads/p/${publicId}`);
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getLead, getLeadLpUrl, getLeadMessages, getLeadLandingPages, activateLandingPage, runGenerate, runOutreach, runEnrich } from "@/lib/api";
+import { getLead, getLeadLpUrlByPublicId, getLeadMessages, getLeadLandingPages, activateLandingPage, runGenerate, runOutreach, runEnrich } from "@/lib/api";
 import type { Lead, OutreachMessage, LandingPage, ServiceLevels } from "@/lib/types";
 import { ConfirmModal } from "./confirm-modal";
 import { DiagnosticPanel } from "./diagnostic-panel";
@@ -411,7 +411,7 @@ export function LeadSheet({ leadId, onClose }: LeadSheetProps) {
                     </a>
                   </div>
                   <iframe
-                    src={getLeadLpUrl(lead.id)}
+                    src={getLeadLpUrlByPublicId(lead.public_id)}
                     className="w-full h-[400px] bg-white"
                     title={`LP Preview — ${lead.nome}`}
                   />
