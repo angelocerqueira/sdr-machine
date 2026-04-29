@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
+# Telefone, CPF, CNPJ, etc. — qualquer sequência de 8+ dígitos seguidos.
+# Conservador: não tenta separar PII de números legítimos (ex.: 8000-token
+# count). Vale a troca por privacy-by-default em logs de diagnóstico.
+_DIGIT_RUN_RE = re.compile(r"\d{8,}")
 
 
 def _get_llm() -> ChatOpenAI:
@@ -33,17 +37,71 @@ def _get_llm() -> ChatOpenAI:
     )
 
 
+def _extract_balanced_json(text: str) -> str | None:
+    """Return the first balanced ``{...}`` block in ``text``, or None.
+
+    Tracks string boundaries so braces inside JSON string values don't break the
+    balance. Lets us recover a valid JSON object when the LLM wraps its
+    response in prose ("Here's the analysis: {...}\\n\\nHope it helps!").
+
+    Note: only escapes the next single char (the JSON spec's ``\\X`` form);
+    ``\\uXXXX`` is intentionally not decoded — none of the four hex digits can
+    be a structural ``{``/``}``/``"``/``\\``, so the byte-level walk stays
+    correct without unicode-escape handling.
+    """
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if escape:
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+    return None
+
+
+def _redact_pii(s: str) -> str:
+    """Replace runs of 8+ digits (phone, CPF, CNPJ) with ``***``."""
+    return _DIGIT_RUN_RE.sub("***", s)
+
+
 def _parse_response(text: str) -> MarketingDiagnostic:
-    """Parse LLM response into MarketingDiagnostic."""
+    """Parse LLM response into MarketingDiagnostic.
+
+    Tolerates: ``<think>`` blocks, ```` ```json ``` ```` fences, and prose
+    surrounding the JSON object.
+    """
     cleaned = _THINK_RE.sub("", text).strip()
     match = _JSON_BLOCK_RE.search(cleaned)
     if match:
         cleaned = match.group(1).strip()
+    else:
+        balanced = _extract_balanced_json(cleaned)
+        if balanced:
+            cleaned = balanced
     return MarketingDiagnostic(**json.loads(cleaned))
 
 
 def analyze_marketing(state: GraphState) -> dict:
     """Run marketing diagnostic LLM call and parse JSON."""
+    response_text: str | None = None
     try:
         llm = _get_llm()
         visible_text = _extract_visible_text(state.html)
@@ -60,8 +118,24 @@ def analyze_marketing(state: GraphState) -> dict:
             {"role": "system", "content": MARKETING_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ])
-        result = _parse_response(response.content)
+        response_text = response.content
+        result = _parse_response(response_text)
         return {"marketing_result": result}
     except Exception:
-        logger.exception("Marketing analyzer failed")
+        if response_text is None:
+            logger.exception("Marketing analyzer failed (no response captured)")
+        elif len(response_text) <= 400:
+            # head[:200]+tail[-200:] would overlap — log inline instead.
+            resp = _redact_pii(response_text.replace("\n", " "))
+            logger.exception(
+                "Marketing analyzer failed | resp_len=%d | resp=%r",
+                len(response_text), resp,
+            )
+        else:
+            head = _redact_pii(response_text[:200].replace("\n", " "))
+            tail = _redact_pii(response_text[-200:].replace("\n", " "))
+            logger.exception(
+                "Marketing analyzer failed | resp_len=%d | head=%r | tail=%r",
+                len(response_text), head, tail,
+            )
         return {"marketing_result": None}
