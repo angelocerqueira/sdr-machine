@@ -28,6 +28,9 @@ from app.pipeline.enrichment.providers.apollo_enricher import ApolloProvider
 from app.pipeline.enrichment.providers.classification_provider import (
     ClassificationProvider,
 )
+from app.pipeline.enrichment.providers.diagnostic_provider import (
+    DiagnosticProvider,
+)
 from app.pipeline.enrichment.classifier import build_classifier_llm_client
 from app.pipeline.enrichment.scoring import calculate_score
 
@@ -45,6 +48,7 @@ def _default_providers() -> list[BaseProvider]:
         WebsiteCrawlerProvider(),
         SchemaOrgProvider(),
         TechStackProvider(),
+        DiagnosticProvider(),
         EmailDiscovererProvider(),
         ApolloProvider(),
         ClassificationProvider(llm_client=build_classifier_llm_client()),
@@ -56,6 +60,7 @@ _PHASE_ORDER = [
     "website_crawler",
     "schema_extractor",
     "tech_stack",
+    "diagnostic",
     "email_discoverer",
     "apollo",
     "classification",
@@ -107,6 +112,7 @@ class EnrichmentOrchestrator:
                 "website_crawler",
                 "schema_extractor",
                 "tech_stack",
+                "diagnostic",
                 "email_discoverer",
                 "apollo",
             }

@@ -134,6 +134,13 @@ class WebsiteCrawlerProvider(BaseProvider):
             except Exception as exc:
                 errors.append(f"social: {str(exc)[:100]}")
 
+        # Stash raw intermediates for DiagnosticProvider — avoids re-crawling
+        # and re-calling rate-limited PageSpeed.
+        context.site_data = site_data
+        context.html_analysis = html_analysis
+        context.pagespeed = pagespeed
+        context.social_profiles = social_profiles
+
         data = {
             "site_analysis": site_analysis,
             "social_profiles": social_profiles,

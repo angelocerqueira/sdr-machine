@@ -63,6 +63,31 @@ def test_run_populates_context_html(mock_get):
 
 
 @patch("app.pipeline.enrichment.providers.website_crawler.requests.get")
+def test_run_stashes_diagnostic_intermediates_in_context(mock_get):
+    """Crawler must populate context.site_data/html_analysis/pagespeed so the
+    DiagnosticProvider can run without re-crawling or re-calling PageSpeed."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.text = "<html><head><title>Foo</title></head><body></body></html>"
+    mock_resp.url = "https://example.com"
+    mock_resp.headers = {"Server": "nginx"}
+    mock_get.return_value = mock_resp
+
+    provider = WebsiteCrawlerProvider()
+    lead = FakeLead(website="https://example.com")
+    ctx = EnrichmentContext()
+
+    with patch("app.pipeline.enrichment.providers.website_crawler.check_pagespeed",
+               return_value={"performance_score": 80}):
+        provider.run(lead, ctx)
+
+    assert ctx.site_data is not None
+    assert ctx.site_data.get("status") == "ok"
+    assert ctx.html_analysis is not None
+    assert ctx.pagespeed == {"performance_score": 80}
+
+
+@patch("app.pipeline.enrichment.providers.website_crawler.requests.get")
 def test_run_handles_connection_error(mock_get):
     import requests
     mock_get.side_effect = requests.exceptions.ConnectionError("boom")
