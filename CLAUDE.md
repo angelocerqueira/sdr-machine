@@ -27,7 +27,7 @@ Each stage runs as a FastAPI background task, creating a `Job` record and stream
 
 ### Database Models
 
-Four tables: `jobs`, `leads`, `landing_pages`, `outreach_messages`. Lead has a PostgreSQL trigger for auto-updating `updated_at`. Leads belong to Jobs (SET NULL on delete), OutreachMessages and LandingPages belong to Leads (CASCADE on delete). Lead inclui 9 campos de enriquecimento: `email`, `cnpj`, `razao_social`, `porte`, `cnae`, `data_fundacao` (Date), `socios` (JSON), `tech_stack` (JSON), `enrichment_sources` (JSON). Indexes em `email` e `cnpj` além dos existentes (status, nicho, cidade, opportunity_score).
+Seven tables: `jobs`, `leads`, `landing_pages`, `outreach_messages` (pipeline core) + `integration_settings`, `workspace_profile`, `workspace_targeting` (UI Settings). Lead has a PostgreSQL trigger for auto-updating `updated_at`. Leads belong to Jobs (SET NULL on delete), OutreachMessages and LandingPages belong to Leads (CASCADE on delete). Lead inclui 9 campos de enriquecimento: `email`, `cnpj`, `razao_social`, `porte`, `cnae`, `data_fundacao` (Date), `socios` (JSON), `tech_stack` (JSON), `enrichment_sources` (JSON). Indexes em `email` e `cnpj` além dos existentes (status, nicho, cidade, opportunity_score). As 3 tabelas de settings têm `workspace_id INT DEFAULT 1` (multi-tenant scaffold; constante 1 hoje, single workspace).
 
 ### Frontend ↔ Backend
 

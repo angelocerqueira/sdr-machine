@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:3000"
     settings_enc_key: str  # Fernet master key — obrigatório
 
+    # protected_namespaces=("model_",) substitui o default que inclui "settings_"
+    # — necessário porque temos `settings_enc_key` que colidiria com BaseSettings methods.
     model_config = {"env_file": ".env", "protected_namespaces": ("model_",)}
 
 

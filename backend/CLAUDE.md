@@ -40,10 +40,11 @@ Pydantic `BaseSettings` loading from `.env` (see `.env.example`). Key vars:
 | `OPPORTUNITY_SCORE_THRESHOLD` | 40 | Lead qualification cutoff |
 | `HUNTER_API_KEY` | `""` | Email discovery via Hunter.io (opcional) |
 | `APOLLO_API_KEY` | `""` | Contact enrichment via Apollo.io (opcional) |
+| `SETTINGS_ENC_KEY` | (required) | Fernet master key para credenciais cifradas em `integration_settings`. Gere com `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. App não inicia sem esta var. |
 
 ## Database Models (`app/models.py`)
 
-Four tables: `jobs`, `leads`, `landing_pages`, `outreach_messages`.
+Seven tables: `jobs`, `leads`, `landing_pages`, `outreach_messages` (pipeline core) + `integration_settings`, `workspace_profile`, `workspace_targeting` (UI Settings — workspace_id scaffold, single-tenant hoje).
 
 - **Lead** has indexes on `status`, `nicho`, `cidade`, `opportunity_score`, `email`, `cnpj`. Has a PostgreSQL trigger for auto-updating `updated_at` (created in the Alembic migration, not in app code).
 - **Lead** enrichment columns (added by Smart Enrichment Pipeline):
