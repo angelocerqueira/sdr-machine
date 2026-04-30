@@ -136,3 +136,20 @@
   padding-top: 24px;
   border-top: 1px solid var(--line-1);
 }
+
+.settings-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.settings-chip button {
+  background: none; border: 0; cursor: pointer; color: inherit; opacity: 0.6;
+  font-size: 16px; line-height: 1; padding: 0 2px;
+}
+.settings-chip button:hover { opacity: 1; }
