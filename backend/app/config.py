@@ -38,7 +38,12 @@ class Settings(BaseSettings):
     hunter_api_key: str = ""
     apollo_api_key: str = ""
     frontend_url: str = "http://localhost:3000"
-    settings_enc_key: str  # Fernet master key — obrigatório
+    # Fernet master key. Default "" pra container subir mesmo sem secret;
+    # crypto.py faz lazy init e levanta erro claro só quando alguém tenta
+    # cifrar/decifrar. Integrações via env fallback continuam funcionando.
+    # Add SETTINGS_ENC_KEY aos secrets do Railway antes de configurar
+    # credenciais via UI Settings.
+    settings_enc_key: str = ""
 
     # protected_namespaces=("model_",) substitui o default que inclui "settings_"
     # — necessário porque temos `settings_enc_key` que colidiria com BaseSettings methods.

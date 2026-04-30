@@ -11,7 +11,7 @@ from cryptography.fernet import InvalidToken
 from sqlalchemy.orm import Session
 
 from app import config as _config_module
-from app.integrations.crypto import decrypt
+from app.integrations.crypto import SettingsEncKeyMissing, decrypt
 from app.integrations.schemas import SECRET_FIELDS
 from app.models import IntegrationSettings
 
@@ -45,10 +45,11 @@ def _decrypt_secrets(provider: str, raw: dict, *, strict: bool = True) -> dict |
     """Aplica decrypt nos campos listados em SECRET_FIELDS pro provider.
 
     Args:
-        strict: True (default) → propaga InvalidToken pra caller (usado pelo
-                router pra retornar 422 e pedir re-paste).
-                False → log warning + retorna None se algum secret estiver
-                corrompido (usado por get_provider_config pra cair no env
+        strict: True (default) → propaga InvalidToken / SettingsEncKeyMissing
+                pra caller (usado pelo router pra retornar 422/503 e pedir
+                ação ao user).
+                False → log warning + retorna None se houver corrupção ou
+                key ausente (usado por get_provider_config pra cair no env
                 fallback sem crashar pipeline).
     """
     secret_fields = SECRET_FIELDS.get(provider, set())
@@ -57,13 +58,13 @@ def _decrypt_secrets(provider: str, raw: dict, *, strict: bool = True) -> dict |
         if k in secret_fields and isinstance(v, str) and v:
             try:
                 out[k] = decrypt(v)
-            except InvalidToken:
+            except (InvalidToken, SettingsEncKeyMissing) as exc:
                 if strict:
                     raise
                 logger.warning(
-                    "Corrupted ciphertext for provider=%s field=%s; "
+                    "Cannot decrypt provider=%s field=%s (%s); "
                     "treating row as unconfigured and falling back to env",
-                    provider, k,
+                    provider, k, type(exc).__name__,
                 )
                 return None
         else:
