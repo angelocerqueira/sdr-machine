@@ -10,7 +10,7 @@ from app.pipeline.enrichment.base_provider import (
     EnrichmentContext,
     ProviderResult,
 )
-from app.config import settings
+from app.integrations.resolver import provider_config_for
 
 logger = logging.getLogger(__name__)
 
@@ -29,13 +29,17 @@ class ApolloProvider(BaseProvider):
     cost = "freemium"
 
     def can_run(self, lead, context: EnrichmentContext | None = None) -> bool:
-        if not settings.apollo_api_key:
+        _cfg = provider_config_for("apollo") or {}
+        if not _cfg.get("api_key", ""):
             return False
         website = getattr(lead, "website", None) or (context.discovered_website if context else None)
         email = getattr(lead, "email", None)
         return bool(website or email)
 
     def run(self, lead, context: EnrichmentContext) -> ProviderResult:
+        _cfg = provider_config_for("apollo") or {}
+        _api_key = _cfg.get("api_key", "")
+
         website = getattr(lead, "website", None) or (context.discovered_website if context else None)
         domain = _extract_domain(website or "")
         if not domain:
@@ -51,7 +55,7 @@ class ApolloProvider(BaseProvider):
         try:
             resp = requests.get(
                 APOLLO_ORG_ENRICH_URL,
-                headers={"X-Api-Key": settings.apollo_api_key},
+                headers={"X-Api-Key": _api_key},
                 params={"domain": domain},
                 timeout=20,
             )

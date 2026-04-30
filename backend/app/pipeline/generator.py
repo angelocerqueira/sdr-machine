@@ -21,6 +21,7 @@ import re
 import requests
 
 from app.config import settings
+from app.integrations.resolver import provider_config_for
 
 logger = logging.getLogger(__name__)
 
@@ -447,17 +448,22 @@ REGRAS CRÍTICAS:
 - A paleta deve ter pelo menos 4 tons de dark para profundidade
 - As fontes devem ter PERSONALIDADE e ser específicas para este negócio"""
 
+    _llm_cfg = provider_config_for("llm") or {}
+    _api_key = _llm_cfg.get("api_key", "")
+    _base_url = _llm_cfg.get("base_url", "")
+    _model = _llm_cfg.get("model", "")
+
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {settings.llm_api_key}",
+        "Authorization": f"Bearer {_api_key}",
     }
 
     try:
         resp = _llm_post(
-            f"{settings.llm_base_url}/chat/completions",
+            f"{_base_url}/chat/completions",
             headers=headers,
             body={
-                "model": settings.llm_model,
+                "model": _model,
                 "temperature": 0.85,
                 "messages": [
                     {"role": "system", "content": system},
@@ -636,15 +642,20 @@ Gere o HTML completo agora."""
         {"role": "user", "content": user},
     ]
 
+    _llm_cfg = provider_config_for("llm") or {}
+    _api_key = _llm_cfg.get("api_key", "")
+    _base_url = _llm_cfg.get("base_url", "")
+    _model = _llm_cfg.get("model", "")
+
     try:
         resp = _llm_post(
-            f"{settings.llm_base_url}/chat/completions",
+            f"{_base_url}/chat/completions",
             headers={
                 "Content-Type": "application/json",
-                "Authorization": f"Bearer {settings.llm_api_key}",
+                "Authorization": f"Bearer {_api_key}",
             },
             body={
-                "model": settings.llm_model,
+                "model": _model,
                 "temperature": 0.7,
                 "messages": messages,
             },

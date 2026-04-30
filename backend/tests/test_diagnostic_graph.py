@@ -56,13 +56,10 @@ class TestRunDiagnostic:
         assert result.qualificado is True
         assert result.nivel_recomendado in ("lp", "automacao_basica", "mapa_automacoes", "vertical_os")
 
+    @patch("app.pipeline.diagnostic.graph.provider_config_for", return_value=None)
     @patch("app.pipeline.diagnostic.graph.settings")
-    def test_returns_none_when_no_api_key(self, mock_settings):
-        mock_settings.llm_api_key = ""
+    def test_returns_none_when_no_api_key(self, mock_settings, mock_pcf):
         mock_settings.skip_service_level_analysis = False
-        mock_settings.langsmith_tracing = False
-        mock_settings.langsmith_api_key = ""
-        mock_settings.langsmith_project = "sdr-machine"
 
         result = run_diagnostic(
             lead_info=SAMPLE_LEAD_INFO,
@@ -78,9 +75,6 @@ class TestRunDiagnostic:
     @patch("app.pipeline.diagnostic.graph.settings")
     def test_returns_none_when_disabled(self, mock_settings):
         mock_settings.skip_service_level_analysis = True
-        mock_settings.langsmith_tracing = False
-        mock_settings.langsmith_api_key = ""
-        mock_settings.langsmith_project = "sdr-machine"
 
         result = run_diagnostic(
             lead_info=SAMPLE_LEAD_INFO,

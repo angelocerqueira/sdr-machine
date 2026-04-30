@@ -19,15 +19,13 @@ class FakeLead:
         self.top_reviews = kwargs.get("top_reviews", [])
 
 
-@patch("app.pipeline.enrichment.providers.apollo_enricher.settings")
-@patch("app.pipeline.enrichment.providers.email_discoverer.settings")
+@patch("app.pipeline.enrichment.providers.apollo_enricher.provider_config_for", return_value=None)
+@patch("app.pipeline.enrichment.providers.email_discoverer.provider_config_for", return_value=None)
 @patch("app.pipeline.enrichment.providers.website_crawler.check_pagespeed")
 @patch("app.pipeline.enrichment.providers.website_crawler.requests.get")
 def test_full_pipeline_on_website_lead(
-    mock_crawler_get, mock_pagespeed, mock_email_settings, mock_apollo_settings
+    mock_crawler_get, mock_pagespeed, mock_email_pcf, mock_apollo_pcf
 ):
-    mock_email_settings.hunter_api_key = ""
-    mock_apollo_settings.apollo_api_key = ""
 
     mock_resp = MagicMock()
     mock_resp.status_code = 200

@@ -7,6 +7,7 @@ import re
 import requests
 
 from app.config import settings
+from app.integrations.resolver import provider_config_for
 from app.pipeline.cnpj_scraper import scrape_cnpj
 
 
@@ -62,6 +63,11 @@ def scrape_google_maps(niche: str, city: str, max_results: int | None = None) ->
     if max_results is None:
         max_results = settings.max_results_per_search
 
+    _apify_cfg = provider_config_for("apify") or {}
+    _apify_token = _apify_cfg.get("token", "")
+    if not _apify_token:
+        return []
+
     url = "https://api.apify.com/v2/acts/compass~crawler-google-places/run-sync-get-dataset-items"
 
     payload = {
@@ -79,7 +85,7 @@ def scrape_google_maps(niche: str, city: str, max_results: int | None = None) ->
     }
 
     params = {
-        "token": settings.apify_token,
+        "token": _apify_token,
         "timeout": 120,
         "memory": 1024,
     }

@@ -7,6 +7,7 @@ from typing import Annotated
 from langgraph.graph import StateGraph, START, END
 
 from app.config import settings
+from app.integrations.resolver import provider_config_for
 from app.pipeline.diagnostic.state import GraphState, ServiceLevelAnalysis
 from app.pipeline.diagnostic.nodes.collect import collect_context
 from app.pipeline.diagnostic.nodes.analyzers import (
@@ -20,11 +21,17 @@ from app.pipeline.diagnostic.nodes.qualify import qualify
 
 logger = logging.getLogger(__name__)
 
-# Configure LangSmith tracing once at module level
-if settings.langsmith_tracing and settings.langsmith_api_key:
-    os.environ["LANGSMITH_API_KEY"] = settings.langsmith_api_key
-    os.environ["LANGSMITH_PROJECT"] = settings.langsmith_project
-    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+
+def _configure_langsmith() -> None:
+    """Configure LangSmith tracing from DB config (provider_config_for) with env fallback."""
+    _cfg = provider_config_for("langsmith") or {}
+    _api_key = _cfg.get("api_key", "")
+    _project = _cfg.get("project", "")
+    _tracing = _cfg.get("tracing", False)
+    if _tracing and _api_key:
+        os.environ["LANGSMITH_API_KEY"] = _api_key
+        os.environ["LANGSMITH_PROJECT"] = _project or "sdr-machine"
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
 
 
 def _build_graph() -> StateGraph:
@@ -84,9 +91,12 @@ def run_diagnostic(
     if settings.skip_service_level_analysis:
         return None
 
-    if not settings.llm_api_key:
+    _llm_cfg = provider_config_for("llm") or {}
+    if not _llm_cfg.get("api_key", ""):
         logger.warning("Service Level Analysis: LLM_API_KEY não configurada")
         return None
+
+    _configure_langsmith()
 
     try:
         initial_state = collect_context(

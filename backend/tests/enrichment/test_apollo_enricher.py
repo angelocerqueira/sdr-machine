@@ -11,31 +11,27 @@ class FakeLead:
         self.email = email
 
 
-@patch("app.pipeline.enrichment.providers.apollo_enricher.settings")
-def test_cannot_run_without_api_key(mock_settings):
-    mock_settings.apollo_api_key = ""
+@patch("app.pipeline.enrichment.providers.apollo_enricher.provider_config_for", return_value=None)
+def test_cannot_run_without_api_key(mock_pcf):
     provider = ApolloProvider()
     assert provider.can_run(FakeLead(website="https://x.com")) is False
 
 
-@patch("app.pipeline.enrichment.providers.apollo_enricher.settings")
-def test_cannot_run_without_website_or_email(mock_settings):
-    mock_settings.apollo_api_key = "fake"
+@patch("app.pipeline.enrichment.providers.apollo_enricher.provider_config_for", return_value={"api_key": "fake"})
+def test_cannot_run_without_website_or_email(mock_pcf):
     provider = ApolloProvider()
     assert provider.can_run(FakeLead()) is False
 
 
-@patch("app.pipeline.enrichment.providers.apollo_enricher.settings")
-def test_can_run_with_key_and_website(mock_settings):
-    mock_settings.apollo_api_key = "fake"
+@patch("app.pipeline.enrichment.providers.apollo_enricher.provider_config_for", return_value={"api_key": "fake"})
+def test_can_run_with_key_and_website(mock_pcf):
     provider = ApolloProvider()
     assert provider.can_run(FakeLead(website="https://x.com")) is True
 
 
-@patch("app.pipeline.enrichment.providers.apollo_enricher.settings")
+@patch("app.pipeline.enrichment.providers.apollo_enricher.provider_config_for", return_value={"api_key": "fake_key"})
 @patch("app.pipeline.enrichment.providers.apollo_enricher.requests.get")
-def test_enrich_organization(mock_get, mock_settings):
-    mock_settings.apollo_api_key = "fake_key"
+def test_enrich_organization(mock_get, mock_pcf):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = {
@@ -67,10 +63,9 @@ def test_enrich_organization(mock_get, mock_settings):
 
 # --- EC17: Apollo 200 with null organization ---
 
-@patch("app.pipeline.enrichment.providers.apollo_enricher.settings")
+@patch("app.pipeline.enrichment.providers.apollo_enricher.provider_config_for", return_value={"api_key": "fake"})
 @patch("app.pipeline.enrichment.providers.apollo_enricher.requests.get")
-def test_handles_null_organization(mock_get, mock_settings):
-    mock_settings.apollo_api_key = "fake"
+def test_handles_null_organization(mock_get, mock_pcf):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = {"organization": None}
@@ -83,10 +78,9 @@ def test_handles_null_organization(mock_get, mock_settings):
     assert not apollo_data.get("name")
 
 
-@patch("app.pipeline.enrichment.providers.apollo_enricher.settings")
+@patch("app.pipeline.enrichment.providers.apollo_enricher.provider_config_for", return_value={"api_key": "fake_key"})
 @patch("app.pipeline.enrichment.providers.apollo_enricher.requests.get")
-def test_handles_rate_limit(mock_get, mock_settings):
-    mock_settings.apollo_api_key = "fake_key"
+def test_handles_rate_limit(mock_get, mock_pcf):
     mock_resp = MagicMock()
     mock_resp.status_code = 429
     mock_get.return_value = mock_resp

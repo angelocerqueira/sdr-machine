@@ -81,10 +81,9 @@ def test_normalizes_mixed_case_emails():
 
 # --- EC16: Hunter 402 quota exceeded ---
 
-@patch("app.pipeline.enrichment.providers.email_discoverer.settings")
+@patch("app.pipeline.enrichment.providers.email_discoverer.provider_config_for", return_value={"api_key": "fake"})
 @patch("app.pipeline.enrichment.providers.email_discoverer.requests.get")
-def test_hunter_402_recorded_as_error_not_crash(mock_get, mock_settings):
-    mock_settings.hunter_api_key = "fake"
+def test_hunter_402_recorded_as_error_not_crash(mock_get, mock_pcf):
     mock_resp = MagicMock()
     mock_resp.status_code = 402
     mock_get.return_value = mock_resp
@@ -106,10 +105,9 @@ def test_no_emails_returns_success_with_empty():
     assert result.data["site_analysis"]["emails_found"] == []
 
 
-@patch("app.pipeline.enrichment.providers.email_discoverer.settings")
+@patch("app.pipeline.enrichment.providers.email_discoverer.provider_config_for", return_value={"api_key": "fake_key"})
 @patch("app.pipeline.enrichment.providers.email_discoverer.requests.get")
-def test_hunter_api_called_when_key_configured(mock_get, mock_settings):
-    mock_settings.hunter_api_key = "fake_key"
+def test_hunter_api_called_when_key_configured(mock_get, mock_pcf):
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = {

@@ -47,3 +47,36 @@ def test_mask_empty():
     from app.integrations.crypto import mask
     assert mask("") == "••••••••"
     assert mask(None) == "••••••••"
+
+
+def test_crypto_module_imports_without_key(monkeypatch):
+    """Container deve subir mesmo sem SETTINGS_ENC_KEY — só falha em uso.
+
+    setenv("SETTINGS_ENC_KEY", "") força string vazia mesmo com .env local
+    setado (env vars têm precedência sobre .env file no pydantic-settings).
+    """
+    monkeypatch.setenv("SETTINGS_ENC_KEY", "")
+    import importlib
+    from app import config
+    importlib.reload(config)
+    from app.integrations import crypto
+    importlib.reload(crypto)
+    # Module-level state: _fernet ainda None, sem crash
+    assert crypto._fernet is None
+    assert config.settings.settings_enc_key == ""
+
+
+def test_crypto_raises_settings_enc_key_missing_on_use(monkeypatch):
+    """Tentar cifrar/decifrar sem key levanta erro tipado, não Fernet/ValueError."""
+    monkeypatch.setenv("SETTINGS_ENC_KEY", "")
+    import importlib
+    from app import config
+    importlib.reload(config)
+    from app.integrations import crypto
+    importlib.reload(crypto)
+    from app.integrations.crypto import SettingsEncKeyMissing, encrypt, decrypt
+
+    with pytest.raises(SettingsEncKeyMissing):
+        encrypt("anything")
+    with pytest.raises(SettingsEncKeyMissing):
+        decrypt("gAAAAAB-x")
