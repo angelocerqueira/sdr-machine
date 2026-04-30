@@ -168,3 +168,15 @@
 .settings-badge-warn { color: var(--warn); border-color: color-mix(in oklch, var(--warn) 30%, transparent); background: color-mix(in oklch, var(--warn) 8%, transparent); }
 .settings-badge-danger { color: var(--danger); border-color: color-mix(in oklch, var(--danger) 30%, transparent); background: color-mix(in oklch, var(--danger) 8%, transparent); }
 .settings-badge-muted { color: var(--text-muted); border-color: var(--line-1); background: var(--surface); }
+
+.settings-card {
+  display: block;
+  padding: 16px;
+  border: 1px solid var(--line-1);
+  border-radius: 12px;
+  background: var(--surface);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.settings-card:hover { border-color: var(--accent); transform: translateY(-1px); }
