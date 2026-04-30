@@ -153,3 +153,18 @@
   font-size: 16px; line-height: 1; padding: 0 2px;
 }
 .settings-chip button:hover { opacity: 1; }
+
+.settings-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 480;
+  border: 1px solid;
+}
+.settings-badge-ok { color: var(--ok); border-color: color-mix(in oklch, var(--ok) 30%, transparent); background: color-mix(in oklch, var(--ok) 8%, transparent); }
+.settings-badge-warn { color: var(--warn); border-color: color-mix(in oklch, var(--warn) 30%, transparent); background: color-mix(in oklch, var(--warn) 8%, transparent); }
+.settings-badge-danger { color: var(--danger); border-color: color-mix(in oklch, var(--danger) 30%, transparent); background: color-mix(in oklch, var(--danger) 8%, transparent); }
+.settings-badge-muted { color: var(--text-muted); border-color: var(--line-1); background: var(--surface); }
