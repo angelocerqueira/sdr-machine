@@ -134,3 +134,101 @@ def test_integration_test_endpoint(client, httpx_mock):
 def test_integration_test_without_config_fails(client):
     res = client.post("/api/workspace/integrations/resend/test")
     assert res.status_code == 400
+
+
+def test_integration_get_with_corrupt_secret_does_not_500(client, db):
+    """Linha com ciphertext inválido (key rotation, corrupção) não pode quebrar
+    GET /integrations — deve marcar needs_reencrypt e seguir."""
+    from app.models import IntegrationSettings
+
+    db.add(IntegrationSettings(
+        workspace_id=1, provider="resend",
+        config={
+            "api_key": "gAAAAAB-not-a-valid-fernet-token",  # cifra inválida
+            "from_email": "x@y.com",
+            "from_name": "X",
+        },
+        enabled=True,
+    ))
+    db.commit()
+
+    # GET single
+    res = client.get("/api/workspace/integrations/resend")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["config"]["has_api_key"] is True
+    assert "api_key_last4" not in body["config"]
+    assert body["config"]["needs_reencrypt"] is True
+
+    # GET list — não pode 500 mesmo com 1 linha corrompida
+    res = client.get("/api/workspace/integrations")
+    assert res.status_code == 200
+    items = res.json()
+    resend = next(i for i in items if i["provider"] == "resend")
+    assert resend["config"]["needs_reencrypt"] is True
+
+
+def test_integration_put_with_corrupt_secret_returns_422(client, db):
+    """PUT preservando secret corrompido (sem re-paste) retorna 422 claro,
+    não 500."""
+    from app.models import IntegrationSettings
+
+    db.add(IntegrationSettings(
+        workspace_id=1, provider="resend",
+        config={
+            "api_key": "gAAAAAB-not-a-valid-fernet-token",
+            "from_email": "x@y.com",
+            "from_name": "X",
+        },
+        enabled=True,
+    ))
+    db.commit()
+
+    # PUT só de campo plain — secret corrompido permanece
+    res = client.put("/api/workspace/integrations/resend", json={
+        "config": {"from_email": "novo@y.com"}
+    })
+    assert res.status_code == 422
+    assert "corrupted" in res.json()["detail"].lower()
+
+
+def test_integration_put_overwrites_corrupt_secret_with_new_value(client, db):
+    """User re-paste de secret novo deve sobrescrever ciphertext corrompido."""
+    from app.models import IntegrationSettings
+
+    db.add(IntegrationSettings(
+        workspace_id=1, provider="resend",
+        config={
+            "api_key": "gAAAAAB-not-a-valid-fernet-token",
+            "from_email": "x@y.com",
+            "from_name": "X",
+        },
+        enabled=True,
+    ))
+    db.commit()
+
+    res = client.put("/api/workspace/integrations/resend", json={
+        "config": {"api_key": "re_new_valid_value", "from_email": "x@y.com", "from_name": "X"}
+    })
+    assert res.status_code == 200
+    body = res.json()
+    assert body["config"]["has_api_key"] is True
+    assert body["config"]["api_key_last4"] == "alue"
+    assert "needs_reencrypt" not in body["config"]
+
+
+def test_integration_test_with_corrupt_secret_returns_422(client, db):
+    """POST /test em linha com secret corrompido retorna 422 claro."""
+    from app.models import IntegrationSettings
+
+    db.add(IntegrationSettings(
+        workspace_id=1, provider="resend",
+        config={"api_key": "gAAAAAB-not-a-valid-fernet-token",
+                "from_email": "x@y.com", "from_name": "X"},
+        enabled=True,
+    ))
+    db.commit()
+
+    res = client.post("/api/workspace/integrations/resend/test")
+    assert res.status_code == 422
+    assert "corrupted" in res.json()["detail"].lower()

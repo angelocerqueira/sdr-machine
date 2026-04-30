@@ -28,15 +28,14 @@ class ProfileIn(BaseModel):
 
 
 class ProfileOut(BaseModel):
+    model_config = {"from_attributes": True}
+
     business_name: str | None
     your_name: str | None
     your_email: str | None
     your_whatsapp: str | None
     your_website: str | None
     legal_basis: str | None
-
-    class Config:
-        from_attributes = True
 
 
 def _get_or_create_profile(db: Session, ws: int) -> WorkspaceProfile:
@@ -83,8 +82,7 @@ class TargetingIn(BaseModel):
 
 
 class TargetingOut(TargetingIn):
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 def _get_or_create_targeting(db: Session, ws: int) -> WorkspaceTargeting:
@@ -117,7 +115,9 @@ def put_targeting(payload: TargetingIn, request: Request, db: Session = Depends(
 # ─────── Integrations ───────
 import datetime as _dt
 
-from app.integrations.crypto import encrypt
+from cryptography.fernet import InvalidToken
+
+from app.integrations.crypto import decrypt, encrypt
 from app.integrations.resolver import _decrypt_secrets  # shared logic within app.integrations
 from app.integrations.schemas import PROVIDER_SCHEMAS, SECRET_FIELDS
 from app.integrations.testers import run_test
@@ -127,20 +127,37 @@ KNOWN_PROVIDERS = list(PROVIDER_SCHEMAS.keys())
 
 
 def _mask_config(provider: str, raw: dict) -> dict:
-    """Aplica mask em campos secretos e expõe flags has_*/last4 pra UI."""
+    """Aplica mask em campos secretos e expõe flags has_*/last4 pra UI.
+
+    Decifra cada secret individualmente. Se o ciphertext estiver corrompido
+    (key rotation sem re-encrypt, restore parcial, edição manual de DB), marca
+    `needs_reencrypt=true` e segue — sem isso, uma linha ruim quebraria
+    GET /integrations inteiro com 500.
+    """
     secrets = SECRET_FIELDS.get(provider, set())
     out = {}
     for k, v in raw.items():
         if k in secrets:
             continue  # secret nunca volta em plain
         out[k] = v
-    # decifra (em memória) só pra calcular last4
-    decrypted = _decrypt_secrets(provider, raw)
+
+    needs_reencrypt = False
     for field in secrets:
-        val = decrypted.get(field)
-        out[f"has_{field}"] = bool(val)
+        cipher = raw.get(field)
+        if not cipher or not isinstance(cipher, str):
+            out[f"has_{field}"] = False
+            continue
+        out[f"has_{field}"] = True
+        try:
+            val = decrypt(cipher)
+        except InvalidToken:
+            needs_reencrypt = True
+            continue
         if val:
             out[f"{field}_last4"] = val[-4:] if len(val) >= 4 else val
+
+    if needs_reencrypt:
+        out["needs_reencrypt"] = True
     return out
 
 
@@ -206,7 +223,14 @@ def put_integration(provider: str, payload: IntegrationPut, request: Request, db
 
     # Validar shape com Pydantic — testes só fazem sentido se schema completo
     schema = PROVIDER_SCHEMAS[provider]
-    decrypted = _decrypt_secrets(provider, new_config)
+    try:
+        decrypted = _decrypt_secrets(provider, new_config)
+    except InvalidToken:
+        raise HTTPException(
+            422,
+            f"Stored secret for {provider} is corrupted (Fernet key rotated or row tampered). "
+            f"Re-paste the credential to overwrite.",
+        )
     try:
         schema.model_validate(decrypted)
     except Exception as exc:
@@ -247,7 +271,14 @@ def test_integration(provider: str, request: Request, db: Session = Depends(get_
     if row is None or not row.config:
         raise HTTPException(400, "Integration not configured")
 
-    cfg = _decrypt_secrets(provider, row.config)
+    try:
+        cfg = _decrypt_secrets(provider, row.config)
+    except InvalidToken:
+        raise HTTPException(
+            422,
+            f"Stored secret for {provider} is corrupted (Fernet key rotated or row tampered). "
+            f"Re-save the credential before testing.",
+        )
     res = run_test(provider, cfg)
     row.last_tested_at = _dt.datetime.utcnow()
     row.last_test_result = res.to_dict()
