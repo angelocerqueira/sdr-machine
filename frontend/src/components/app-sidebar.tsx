@@ -174,6 +174,18 @@ export function AppSidebar() {
         </button>
         <div className="app-sidebar-sep" />
         <button
+          className={`app-sidebar-btn ${pathname.startsWith("/app/settings") ? "active" : ""}`}
+          onClick={() => {
+            router.push("/app/settings");
+            setMobileOpen(false);
+          }}
+        >
+          <Icon name="settings" size={18} />
+          <span className="app-sidebar-label">Configurações</span>
+          <span className="app-sidebar-tip">Configurações</span>
+        </button>
+        <div className="app-sidebar-sep" />
+        <button
           className="app-sidebar-btn"
           onClick={() => setSearchOpen(true)}
         >
@@ -217,6 +229,16 @@ export function AppSidebar() {
               <button className="avatar-menu-item" onClick={toggleTheme}>
                 <Icon name={theme === "dark" ? "sun" : "moon"} size={15} />
                 <span>{theme === "dark" ? "Modo claro" : "Modo escuro"}</span>
+              </button>
+              <button
+                className="avatar-menu-item"
+                onClick={() => {
+                  setAvatarOpen(false);
+                  router.push("/app/settings");
+                }}
+              >
+                <Icon name="settings" size={15} />
+                <span>Configurações</span>
               </button>
               <div className="avatar-menu-divider" />
               <button
