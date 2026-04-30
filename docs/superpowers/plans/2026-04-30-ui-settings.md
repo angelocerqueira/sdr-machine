@@ -29,7 +29,7 @@ backend/
 │   │   └── workspace_settings.py  # 9 endpoints
 │   └── models.py               # +3 modelos no fim
 ├── alembic/versions/
-│   └── k04_workspace_settings.py
+│   └── n07_workspace_settings.py
 └── tests/
     ├── test_settings_crypto.py
     ├── test_settings_schemas.py
@@ -506,25 +506,25 @@ git commit -m "feat(models): IntegrationSettings, WorkspaceProfile, WorkspaceTar
 ### Task 1.6: Alembic migration
 
 **Files:**
-- Create: `backend/alembic/versions/k04_workspace_settings.py`
+- Create: `backend/alembic/versions/n07_workspace_settings.py`
 
 - [ ] **Step 1: Criar migration manualmente**
 
-Create `backend/alembic/versions/k04_workspace_settings.py`:
+Create `backend/alembic/versions/n07_workspace_settings.py`:
 
 ```python
 """workspace settings — integrations, profile, targeting
 
 Revision ID: k04
-Revises: j03
+Revises: m06_place_id_unique
 Create Date: 2026-04-30
 """
 from alembic import op
 import sqlalchemy as sa
 
 
-revision = "k04"
-down_revision = "j03"
+revision = "n07"
+down_revision = "m06_place_id_unique"
 branch_labels = None
 depends_on = None
 
@@ -586,7 +586,7 @@ def downgrade() -> None:
 - [ ] **Step 2: Aplicar migration localmente**
 
 Run: `cd backend && alembic upgrade head`
-Expected: log mostra `Running upgrade j03 -> k04`. Sem erros.
+Expected: log mostra `Running upgrade m06 -> n07`. Sem erros.
 
 - [ ] **Step 3: Verificar tabelas**
 
@@ -606,8 +606,8 @@ Expected: 390+ passed.
 - [ ] **Step 6: Commit + abrir PR**
 
 ```bash
-git add backend/alembic/versions/k04_workspace_settings.py
-git commit -m "feat(db): migration k04 — integration_settings + workspace_profile + workspace_targeting"
+git add backend/alembic/versions/n07_workspace_settings.py
+git commit -m "feat(db): migration n07 — integration_settings + workspace_profile + workspace_targeting"
 git push -u origin feat/ui-settings-spec
 gh pr create --title "feat(settings): foundation — migration + crypto + schemas" --body "$(cat <<'EOF'
 ## Summary
