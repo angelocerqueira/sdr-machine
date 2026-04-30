@@ -14,7 +14,8 @@ export type IconName =
   | "info" | "warn" | "error" | "ok" | "bolt"
   | "wa" | "building" | "link" | "cnpj" | "score"
   | "settings" | "copy" | "external" | "drag" | "folder" | "empty"
-  | "refresh" | "message";
+  | "refresh" | "message"
+  | "user" | "target" | "tool";
 
 interface IconProps {
   name: IconName;
@@ -127,6 +128,12 @@ export function Icon({ name, size = 16, className = "", style }: IconProps) {
       return <svg {...common}><path d="M16 4v4h-4M4 16v-4h4"/><path d="M5.5 8A5.5 5.5 0 0 1 16 8M14.5 12a5.5 5.5 0 0 1-10.5 0"/></svg>;
     case "message":
       return <svg {...common}><path d="M4 4h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H8l-4 3V5a1 1 0 0 1 1-1z"/></svg>;
+    case "user":
+      return <svg {...common}><circle cx="10" cy="7" r="3.5"/><path d="M3 17c0-3.5 3-6 7-6s7 2.5 7 6"/></svg>;
+    case "target":
+      return <svg {...common}><circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="3.5"/><circle cx="10" cy="10" r="0.8" fill="currentColor" stroke="none"/></svg>;
+    case "tool":
+      return <svg {...common}><path d="M14.5 3.5a3 3 0 0 1 0 4.24l-8 8a1.5 1.5 0 0 1-2.12-2.12l8-8a3 3 0 0 1 2.12-.88z"/><path d="M4 16l1.5-1.5M6.5 5.5l4 4"/></svg>;
     default:
       return <svg {...common}><rect x="4" y="4" width="12" height="12" rx="1"/></svg>;
   }

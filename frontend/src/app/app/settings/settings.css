@@ -1,0 +1,65 @@
+.settings-shell {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: calc(100vh - 48px);
+}
+
+.settings-sidebar {
+  border-right: 1px solid var(--line-1);
+  background: var(--surface);
+  padding: 24px 16px;
+}
+
+.settings-sidebar-header h1 {
+  font-size: 13px;
+  font-weight: 460;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 16px 8px;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+  text-decoration: none;
+  min-height: 48px;
+}
+
+.settings-nav-item:hover {
+  background: var(--bg-soft);
+}
+
+.settings-nav-item--active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 480;
+}
+
+.settings-nav-chevron { margin-left: auto; opacity: 0.4; }
+
+.settings-content {
+  padding: 32px 24px;
+  max-width: 720px;
+}
+
+@media (max-width: 1023px) {
+  .settings-shell { grid-template-columns: 1fr; }
+  .settings-content { padding: 16px; }
+}
+
+@media (min-width: 1024px) {
+  .settings-shell { grid-template-columns: 220px 1fr; }
+  .settings-nav-chevron { display: none; }
+}
