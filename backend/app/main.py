@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings as app_settings
 from app.middleware import AuthMiddleware
-from app.routers import dashboard, leads, pipeline, settings
+from app.routers import dashboard, leads, pipeline, settings, workspace_settings
 
 app = FastAPI(title="SDR Machine API", version="1.0.0")
 
@@ -29,6 +29,7 @@ app.include_router(leads.router)
 app.include_router(dashboard.router)
 app.include_router(settings.router)
 app.include_router(pipeline.router)
+app.include_router(workspace_settings.router)
 
 
 @app.get("/api/health")
