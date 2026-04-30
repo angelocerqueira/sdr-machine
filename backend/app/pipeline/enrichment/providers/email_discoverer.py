@@ -10,7 +10,7 @@ from app.pipeline.enrichment.base_provider import (
     EnrichmentContext,
     ProviderResult,
 )
-from app.config import settings
+from app.integrations.resolver import provider_config_for
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,9 @@ class EmailDiscovererProvider(BaseProvider):
         emails_found = _filter_emails(emails_found)
 
         website = getattr(lead, "website", None) or (context.discovered_website if context else None)
-        if settings.hunter_api_key and website:
+        _cfg = provider_config_for("hunter") or {}
+        _api_key = _cfg.get("api_key", "")
+        if _api_key and website:
             domain = _extract_domain(website)
             if domain:
                 try:
@@ -86,7 +88,7 @@ class EmailDiscovererProvider(BaseProvider):
                         HUNTER_DOMAIN_URL,
                         params={
                             "domain": domain,
-                            "api_key": settings.hunter_api_key,
+                            "api_key": _api_key,
                             "limit": 10,
                         },
                         timeout=15,
