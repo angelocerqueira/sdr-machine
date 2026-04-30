@@ -38,8 +38,9 @@ class Settings(BaseSettings):
     hunter_api_key: str = ""
     apollo_api_key: str = ""
     frontend_url: str = "http://localhost:3000"
+    settings_enc_key: str  # Fernet master key — obrigatório
 
-    model_config = {"env_file": ".env"}
+    model_config = {"env_file": ".env", "protected_namespaces": ("model_",)}
 
 
 settings = Settings()
