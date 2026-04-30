@@ -66,3 +66,20 @@ def _env_fallback(provider: str) -> dict | None:
             }
         return None
     return None  # resend, telegram nunca tiveram env
+
+
+from app.database import SessionLocal
+from app.integrations.tenant import DEFAULT_WORKSPACE_ID
+
+
+def provider_config_for(provider: str) -> dict | None:
+    """Conveniência pra call sites de pipeline (sync, sem request).
+
+    Hoje single-workspace. Quando virar multi-tenant, call sites de
+    background passam workspace_id explícito.
+    """
+    db = SessionLocal()
+    try:
+        return get_provider_config(db, DEFAULT_WORKSPACE_ID, provider)
+    finally:
+        db.close()
