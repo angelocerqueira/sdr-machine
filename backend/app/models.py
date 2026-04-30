@@ -142,3 +142,54 @@ class OutreachMessage(Base):
     __table_args__ = (
         Index("idx_outreach_messages_lead_id", "lead_id"),
     )
+
+
+class IntegrationSettings(Base):
+    __tablename__ = "integration_settings"
+
+    id = Column(Integer, primary_key=True)
+    workspace_id = Column(Integer, nullable=False, default=1, server_default="1")
+    provider = Column(String(32), nullable=False)
+    config = Column(JSON, nullable=False, default=dict, server_default="{}")
+    enabled = Column(Boolean, nullable=False, default=True, server_default="true")
+    last_tested_at = Column(DateTime, nullable=True)
+    last_test_result = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "provider", name="uq_integration_workspace_provider"),
+        Index("idx_integration_settings_workspace", "workspace_id"),
+    )
+
+
+class WorkspaceProfile(Base):
+    __tablename__ = "workspace_profile"
+
+    workspace_id = Column(Integer, primary_key=True, default=1, server_default="1")
+    business_name = Column(String(255), nullable=True)
+    your_name = Column(String(255), nullable=True)
+    your_email = Column(String(255), nullable=True)
+    your_whatsapp = Column(String(50), nullable=True)
+    your_website = Column(String(500), nullable=True)
+    legal_basis = Column(String(64), nullable=True, default="legitimo_interesse_b2b",
+                         server_default="legitimo_interesse_b2b")
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class WorkspaceTargeting(Base):
+    __tablename__ = "workspace_targeting"
+
+    workspace_id = Column(Integer, primary_key=True, default=1, server_default="1")
+    target_niches = Column(JSON, nullable=True, default=list, server_default="[]")
+    target_cities = Column(JSON, nullable=True, default=list, server_default="[]")
+    min_rating = Column(Float, nullable=True)
+    max_results_per_search = Column(Integer, nullable=True)
+    opportunity_score_threshold = Column(Integer, nullable=True)
+    diagnostic_model = Column(String(64), nullable=True)
+    skip_ai_diagnostic = Column(Boolean, nullable=True)
+    skip_social_scraping = Column(Boolean, nullable=True)
+    ai_potential_threshold = Column(Integer, nullable=True)
+    disqualify_threshold = Column(Integer, nullable=True)
+    skip_service_level_analysis = Column(Boolean, nullable=True)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
