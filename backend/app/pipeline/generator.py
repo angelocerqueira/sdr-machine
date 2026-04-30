@@ -464,7 +464,7 @@ REGRAS CRÍTICAS:
                     {"role": "user", "content": user},
                 ],
             },
-            timeout=60,
+            timeout=120,
         )
         data = resp.json()
         logger.debug("Pass 1 raw response keys: %s", list(data.keys()))
