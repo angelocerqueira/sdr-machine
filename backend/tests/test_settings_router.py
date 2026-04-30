@@ -48,3 +48,89 @@ def test_targeting_put(client):
     })
     assert res.status_code == 200
     assert res.json()["min_rating"] == 4.0
+
+
+def test_integrations_list_empty(client):
+    res = client.get("/api/workspace/integrations")
+    assert res.status_code == 200
+    body = res.json()
+    assert isinstance(body, list)
+    # Cada provider conhecido aparece como "desconectado" se sem row
+    providers = [i["provider"] for i in body]
+    for p in ["resend", "telegram", "apify", "llm", "hunter", "apollo", "langsmith"]:
+        assert p in providers
+
+
+def test_integration_put_creates_with_encrypted_secret(client, db):
+    res = client.put("/api/workspace/integrations/resend", json={
+        "config": {
+            "api_key": "re_real_secret",
+            "from_email": "x@y.com",
+            "from_name": "X",
+        }
+    })
+    assert res.status_code == 200
+    body = res.json()
+    # Resposta nunca vaza secret em texto
+    assert "api_key" not in body["config"] or body["config"].get("api_key") is None
+    assert body["config"]["has_api_key"] is True
+    assert body["config"]["api_key_last4"] == "cret"
+    # DB grava cifrado
+    from app.models import IntegrationSettings
+    row = db.query(IntegrationSettings).filter_by(provider="resend").first()
+    assert row.config["api_key"] != "re_real_secret"
+
+
+def test_integration_put_partial_keeps_secret(client, db):
+    # Setup: cria com secret
+    client.put("/api/workspace/integrations/resend", json={
+        "config": {"api_key": "re_first", "from_email": "x@y.com", "from_name": "X"}
+    })
+    # PUT sem api_key — mantém o atual
+    res = client.put("/api/workspace/integrations/resend", json={
+        "config": {"from_email": "novo@y.com"}
+    })
+    assert res.status_code == 200
+    assert res.json()["config"]["from_email"] == "novo@y.com"
+    assert res.json()["config"]["has_api_key"] is True
+    assert res.json()["config"]["api_key_last4"] == "irst"
+
+
+def test_integration_put_empty_secret_ignored(client, db):
+    client.put("/api/workspace/integrations/resend", json={
+        "config": {"api_key": "re_first", "from_email": "x@y.com", "from_name": "X"}
+    })
+    res = client.put("/api/workspace/integrations/resend", json={
+        "config": {"api_key": "", "from_email": "nu@y.com"}
+    })
+    assert res.json()["config"]["api_key_last4"] == "irst"  # mantido
+
+
+def test_integration_delete(client):
+    client.put("/api/workspace/integrations/resend", json={
+        "config": {"api_key": "re_x", "from_email": "x@y.com", "from_name": "X"}
+    })
+    res = client.delete("/api/workspace/integrations/resend")
+    assert res.status_code == 204
+    res = client.get("/api/workspace/integrations/resend")
+    assert res.json()["enabled"] is False
+
+
+def test_integration_test_endpoint(client, httpx_mock):
+    httpx_mock.add_response(
+        url="https://api.resend.com/domains",
+        json={"data": []}, status_code=200,
+    )
+    client.put("/api/workspace/integrations/resend", json={
+        "config": {"api_key": "re_x", "from_email": "x@y.com", "from_name": "X"}
+    })
+    res = client.post("/api/workspace/integrations/resend/test")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is True
+    assert body["latency_ms"] >= 0
+
+
+def test_integration_test_without_config_fails(client):
+    res = client.post("/api/workspace/integrations/resend/test")
+    assert res.status_code == 400
