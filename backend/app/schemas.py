@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
@@ -227,36 +227,39 @@ class BulkUpdateError(BaseModel):
 
 class BulkUpdateResult(BaseModel):
     updated: int
-    errors: list[BulkUpdateError]
+    errors: list[BulkUpdateError] = Field(default_factory=list)
 
 
 class BulkDeleteResult(BaseModel):
     deleted: int
-    errors: list[BulkUpdateError]
+    errors: list[BulkUpdateError] = Field(default_factory=list)
 
 
 # === Pipeline Preview ===
 
+PipelineAction = Literal["enrich", "generate", "outreach", "classify"]
+
+
 class PipelinePreviewRequest(BaseModel):
-    action: Literal["enrich", "generate", "outreach", "classify"]
+    action: PipelineAction
     lead_ids: list[int] = Field(min_length=1, max_length=5000)
-    options: dict = Field(default_factory=dict)
+    options: dict[str, Any] = Field(default_factory=dict)
 
 
 class PipelinePreviewResponse(BaseModel):
-    action: str
+    action: PipelineAction
     total_leads: int
     eligible: int
     skipped: int
-    skipped_reasons: dict[str, int]
+    skipped_reasons: dict[str, int] = Field(default_factory=dict)
     cost_estimate: dict | None = None
     quota_status: list[dict] | None = None
-    warnings: list[str]
+    warnings: list[str] = Field(default_factory=list)
 
 
 # === Lead IDs ===
 
 class LeadIdsResponse(BaseModel):
-    ids: list[int]
+    ids: list[int] = Field(default_factory=list)
     total: int
-    truncated: bool
+    truncated: bool = False
