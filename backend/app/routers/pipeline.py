@@ -26,6 +26,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["pipeline"])
 
 # ---------------------------------------------------------------------------
+# Eligibility status sets
+# ---------------------------------------------------------------------------
+# Status sets shared between the preview endpoint and runners.
+# Keep these in sync — the preview reports eligibility based on these sets.
+ENRICH_INPUT_STATUSES = frozenset({"scraped", "enrich_failed"})
+OUTREACH_INPUT_STATUSES = frozenset({"lp_generated", "outreach_ready", "outreach_failed"})
+
+# ---------------------------------------------------------------------------
 # In-memory SSE events
 # ---------------------------------------------------------------------------
 
@@ -148,7 +156,13 @@ def _run_enrich(job_id: int, params: dict):
         force_providers = params.get("force_providers", []) or []
 
         if lead_ids:
-            leads = db.query(Lead).filter(Lead.id.in_(lead_ids)).all()
+            query = db.query(Lead).filter(Lead.id.in_(lead_ids))
+            # When force_providers is set, re-enrichment is explicit — accept any status.
+            # Otherwise filter to natural inputs (scraped, enrich_failed) so we don't
+            # silently re-enrich already-enriched leads.
+            if not force_providers:
+                query = query.filter(Lead.status.in_(ENRICH_INPUT_STATUSES))
+            leads = query.all()
         else:
             leads = db.query(Lead).filter(Lead.status == "scraped").all()
 
@@ -299,7 +313,7 @@ def _run_outreach(job_id: int, params: dict):
         if lead_ids:
             leads = db.query(Lead).filter(
                 Lead.id.in_(lead_ids),
-                Lead.status != "disqualified",
+                Lead.status.in_(OUTREACH_INPUT_STATUSES),
             ).all()
         else:
             leads = db.query(Lead).filter(Lead.status == "lp_generated").all()
@@ -649,7 +663,7 @@ def preview_pipeline(payload: PipelinePreviewRequest, db: Session = Depends(get_
 
     if payload.action == "enrich":
         # leads in scraped or enrich_failed are the natural inputs
-        already = sum(1 for l in leads if l.status not in ("scraped", "enrich_failed"))
+        already = sum(1 for lead in leads if lead.status not in ENRICH_INPUT_STATUSES)
         if already > 0:
             skipped_reasons["already_enriched"] = already
             warnings.append(
@@ -659,15 +673,16 @@ def preview_pipeline(payload: PipelinePreviewRequest, db: Session = Depends(get_
                 eligible -= already
 
     elif payload.action == "generate":
-        disq = sum(1 for l in leads if l.status == "disqualified")
+        disq = sum(1 for lead in leads if lead.status == "disqualified")
         if disq > 0:
             skipped_reasons["disqualified"] = disq
             eligible -= disq
+            warnings.append(f"{disq} leads desqualificados serão ignorados.")
 
     elif payload.action == "outreach":
         no_lp = sum(
-            1 for l in leads
-            if l.status not in ("lp_generated", "outreach_ready", "outreach_failed")
+            1 for lead in leads
+            if lead.status not in OUTREACH_INPUT_STATUSES
         )
         if no_lp > 0:
             skipped_reasons["no_lp"] = no_lp

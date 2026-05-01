@@ -238,6 +238,7 @@ class BulkDeleteResult(BaseModel):
 # === Pipeline Preview ===
 
 PipelineAction = Literal["enrich", "generate", "outreach", "classify"]
+SkippedReason = Literal["already_enriched", "disqualified", "no_lp"]
 
 
 class PipelinePreviewRequest(BaseModel):
@@ -251,7 +252,7 @@ class PipelinePreviewResponse(BaseModel):
     total_leads: int
     eligible: int
     skipped: int
-    skipped_reasons: dict[str, int] = Field(default_factory=dict)
+    skipped_reasons: dict[SkippedReason, int] = Field(default_factory=dict)
     cost_estimate: dict | None = None
     quota_status: list[dict] | None = None
     warnings: list[str] = Field(default_factory=list)
