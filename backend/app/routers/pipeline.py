@@ -16,6 +16,8 @@ from app.schemas import (
     ScrapeRequest, EnrichRequest, GenerateRequest, OutreachRequest,
     JobOut, JobListOut, PipelineStatusOut,
     ClassifyRequest,
+    PipelinePreviewRequest,
+    PipelinePreviewResponse,
 )
 from app.config import settings
 
@@ -634,6 +636,58 @@ def pipeline_status(db: Session = Depends(get_db)):
         db.query(Job.type).filter(Job.status == "running").distinct().all()
     ]
     return PipelineStatusOut(eligible_counts=eligible, running_jobs=running)
+
+
+@router.post("/pipeline/preview", response_model=PipelinePreviewResponse)
+def preview_pipeline(payload: PipelinePreviewRequest, db: Session = Depends(get_db)):
+    leads = db.query(Lead).filter(Lead.id.in_(payload.lead_ids)).all()
+    total = len(leads)
+
+    skipped_reasons: dict[str, int] = {}
+    warnings: list[str] = []
+    eligible = total
+
+    if payload.action == "enrich":
+        # leads in scraped or enrich_failed are the natural inputs
+        already = sum(1 for l in leads if l.status not in ("scraped", "enrich_failed"))
+        if already > 0:
+            skipped_reasons["already_enriched"] = already
+            warnings.append(
+                f"{already} leads já enriquecidos. Use force_providers para reprocessar."
+            )
+            if not payload.options.get("force_providers"):
+                eligible -= already
+
+    elif payload.action == "generate":
+        disq = sum(1 for l in leads if l.status == "disqualified")
+        if disq > 0:
+            skipped_reasons["disqualified"] = disq
+            eligible -= disq
+
+    elif payload.action == "outreach":
+        no_lp = sum(
+            1 for l in leads
+            if l.status not in ("lp_generated", "outreach_ready", "outreach_failed")
+        )
+        if no_lp > 0:
+            skipped_reasons["no_lp"] = no_lp
+            eligible -= no_lp
+            warnings.append(
+                f"{no_lp} leads sem LP gerada. Gere LP antes do outreach."
+            )
+
+    # action == "classify" : no special filtering today (classifier handles all states)
+
+    return PipelinePreviewResponse(
+        action=payload.action,
+        total_leads=total,
+        eligible=eligible,
+        skipped=total - eligible,
+        skipped_reasons=skipped_reasons,
+        cost_estimate=None,
+        quota_status=None,
+        warnings=warnings,
+    )
 
 
 @router.post("/pipeline/scrape", response_model=JobOut)
