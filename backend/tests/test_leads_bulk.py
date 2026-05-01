@@ -127,6 +127,34 @@ class TestBulkUpdate:
         assert refreshed.status == "enriched"
         assert refreshed.nome == "Novo Nome"
 
+    def test_nicho_canonico_marks_manual(self, client, db):
+        """Mirrors single-lead PATCH invariant: setting nicho_canonico must set
+        nicho_source='manual' + nicho_confidence=1.0 so a future reclassify
+        won't overwrite the user's manual choice."""
+        lead = _make_lead(
+            db,
+            nome="Lead X",
+            nicho_canonico="outros",
+            nicho_source="llm_inferred",
+            nicho_confidence=0.4,
+        )
+
+        resp = client.patch(
+            "/api/leads/bulk",
+            json={
+                "lead_ids": [lead.id],
+                "data": {"nicho_canonico": "dentista"},
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["updated"] == 1
+
+        db.expire_all()
+        refreshed = db.get(Lead, lead.id)
+        assert refreshed.nicho_canonico == "dentista"
+        assert refreshed.nicho_source == "manual"
+        assert refreshed.nicho_confidence == 1.0
+
 
 class TestBulkDelete:
     def test_happy_path(self, client, db):

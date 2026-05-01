@@ -349,16 +349,22 @@ def bulk_update_leads(payload: BulkLeadUpdate, db: Session = Depends(get_db)):
         if lid not in found_ids
     ]
 
-    updated = 0
+    sets_nicho = "nicho_canonico" in update_data
     for lead in leads:
-        try:
-            for k, v in update_data.items():
-                setattr(lead, k, v)
-            updated += 1
-        except Exception as exc:  # noqa: BLE001 — bulk endpoint reports per-lead errors
-            errors.append(BulkUpdateError(lead_id=lead.id, error=str(exc)[:200]))
+        for k, v in update_data.items():
+            setattr(lead, k, v)
+        if sets_nicho:
+            lead.nicho_source = "manual"
+            lead.nicho_confidence = 1.0
 
-    db.commit()
+    try:
+        db.commit()
+        updated = len(leads)
+    except Exception as exc:  # noqa: BLE001 — surface commit failure as global error
+        db.rollback()
+        updated = 0
+        errors.append(BulkUpdateError(lead_id=0, error=f"Commit failed: {str(exc)[:200]}"))
+
     return BulkUpdateResult(updated=updated, errors=errors)
 
 
@@ -372,15 +378,17 @@ def bulk_delete_leads(payload: BulkLeadDelete, db: Session = Depends(get_db)):
         if lid not in found_ids
     ]
 
-    deleted = 0
     for lead in leads:
-        try:
-            db.delete(lead)
-            deleted += 1
-        except Exception as exc:  # noqa: BLE001 — bulk endpoint reports per-lead errors
-            errors.append(BulkUpdateError(lead_id=lead.id, error=str(exc)[:200]))
+        db.delete(lead)
 
-    db.commit()
+    try:
+        db.commit()
+        deleted = len(leads)
+    except Exception as exc:  # noqa: BLE001 — surface commit failure as global error
+        db.rollback()
+        deleted = 0
+        errors.append(BulkUpdateError(lead_id=0, error=f"Commit failed: {str(exc)[:200]}"))
+
     return BulkDeleteResult(deleted=deleted, errors=errors)
 
 
