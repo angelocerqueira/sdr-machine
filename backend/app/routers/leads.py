@@ -15,6 +15,7 @@ from app.schemas import (
     BulkUpdateResult,
     JobOut,
     LandingPageOut,
+    LeadIdsResponse,
     LeadListOut,
     LeadOut,
     LeadSummaryOut,
@@ -51,33 +52,42 @@ VALID_STATUSES = {
 }
 
 
-@router.get("/filters")
-def lead_filters(db: Session = Depends(get_db)):
-    """Return distinct nichos and cidades for dynamic filter dropdowns."""
-    nichos = [r[0] for r in db.query(Lead.nicho).filter(Lead.nicho.isnot(None)).distinct().order_by(Lead.nicho).all()]
-    cidades = [r[0] for r in db.query(Lead.cidade).filter(Lead.cidade.isnot(None)).distinct().order_by(Lead.cidade).all()]
-    return {"nichos": nichos, "cidades": cidades}
-
-
-@router.get("/counts")
-def lead_counts(
+def _apply_lead_filters(
+    query,
+    *,
+    status: str | None = None,
     nicho: str | None = None,
     cidade: str | None = None,
     score_min: int | None = None,
+    score_max: int | None = None,
+    has_telefone: bool | None = None,
+    has_email: bool | None = None,
     search: str | None = None,
     perfil_lead: str | None = None,
     nicho_canonico: str | None = None,
-    db: Session = Depends(get_db),
 ):
-    """Return lead counts grouped by status. Used by Kanban column headers."""
-    query = db.query(Lead.status, func.count(Lead.id))
-
+    """Apply common filters to a Lead query. Returns the filtered query."""
+    if status:
+        if status == "failed":
+            query = query.filter(Lead.status.like("%_failed"))
+        else:
+            query = query.filter(Lead.status == status)
     if nicho:
         query = query.filter(Lead.nicho == nicho)
     if cidade:
         query = query.filter(Lead.cidade == cidade)
     if score_min is not None:
         query = query.filter(Lead.opportunity_score >= score_min)
+    if score_max is not None:
+        query = query.filter(Lead.opportunity_score <= score_max)
+    if has_telefone is True:
+        query = query.filter(Lead.telefone.isnot(None))
+    elif has_telefone is False:
+        query = query.filter(Lead.telefone.is_(None))
+    if has_email is True:
+        query = query.filter(Lead.email.isnot(None))
+    elif has_email is False:
+        query = query.filter(Lead.email.is_(None))
     if search:
         term = f"%{search}%"
         query = query.filter(or_(
@@ -92,6 +102,44 @@ def lead_counts(
         query = query.filter(Lead.perfil_lead == perfil_lead)
     if nicho_canonico:
         query = query.filter(Lead.nicho_canonico == nicho_canonico)
+    return query
+
+
+@router.get("/filters")
+def lead_filters(db: Session = Depends(get_db)):
+    """Return distinct nichos and cidades for dynamic filter dropdowns."""
+    nichos = [r[0] for r in db.query(Lead.nicho).filter(Lead.nicho.isnot(None)).distinct().order_by(Lead.nicho).all()]
+    cidades = [r[0] for r in db.query(Lead.cidade).filter(Lead.cidade.isnot(None)).distinct().order_by(Lead.cidade).all()]
+    return {"nichos": nichos, "cidades": cidades}
+
+
+@router.get("/counts")
+def lead_counts(
+    nicho: str | None = None,
+    cidade: str | None = None,
+    score_min: int | None = None,
+    score_max: int | None = None,
+    has_telefone: bool | None = None,
+    has_email: bool | None = None,
+    search: str | None = None,
+    perfil_lead: str | None = None,
+    nicho_canonico: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Return lead counts grouped by status. Used by Kanban column headers."""
+    query = db.query(Lead.status, func.count(Lead.id))
+    query = _apply_lead_filters(
+        query,
+        nicho=nicho,
+        cidade=cidade,
+        score_min=score_min,
+        score_max=score_max,
+        has_telefone=has_telefone,
+        has_email=has_email,
+        search=search,
+        perfil_lead=perfil_lead,
+        nicho_canonico=nicho_canonico,
+    )
 
     rows = query.group_by(Lead.status).all()
     result: dict[str, int] = {}
@@ -128,12 +176,51 @@ def list_leads_for_review(
     )
 
 
+@router.get("/ids", response_model=LeadIdsResponse)
+def list_lead_ids(
+    status: str | None = None,
+    nicho: str | None = None,
+    cidade: str | None = None,
+    score_min: int | None = None,
+    score_max: int | None = None,
+    has_telefone: bool | None = None,
+    has_email: bool | None = None,
+    search: str | None = None,
+    perfil_lead: str | None = None,
+    nicho_canonico: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Return up to 5000 lead IDs matching the filters. Used by frontend
+    bulk-selection in 'select all matching filter' mode to materialize the ID set."""
+    query = _apply_lead_filters(
+        db.query(Lead.id),
+        status=status,
+        nicho=nicho,
+        cidade=cidade,
+        score_min=score_min,
+        score_max=score_max,
+        has_telefone=has_telefone,
+        has_email=has_email,
+        search=search,
+        perfil_lead=perfil_lead,
+        nicho_canonico=nicho_canonico,
+    )
+    total = query.count()
+    rows = query.limit(5001).all()
+    truncated = len(rows) > 5000
+    ids = [r[0] for r in rows[:5000]]
+    return LeadIdsResponse(ids=ids, total=total, truncated=truncated)
+
+
 @router.get("", response_model=LeadListOut)
 def list_leads(
     status: str | None = None,
     nicho: str | None = None,
     cidade: str | None = None,
     score_min: int | None = None,
+    score_max: int | None = None,
+    has_telefone: bool | None = None,
+    has_email: bool | None = None,
     search: str | None = None,
     perfil_lead: str | None = None,
     nicho_canonico: str | None = None,
@@ -142,33 +229,19 @@ def list_leads(
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Lead)
-
-    if status:
-        if status == "failed":
-            query = query.filter(Lead.status.like("%_failed"))
-        else:
-            query = query.filter(Lead.status == status)
-    if nicho:
-        query = query.filter(Lead.nicho == nicho)
-    if cidade:
-        query = query.filter(Lead.cidade == cidade)
-    if score_min is not None:
-        query = query.filter(Lead.opportunity_score >= score_min)
-    if search:
-        term = f"%{search}%"
-        query = query.filter(or_(
-            Lead.nome.ilike(term),
-            Lead.telefone.ilike(term),
-            Lead.nicho.ilike(term),
-            Lead.cidade.ilike(term),
-            Lead.email.ilike(term),
-            Lead.razao_social.ilike(term),
-        ))
-    if perfil_lead:
-        query = query.filter(Lead.perfil_lead == perfil_lead)
-    if nicho_canonico:
-        query = query.filter(Lead.nicho_canonico == nicho_canonico)
+    query = _apply_lead_filters(
+        db.query(Lead),
+        status=status,
+        nicho=nicho,
+        cidade=cidade,
+        score_min=score_min,
+        score_max=score_max,
+        has_telefone=has_telefone,
+        has_email=has_email,
+        search=search,
+        perfil_lead=perfil_lead,
+        nicho_canonico=nicho_canonico,
+    )
 
     if order_by == "prioridade":
         from sqlalchemy import case as sa_case
