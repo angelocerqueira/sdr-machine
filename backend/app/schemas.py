@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from typing import Literal
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # === Leads ===
@@ -207,3 +207,56 @@ class OutreachMessageOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# === Bulk Operations ===
+
+class BulkLeadUpdate(BaseModel):
+    lead_ids: list[int] = Field(min_length=1, max_length=5000)
+    data: LeadUpdate
+
+
+class BulkLeadDelete(BaseModel):
+    lead_ids: list[int] = Field(min_length=1, max_length=5000)
+
+
+class BulkUpdateError(BaseModel):
+    lead_id: int
+    error: str
+
+
+class BulkUpdateResult(BaseModel):
+    updated: int
+    errors: list[BulkUpdateError]
+
+
+class BulkDeleteResult(BaseModel):
+    deleted: int
+    errors: list[BulkUpdateError]
+
+
+# === Pipeline Preview ===
+
+class PipelinePreviewRequest(BaseModel):
+    action: Literal["enrich", "generate", "outreach", "classify"]
+    lead_ids: list[int] = Field(min_length=1, max_length=5000)
+    options: dict = Field(default_factory=dict)
+
+
+class PipelinePreviewResponse(BaseModel):
+    action: str
+    total_leads: int
+    eligible: int
+    skipped: int
+    skipped_reasons: dict[str, int]
+    cost_estimate: dict | None = None
+    quota_status: list[dict] | None = None
+    warnings: list[str]
+
+
+# === Lead IDs ===
+
+class LeadIdsResponse(BaseModel):
+    ids: list[int]
+    total: int
+    truncated: bool
