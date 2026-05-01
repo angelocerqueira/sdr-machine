@@ -64,10 +64,11 @@ Seven tables: `jobs`, `leads`, `landing_pages`, `outreach_messages` (pipeline co
 
 | Router | Prefix | Key endpoints |
 |--------|--------|---------------|
-| `routers/leads.py` | `/api/leads` | CRUD + filters (status, nicho, cidade, score_min) + `/lp` (returns HTML) + `/messages` |
+| `routers/leads.py` | `/api/leads` | CRUD + filters (status, nicho, cidade, score_min, score_max, has_telefone, has_email, search, perfil_lead, nicho_canonico) + `/lp` (returns HTML) + `/messages` + `/ids` (up to 5000 IDs for bulk-select) + `PATCH /bulk` + `DELETE /bulk` (bulk write, max 5000 IDs, per-id error reporting) |
+| `routers/pipeline.py` | `/api/pipeline` | scrape/enrich/generate/outreach/classify dispatch + `/preview` (dry-run eligibility/skip estimate per action) + jobs list/detail + SSE stream |
 | `routers/dashboard.py` | `/api/dashboard` | `/stats` — totals, avg score, leads_by_status, conversion_rate |
 | `routers/settings.py` | `/api/settings` | Read-only config for frontend |
-| `routers/pipeline.py` | `/api/pipeline` + `/api/jobs` | POST scrape/enrich/generate/outreach + job list/detail + SSE stream |
+| `routers/workspace_settings.py` | `/api/workspace` | Integration credentials, profile, targeting (UI Settings) |
 
 Health check: `GET /api/health`.
 
