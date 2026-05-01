@@ -50,6 +50,28 @@ class TestLeadIdsHappy:
         assert body["total"] == 5001
         assert body["truncated"] is True
 
+    def test_does_not_truncate_at_exactly_5000(self, client, db):
+        """Boundary case — locks down off-by-one in `truncated = len(rows) > 5000`."""
+        leads = [
+            Lead(
+                nome=f"Lead {i}",
+                telefone=f"4999900{i:04d}",
+                status="scraped",
+                cidade="Chapecó",
+                nicho="dentista",
+            )
+            for i in range(5000)
+        ]
+        db.add_all(leads)
+        db.commit()
+
+        resp = client.get("/api/leads/ids")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert len(body["ids"]) == 5000
+        assert body["total"] == 5000
+        assert body["truncated"] is False
+
     def test_empty(self, client, db):
         resp = client.get("/api/leads/ids")
         assert resp.status_code == 200, resp.text
