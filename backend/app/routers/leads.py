@@ -7,7 +7,21 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Job, LandingPage, Lead
-from app.schemas import JobOut, LandingPageOut, LeadListOut, LeadOut, LeadSummaryOut, LeadUpdate, OutreachMessageOut, ReclassifyRequest
+from app.schemas import (
+    BulkDeleteResult,
+    BulkLeadDelete,
+    BulkLeadUpdate,
+    BulkUpdateError,
+    BulkUpdateResult,
+    JobOut,
+    LandingPageOut,
+    LeadListOut,
+    LeadOut,
+    LeadSummaryOut,
+    LeadUpdate,
+    OutreachMessageOut,
+    ReclassifyRequest,
+)
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
 
@@ -313,6 +327,61 @@ def reclassify_lead(
     db.commit()
     db.refresh(lead)
     return lead
+
+
+@router.patch("/bulk", response_model=BulkUpdateResult)
+def bulk_update_leads(payload: BulkLeadUpdate, db: Session = Depends(get_db)):
+    update_data = payload.data.model_dump(exclude_unset=True)
+    if not update_data:
+        return BulkUpdateResult(updated=0)
+
+    if "status" in update_data and update_data["status"] not in VALID_STATUSES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid status: {update_data['status']}",
+        )
+
+    leads = db.query(Lead).filter(Lead.id.in_(payload.lead_ids)).all()
+    found_ids = {l.id for l in leads}
+    errors = [
+        BulkUpdateError(lead_id=lid, error="Lead not found")
+        for lid in payload.lead_ids
+        if lid not in found_ids
+    ]
+
+    updated = 0
+    for lead in leads:
+        try:
+            for k, v in update_data.items():
+                setattr(lead, k, v)
+            updated += 1
+        except Exception as exc:  # noqa: BLE001 — bulk endpoint reports per-lead errors
+            errors.append(BulkUpdateError(lead_id=lead.id, error=str(exc)[:200]))
+
+    db.commit()
+    return BulkUpdateResult(updated=updated, errors=errors)
+
+
+@router.delete("/bulk", response_model=BulkDeleteResult)
+def bulk_delete_leads(payload: BulkLeadDelete, db: Session = Depends(get_db)):
+    leads = db.query(Lead).filter(Lead.id.in_(payload.lead_ids)).all()
+    found_ids = {l.id for l in leads}
+    errors = [
+        BulkUpdateError(lead_id=lid, error="Lead not found")
+        for lid in payload.lead_ids
+        if lid not in found_ids
+    ]
+
+    deleted = 0
+    for lead in leads:
+        try:
+            db.delete(lead)
+            deleted += 1
+        except Exception as exc:  # noqa: BLE001 — bulk endpoint reports per-lead errors
+            errors.append(BulkUpdateError(lead_id=lead.id, error=str(exc)[:200]))
+
+    db.commit()
+    return BulkDeleteResult(deleted=deleted, errors=errors)
 
 
 @router.patch("/{lead_id}", response_model=LeadOut)
