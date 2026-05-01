@@ -7,7 +7,22 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Job, LandingPage, Lead
-from app.schemas import JobOut, LandingPageOut, LeadListOut, LeadOut, LeadSummaryOut, LeadUpdate, OutreachMessageOut, ReclassifyRequest
+from app.schemas import (
+    BulkDeleteResult,
+    BulkLeadDelete,
+    BulkLeadUpdate,
+    BulkUpdateError,
+    BulkUpdateResult,
+    JobOut,
+    LandingPageOut,
+    LeadIdsResponse,
+    LeadListOut,
+    LeadOut,
+    LeadSummaryOut,
+    LeadUpdate,
+    OutreachMessageOut,
+    ReclassifyRequest,
+)
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
 
@@ -37,33 +52,42 @@ VALID_STATUSES = {
 }
 
 
-@router.get("/filters")
-def lead_filters(db: Session = Depends(get_db)):
-    """Return distinct nichos and cidades for dynamic filter dropdowns."""
-    nichos = [r[0] for r in db.query(Lead.nicho).filter(Lead.nicho.isnot(None)).distinct().order_by(Lead.nicho).all()]
-    cidades = [r[0] for r in db.query(Lead.cidade).filter(Lead.cidade.isnot(None)).distinct().order_by(Lead.cidade).all()]
-    return {"nichos": nichos, "cidades": cidades}
-
-
-@router.get("/counts")
-def lead_counts(
+def _apply_lead_filters(
+    query,
+    *,
+    status: str | None = None,
     nicho: str | None = None,
     cidade: str | None = None,
     score_min: int | None = None,
+    score_max: int | None = None,
+    has_telefone: bool | None = None,
+    has_email: bool | None = None,
     search: str | None = None,
     perfil_lead: str | None = None,
     nicho_canonico: str | None = None,
-    db: Session = Depends(get_db),
 ):
-    """Return lead counts grouped by status. Used by Kanban column headers."""
-    query = db.query(Lead.status, func.count(Lead.id))
-
+    """Apply common filters to a Lead query. Returns the filtered query."""
+    if status:
+        if status == "failed":
+            query = query.filter(Lead.status.like("%_failed"))
+        else:
+            query = query.filter(Lead.status == status)
     if nicho:
         query = query.filter(Lead.nicho == nicho)
     if cidade:
         query = query.filter(Lead.cidade == cidade)
     if score_min is not None:
         query = query.filter(Lead.opportunity_score >= score_min)
+    if score_max is not None:
+        query = query.filter(Lead.opportunity_score <= score_max)
+    if has_telefone is True:
+        query = query.filter(Lead.telefone.isnot(None))
+    elif has_telefone is False:
+        query = query.filter(Lead.telefone.is_(None))
+    if has_email is True:
+        query = query.filter(Lead.email.isnot(None))
+    elif has_email is False:
+        query = query.filter(Lead.email.is_(None))
     if search:
         term = f"%{search}%"
         query = query.filter(or_(
@@ -78,6 +102,44 @@ def lead_counts(
         query = query.filter(Lead.perfil_lead == perfil_lead)
     if nicho_canonico:
         query = query.filter(Lead.nicho_canonico == nicho_canonico)
+    return query
+
+
+@router.get("/filters")
+def lead_filters(db: Session = Depends(get_db)):
+    """Return distinct nichos and cidades for dynamic filter dropdowns."""
+    nichos = [r[0] for r in db.query(Lead.nicho).filter(Lead.nicho.isnot(None)).distinct().order_by(Lead.nicho).all()]
+    cidades = [r[0] for r in db.query(Lead.cidade).filter(Lead.cidade.isnot(None)).distinct().order_by(Lead.cidade).all()]
+    return {"nichos": nichos, "cidades": cidades}
+
+
+@router.get("/counts")
+def lead_counts(
+    nicho: str | None = None,
+    cidade: str | None = None,
+    score_min: int | None = None,
+    score_max: int | None = None,
+    has_telefone: bool | None = None,
+    has_email: bool | None = None,
+    search: str | None = None,
+    perfil_lead: str | None = None,
+    nicho_canonico: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Return lead counts grouped by status. Used by Kanban column headers."""
+    query = db.query(Lead.status, func.count(Lead.id))
+    query = _apply_lead_filters(
+        query,
+        nicho=nicho,
+        cidade=cidade,
+        score_min=score_min,
+        score_max=score_max,
+        has_telefone=has_telefone,
+        has_email=has_email,
+        search=search,
+        perfil_lead=perfil_lead,
+        nicho_canonico=nicho_canonico,
+    )
 
     rows = query.group_by(Lead.status).all()
     result: dict[str, int] = {}
@@ -114,12 +176,51 @@ def list_leads_for_review(
     )
 
 
+@router.get("/ids", response_model=LeadIdsResponse)
+def list_lead_ids(
+    status: str | None = None,
+    nicho: str | None = None,
+    cidade: str | None = None,
+    score_min: int | None = None,
+    score_max: int | None = None,
+    has_telefone: bool | None = None,
+    has_email: bool | None = None,
+    search: str | None = None,
+    perfil_lead: str | None = None,
+    nicho_canonico: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Return up to 5000 lead IDs matching the filters. Used by frontend
+    bulk-selection in 'select all matching filter' mode to materialize the ID set."""
+    query = _apply_lead_filters(
+        db.query(Lead.id),
+        status=status,
+        nicho=nicho,
+        cidade=cidade,
+        score_min=score_min,
+        score_max=score_max,
+        has_telefone=has_telefone,
+        has_email=has_email,
+        search=search,
+        perfil_lead=perfil_lead,
+        nicho_canonico=nicho_canonico,
+    )
+    total = query.count()
+    rows = query.limit(5001).all()
+    truncated = len(rows) > 5000
+    ids = [r[0] for r in rows[:5000]]
+    return LeadIdsResponse(ids=ids, total=total, truncated=truncated)
+
+
 @router.get("", response_model=LeadListOut)
 def list_leads(
     status: str | None = None,
     nicho: str | None = None,
     cidade: str | None = None,
     score_min: int | None = None,
+    score_max: int | None = None,
+    has_telefone: bool | None = None,
+    has_email: bool | None = None,
     search: str | None = None,
     perfil_lead: str | None = None,
     nicho_canonico: str | None = None,
@@ -128,33 +229,19 @@ def list_leads(
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Lead)
-
-    if status:
-        if status == "failed":
-            query = query.filter(Lead.status.like("%_failed"))
-        else:
-            query = query.filter(Lead.status == status)
-    if nicho:
-        query = query.filter(Lead.nicho == nicho)
-    if cidade:
-        query = query.filter(Lead.cidade == cidade)
-    if score_min is not None:
-        query = query.filter(Lead.opportunity_score >= score_min)
-    if search:
-        term = f"%{search}%"
-        query = query.filter(or_(
-            Lead.nome.ilike(term),
-            Lead.telefone.ilike(term),
-            Lead.nicho.ilike(term),
-            Lead.cidade.ilike(term),
-            Lead.email.ilike(term),
-            Lead.razao_social.ilike(term),
-        ))
-    if perfil_lead:
-        query = query.filter(Lead.perfil_lead == perfil_lead)
-    if nicho_canonico:
-        query = query.filter(Lead.nicho_canonico == nicho_canonico)
+    query = _apply_lead_filters(
+        db.query(Lead),
+        status=status,
+        nicho=nicho,
+        cidade=cidade,
+        score_min=score_min,
+        score_max=score_max,
+        has_telefone=has_telefone,
+        has_email=has_email,
+        search=search,
+        perfil_lead=perfil_lead,
+        nicho_canonico=nicho_canonico,
+    )
 
     if order_by == "prioridade":
         from sqlalchemy import case as sa_case
@@ -313,6 +400,69 @@ def reclassify_lead(
     db.commit()
     db.refresh(lead)
     return lead
+
+
+@router.patch("/bulk", response_model=BulkUpdateResult)
+def bulk_update_leads(payload: BulkLeadUpdate, db: Session = Depends(get_db)):
+    update_data = payload.data.model_dump(exclude_unset=True)
+    if not update_data:
+        return BulkUpdateResult(updated=0)
+
+    if "status" in update_data and update_data["status"] not in VALID_STATUSES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid status: {update_data['status']}",
+        )
+
+    leads = db.query(Lead).filter(Lead.id.in_(payload.lead_ids)).all()
+    found_ids = {l.id for l in leads}
+    errors = [
+        BulkUpdateError(lead_id=lid, error="Lead not found")
+        for lid in payload.lead_ids
+        if lid not in found_ids
+    ]
+
+    sets_nicho = "nicho_canonico" in update_data
+    for lead in leads:
+        for k, v in update_data.items():
+            setattr(lead, k, v)
+        if sets_nicho:
+            lead.nicho_source = "manual"
+            lead.nicho_confidence = 1.0
+
+    try:
+        db.commit()
+        updated = len(leads)
+    except Exception as exc:  # noqa: BLE001 — surface commit failure as global error
+        db.rollback()
+        updated = 0
+        errors.append(BulkUpdateError(lead_id=0, error=f"Commit failed: {str(exc)[:200]}"))
+
+    return BulkUpdateResult(updated=updated, errors=errors)
+
+
+@router.delete("/bulk", response_model=BulkDeleteResult)
+def bulk_delete_leads(payload: BulkLeadDelete, db: Session = Depends(get_db)):
+    leads = db.query(Lead).filter(Lead.id.in_(payload.lead_ids)).all()
+    found_ids = {l.id for l in leads}
+    errors = [
+        BulkUpdateError(lead_id=lid, error="Lead not found")
+        for lid in payload.lead_ids
+        if lid not in found_ids
+    ]
+
+    for lead in leads:
+        db.delete(lead)
+
+    try:
+        db.commit()
+        deleted = len(leads)
+    except Exception as exc:  # noqa: BLE001 — surface commit failure as global error
+        db.rollback()
+        deleted = 0
+        errors.append(BulkUpdateError(lead_id=0, error=f"Commit failed: {str(exc)[:200]}"))
+
+    return BulkDeleteResult(deleted=deleted, errors=errors)
 
 
 @router.patch("/{lead_id}", response_model=LeadOut)

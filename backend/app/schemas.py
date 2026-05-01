@@ -1,6 +1,6 @@
 from datetime import date, datetime
-from typing import Literal
-from pydantic import BaseModel
+from typing import Any, Literal
+from pydantic import BaseModel, Field
 
 
 # === Leads ===
@@ -207,3 +207,60 @@ class OutreachMessageOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# === Bulk Operations ===
+
+class BulkLeadUpdate(BaseModel):
+    lead_ids: list[int] = Field(min_length=1, max_length=5000)
+    data: LeadUpdate
+
+
+class BulkLeadDelete(BaseModel):
+    lead_ids: list[int] = Field(min_length=1, max_length=5000)
+
+
+class BulkUpdateError(BaseModel):
+    lead_id: int
+    error: str
+
+
+class BulkUpdateResult(BaseModel):
+    updated: int
+    errors: list[BulkUpdateError] = Field(default_factory=list)
+
+
+class BulkDeleteResult(BaseModel):
+    deleted: int
+    errors: list[BulkUpdateError] = Field(default_factory=list)
+
+
+# === Pipeline Preview ===
+
+PipelineAction = Literal["enrich", "generate", "outreach", "classify"]
+SkippedReason = Literal["disqualified"]
+
+
+class PipelinePreviewRequest(BaseModel):
+    action: PipelineAction
+    lead_ids: list[int] = Field(min_length=1, max_length=5000)
+    options: dict[str, Any] = Field(default_factory=dict)
+
+
+class PipelinePreviewResponse(BaseModel):
+    action: PipelineAction
+    total_leads: int
+    eligible: int
+    skipped: int
+    skipped_reasons: dict[SkippedReason, int] = Field(default_factory=dict)
+    cost_estimate: dict | None = None
+    quota_status: list[dict] | None = None
+    warnings: list[str] = Field(default_factory=list)
+
+
+# === Lead IDs ===
+
+class LeadIdsResponse(BaseModel):
+    ids: list[int] = Field(default_factory=list)
+    total: int
+    truncated: bool = False

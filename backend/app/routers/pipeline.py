@@ -16,12 +16,22 @@ from app.schemas import (
     ScrapeRequest, EnrichRequest, GenerateRequest, OutreachRequest,
     JobOut, JobListOut, PipelineStatusOut,
     ClassifyRequest,
+    PipelinePreviewRequest,
+    PipelinePreviewResponse,
 )
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["pipeline"])
+
+# ---------------------------------------------------------------------------
+# Eligibility status sets
+# ---------------------------------------------------------------------------
+# Status sets shared between the preview endpoint and runners.
+# Keep these in sync — the preview reports eligibility based on these sets.
+ENRICH_INPUT_STATUSES = frozenset({"scraped", "enrich_failed"})
+OUTREACH_INPUT_STATUSES = frozenset({"lp_generated", "outreach_ready", "outreach_failed"})
 
 # ---------------------------------------------------------------------------
 # In-memory SSE events
@@ -634,6 +644,64 @@ def pipeline_status(db: Session = Depends(get_db)):
         db.query(Job.type).filter(Job.status == "running").distinct().all()
     ]
     return PipelineStatusOut(eligible_counts=eligible, running_jobs=running)
+
+
+@router.post("/pipeline/preview", response_model=PipelinePreviewResponse)
+def preview_pipeline(payload: PipelinePreviewRequest, db: Session = Depends(get_db)):
+    leads = db.query(Lead).filter(Lead.id.in_(payload.lead_ids)).all()
+    total = len(leads)
+
+    skipped_reasons: dict[str, int] = {}
+    warnings: list[str] = []
+    eligible = total
+
+    if payload.action == "enrich":
+        # Runner processes every lead in lead_ids. Warn (don't skip) when leads
+        # are already past the natural enrich inputs — they will be reprocessed.
+        already = sum(1 for lead in leads if lead.status not in ENRICH_INPUT_STATUSES)
+        if already > 0:
+            warnings.append(
+                f"{already} leads fora do estágio scraped/enrich_failed serão reprocessados."
+            )
+
+    elif payload.action == "generate":
+        # Runner skips disqualified.
+        disq = sum(1 for lead in leads if lead.status == "disqualified")
+        if disq > 0:
+            skipped_reasons["disqualified"] = disq
+            eligible -= disq
+            warnings.append(f"{disq} leads desqualificados serão ignorados.")
+
+    elif payload.action == "outreach":
+        # Runner skips disqualified.
+        disq = sum(1 for lead in leads if lead.status == "disqualified")
+        if disq > 0:
+            skipped_reasons["disqualified"] = disq
+            eligible -= disq
+            warnings.append(f"{disq} leads desqualificados serão ignorados.")
+        # Warn (don't skip) when leads are outside the natural outreach window.
+        # The runner will still process them; messages may be redundant.
+        out_of_window = sum(
+            1 for lead in leads
+            if lead.status not in OUTREACH_INPUT_STATUSES and lead.status != "disqualified"
+        )
+        if out_of_window > 0:
+            warnings.append(
+                f"{out_of_window} leads fora do estágio de outreach (lp_generated/outreach_ready/outreach_failed) — mensagens serão geradas mesmo assim."
+            )
+
+    # action == "classify": no special filtering — classifier handles all states.
+
+    return PipelinePreviewResponse(
+        action=payload.action,
+        total_leads=total,
+        eligible=eligible,
+        skipped=total - eligible,
+        skipped_reasons=skipped_reasons,
+        cost_estimate=None,
+        quota_status=None,
+        warnings=warnings,
+    )
 
 
 @router.post("/pipeline/scrape", response_model=JobOut)
