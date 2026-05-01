@@ -130,9 +130,9 @@ Dry-run que retorna estimativa antes do dispatch. Habilita G5 (cost meter) e des
 {
   "action": "enrich",
   "total_leads": 3,
-  "eligible": 3,                # batem com filtros internos do dispatcher
+  "eligible": 3,                # = total_leads - skipped (skipped = leads que o runner pula)
   "skipped": 0,
-  "skipped_reasons": {},        # {"already_enriched": 12, "disqualified": 3}
+  "skipped_reasons": {},        # apenas {"disqualified": N} hoje
   "cost_estimate": {
     "currency": "USD",
     "total": 0.15,
@@ -144,9 +144,18 @@ Dry-run que retorna estimativa antes do dispatch. Habilita G5 (cost meter) e des
   "quota_status": [
     {"provider": "apollo", "used": 743, "limit": 1000, "would_hit_limit": false}
   ],
-  "warnings": []                # ["12 leads já enriquecidos, use force_providers para reprocessar"]
+  "warnings": []                # ["12 leads fora do estágio scraped/enrich_failed serão reprocessados."]
 }
 ```
+
+**Contrato (preview = espelho do runner):**
+
+- **`enrich`** — runner aceita todos os leads em `lead_ids` independente do status. `eligible = total_leads`, `skipped_reasons = {}`. Leads já fora do estágio natural (`scraped`/`enrich_failed`) viram **warning** ("N leads fora do estágio scraped/enrich_failed serão reprocessados."), não skip.
+- **`generate`** — runner pula `disqualified`. `skipped_reasons` aceita apenas `{"disqualified": N}`.
+- **`outreach`** — runner pula `disqualified`. `skipped_reasons` aceita apenas `{"disqualified": N}`. Leads fora da janela natural (`lp_generated`/`outreach_ready`/`outreach_failed`) viram **warning** — runner ainda processa, mensagens podem ser redundantes.
+- **`classify`** — sem filtragem; classifier lida com qualquer status.
+
+`SkippedReason` é tipado como `Literal["disqualified"]` em `app/schemas.py`.
 
 **Implementação inicial:** retorna `total_leads`, `eligible/skipped`, `warnings`. `cost_estimate` e `quota_status` ficam stubbed (`null`) e são preenchidos depois quando `integration_settings` expor metadata de quota — não bloqueia este spec.
 

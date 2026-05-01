@@ -238,7 +238,7 @@ class BulkDeleteResult(BaseModel):
 # === Pipeline Preview ===
 
 PipelineAction = Literal["enrich", "generate", "outreach", "classify"]
-SkippedReason = Literal["already_enriched", "disqualified", "no_lp"]
+SkippedReason = Literal["disqualified"]
 
 
 class PipelinePreviewRequest(BaseModel):

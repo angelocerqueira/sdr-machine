@@ -156,13 +156,7 @@ def _run_enrich(job_id: int, params: dict):
         force_providers = params.get("force_providers", []) or []
 
         if lead_ids:
-            query = db.query(Lead).filter(Lead.id.in_(lead_ids))
-            # When force_providers is set, re-enrichment is explicit — accept any status.
-            # Otherwise filter to natural inputs (scraped, enrich_failed) so we don't
-            # silently re-enrich already-enriched leads.
-            if not force_providers:
-                query = query.filter(Lead.status.in_(ENRICH_INPUT_STATUSES))
-            leads = query.all()
+            leads = db.query(Lead).filter(Lead.id.in_(lead_ids)).all()
         else:
             leads = db.query(Lead).filter(Lead.status == "scraped").all()
 
@@ -313,7 +307,7 @@ def _run_outreach(job_id: int, params: dict):
         if lead_ids:
             leads = db.query(Lead).filter(
                 Lead.id.in_(lead_ids),
-                Lead.status.in_(OUTREACH_INPUT_STATUSES),
+                Lead.status != "disqualified",
             ).all()
         else:
             leads = db.query(Lead).filter(Lead.status == "lp_generated").all()
@@ -662,17 +656,16 @@ def preview_pipeline(payload: PipelinePreviewRequest, db: Session = Depends(get_
     eligible = total
 
     if payload.action == "enrich":
-        # leads in scraped or enrich_failed are the natural inputs
+        # Runner processes every lead in lead_ids. Warn (don't skip) when leads
+        # are already past the natural enrich inputs — they will be reprocessed.
         already = sum(1 for lead in leads if lead.status not in ENRICH_INPUT_STATUSES)
         if already > 0:
-            skipped_reasons["already_enriched"] = already
             warnings.append(
-                f"{already} leads já enriquecidos. Use force_providers para reprocessar."
+                f"{already} leads fora do estágio scraped/enrich_failed serão reprocessados."
             )
-            if not payload.options.get("force_providers"):
-                eligible -= already
 
     elif payload.action == "generate":
+        # Runner skips disqualified.
         disq = sum(1 for lead in leads if lead.status == "disqualified")
         if disq > 0:
             skipped_reasons["disqualified"] = disq
@@ -680,18 +673,24 @@ def preview_pipeline(payload: PipelinePreviewRequest, db: Session = Depends(get_
             warnings.append(f"{disq} leads desqualificados serão ignorados.")
 
     elif payload.action == "outreach":
-        no_lp = sum(
+        # Runner skips disqualified.
+        disq = sum(1 for lead in leads if lead.status == "disqualified")
+        if disq > 0:
+            skipped_reasons["disqualified"] = disq
+            eligible -= disq
+            warnings.append(f"{disq} leads desqualificados serão ignorados.")
+        # Warn (don't skip) when leads are outside the natural outreach window.
+        # The runner will still process them; messages may be redundant.
+        out_of_window = sum(
             1 for lead in leads
-            if lead.status not in OUTREACH_INPUT_STATUSES
+            if lead.status not in OUTREACH_INPUT_STATUSES and lead.status != "disqualified"
         )
-        if no_lp > 0:
-            skipped_reasons["no_lp"] = no_lp
-            eligible -= no_lp
+        if out_of_window > 0:
             warnings.append(
-                f"{no_lp} leads sem LP gerada. Gere LP antes do outreach."
+                f"{out_of_window} leads fora do estágio de outreach (lp_generated/outreach_ready/outreach_failed) — mensagens serão geradas mesmo assim."
             )
 
-    # action == "classify" : no special filtering today (classifier handles all states)
+    # action == "classify": no special filtering — classifier handles all states.
 
     return PipelinePreviewResponse(
         action=payload.action,

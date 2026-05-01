@@ -36,7 +36,7 @@ class TestPreviewEnrich:
         assert body["skipped_reasons"] == {}
         assert body["warnings"] == []
 
-    def test_already_enriched_skipped_without_force(self, client, db):
+    def test_already_enriched_warned_not_skipped(self, client, db):
         l1 = _make_lead(db, status="scraped")
         l2 = _make_lead(db, status="scraped")
         l3 = _make_lead(db, status="enriched")
@@ -49,13 +49,18 @@ class TestPreviewEnrich:
         assert resp.status_code == 200, resp.text
         body = resp.json()
         assert body["total_leads"] == 4
-        assert body["eligible"] == 2
-        assert body["skipped"] == 2
-        assert body["skipped_reasons"] == {"already_enriched": 2}
+        # Runner accepts all leads regardless of status — no skips.
+        assert body["eligible"] == 4
+        assert body["skipped"] == 0
+        assert body["skipped_reasons"] == {}
+        # Out-of-natural-input leads are reported as a warning instead.
         assert len(body["warnings"]) == 1
-        assert "já enriquecidos" in body["warnings"][0]
+        assert "2 leads" in body["warnings"][0]
+        assert "reprocessados" in body["warnings"][0]
 
     def test_already_enriched_with_force_all_eligible(self, client, db):
+        """`force_providers` is no longer special at the preview layer — runner
+        already accepts every explicit lead_id, so eligibility is always total."""
         l1 = _make_lead(db, status="scraped")
         l2 = _make_lead(db, status="scraped")
         l3 = _make_lead(db, status="enriched")
@@ -74,7 +79,8 @@ class TestPreviewEnrich:
         assert body["total_leads"] == 4
         assert body["eligible"] == 4
         assert body["skipped"] == 0
-        assert body["skipped_reasons"] == {"already_enriched": 2}
+        assert body["skipped_reasons"] == {}
+        # Warning still emitted — the 2 enriched leads will be reprocessed.
         assert len(body["warnings"]) == 1
 
     def test_enrich_failed_treated_as_scraped(self, client, db):
@@ -129,7 +135,7 @@ class TestPreviewGenerate:
 
 
 class TestPreviewOutreach:
-    def test_requires_lp_generated(self, client, db):
+    def test_out_of_window_warned_not_skipped(self, client, db):
         l1 = _make_lead(db, status="lp_generated")
         l2 = _make_lead(db, status="outreach_ready")
         l3 = _make_lead(db, status="outreach_failed")
@@ -142,11 +148,31 @@ class TestPreviewOutreach:
         assert resp.status_code == 200, resp.text
         body = resp.json()
         assert body["total_leads"] == 4
-        assert body["eligible"] == 3
-        assert body["skipped"] == 1
-        assert body["skipped_reasons"] == {"no_lp": 1}
+        # Runner only excludes disqualified — enriched is processed.
+        assert body["eligible"] == 4
+        assert body["skipped"] == 0
+        assert body["skipped_reasons"] == {}
         assert len(body["warnings"]) == 1
-        assert "1 leads sem LP gerada" in body["warnings"][0]
+        assert "1 leads fora do estágio de outreach" in body["warnings"][0]
+
+    def test_outreach_disqualified_skipped(self, client, db):
+        l1 = _make_lead(db, status="lp_generated")
+        l2 = _make_lead(db, status="outreach_ready")
+        l3 = _make_lead(db, status="disqualified")
+
+        resp = client.post(
+            "/api/pipeline/preview",
+            json={"action": "outreach", "lead_ids": [l1.id, l2.id, l3.id]},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["total_leads"] == 3
+        assert body["eligible"] == 2
+        assert body["skipped"] == 1
+        assert body["skipped_reasons"] == {"disqualified": 1}
+        # Warning for disqualified; no out-of-window warning since the others
+        # are within OUTREACH_INPUT_STATUSES.
+        assert any("desqualificados" in w for w in body["warnings"])
 
     def test_all_have_lp(self, client, db):
         l1 = _make_lead(db, status="lp_generated")
