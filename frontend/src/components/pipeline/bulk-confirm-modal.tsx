@@ -44,10 +44,16 @@ export function BulkConfirmModal(props: Props) {
   useEffect(() => {
     if (!open) return;
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        // stopImmediatePropagation prevents the table-level Esc listener
+        // from also firing and clearing the bulk selection.
+        e.stopImmediatePropagation();
+        onClose();
+      }
     }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    // capture: true → run before the document-level table listener.
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [open, onClose]);
 
   if (!open) return null;

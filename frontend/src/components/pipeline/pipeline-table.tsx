@@ -716,7 +716,7 @@ export function PipelineTable({
             className="inline-flex items-center gap-1 px-3 py-1.5 text-[13px] font-medium font-mono rounded-md border border-border bg-surface-raised text-text-secondary hover:text-text hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-default focus:outline-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
           >
             <Icon name="chevron-r" size={12} className="rotate-180" />
-            Prev
+            Anterior
           </button>
           <button
             type="button"
@@ -724,7 +724,7 @@ export function PipelineTable({
             onClick={() => handlePage(page + 1)}
             className="inline-flex items-center gap-1 px-3 py-1.5 text-[13px] font-medium font-mono rounded-md border border-border bg-surface-raised text-text-secondary hover:text-text hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-default focus:outline-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
           >
-            Next
+            Próxima
             <Icon name="chevron-r" size={12} />
           </button>
         </div>

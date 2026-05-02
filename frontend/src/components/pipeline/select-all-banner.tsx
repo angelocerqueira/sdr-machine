@@ -14,6 +14,7 @@ interface Props {
 
 export function SelectAllBanner({ sel, visibleIds, pageTotal, filters }: Props) {
   const [busy, setBusy] = useState(false);
+  const [truncatedWarning, setTruncatedWarning] = useState(false);
 
   const pageAllSelected =
     visibleIds.length > 0 && visibleIds.every((id) => sel.has(id));
@@ -23,10 +24,16 @@ export function SelectAllBanner({ sel, visibleIds, pageTotal, filters }: Props) 
   const handleSelectAllFilter = useCallback(async () => {
     if (busy) return;
     setBusy(true);
+    setTruncatedWarning(false);
     try {
       const res = await getLeadIds(filters);
-      // Either way, mark all_filter mode so dispatch path can warn on truncation.
-      sel.selectAllFilter(filters, res.truncated ? 5000 : res.total);
+      if (res.truncated) {
+        // Backend cap reached. Don't enter all_filter mode — every dispatch would
+        // throw BULK_LIMIT_EXCEEDED and look like a silent failure. Warn instead.
+        setTruncatedWarning(true);
+        return;
+      }
+      sel.selectAllFilter(filters, res.total);
     } catch {
       // best-effort; selection stays as page-only
     } finally {
@@ -39,7 +46,6 @@ export function SelectAllBanner({ sel, visibleIds, pageTotal, filters }: Props) 
       <div className="flex items-center justify-between rounded-lg border border-accent/30 bg-accent-soft px-4 py-2 text-sm">
         <span className="text-accent">
           ✓ Todos os {sel.totalInFilter} leads do filtro selecionados.
-          {sel.totalInFilter >= 5000 && " (limite de 5000 atingido)"}
         </span>
         <button
           type="button"
@@ -47,6 +53,23 @@ export function SelectAllBanner({ sel, visibleIds, pageTotal, filters }: Props) 
           className="t-eyebrow text-text-secondary hover:text-text transition-default cursor-pointer"
         >
           Limpar seleção
+        </button>
+      </div>
+    );
+  }
+
+  if (truncatedWarning) {
+    return (
+      <div className="flex items-center justify-between rounded-lg border border-warn/30 bg-warn/10 px-4 py-2 text-sm">
+        <span className="text-warn">
+          ⚠ Filtro tem mais de 5000 leads. Refine os filtros para selecionar todos.
+        </span>
+        <button
+          type="button"
+          onClick={() => setTruncatedWarning(false)}
+          className="t-eyebrow text-text-secondary hover:text-text transition-default cursor-pointer"
+        >
+          Dispensar
         </button>
       </div>
     );
