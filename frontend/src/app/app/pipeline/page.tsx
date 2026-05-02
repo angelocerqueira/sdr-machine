@@ -1,5 +1,6 @@
 "use client";
 
+import "@/components/pipeline/pipeline.css";
 import { Suspense, useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PipelineControls } from "@/components/pipeline-controls";
