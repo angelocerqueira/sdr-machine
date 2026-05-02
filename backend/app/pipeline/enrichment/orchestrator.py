@@ -112,14 +112,18 @@ class EnrichmentOrchestrator:
                 "website_crawler",
                 "schema_extractor",
                 "tech_stack",
-                "diagnostic",
                 "email_discoverer",
                 "apollo",
             }
             if include_crawl_chain
             else set()
         )
-        optimistic_names.add("classification")  # classificação sempre roda
+        # Sempre rodam, independente de site/CNPJ. Diagnostic gera o
+        # MarketingDiagnostic (descoberta/atracao/consideracao/acao/apologia)
+        # a partir de lead_info — leads sem site são justamente os que mais
+        # precisam da estratégia.
+        optimistic_names.add("classification")
+        optimistic_names.add("diagnostic")
 
         for name in _PHASE_ORDER:
             provider = self._providers_by_name.get(name)

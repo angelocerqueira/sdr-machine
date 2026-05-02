@@ -19,20 +19,44 @@ class FakeLead:
         self.top_reviews = kwargs.get("top_reviews", [])
 
 
-def test_can_run_requires_html_content():
+def test_can_run_always_returns_true():
+    """Provider runs even without a crawled site — the LLM uses lead_info
+    (nicho, cidade, rating, reviews, top_reviews) to generate a marketing
+    diagnostic. Leads without a website are the highest-opportunity ones
+    and were the segment most penalized by the previous html_content gate."""
     provider = DiagnosticProvider()
     lead = FakeLead()
 
-    # No html_content => can't run
-    ctx_empty = EnrichmentContext()
-    assert provider.can_run(lead, ctx_empty) is False
+    assert provider.can_run(lead, EnrichmentContext()) is True
+    assert provider.can_run(lead, None) is True
 
-    # With html_content => can run
     ctx = EnrichmentContext(html_content="<html></html>")
     ctx.site_data = {"status": "ok"}
     ctx.html_analysis = {"title": "x"}
     ctx.pagespeed = {}
     assert provider.can_run(lead, ctx) is True
+
+
+def test_run_records_skip_reason_when_llm_disabled(monkeypatch):
+    """When run_diagnostic returns None, the provider surfaces the reason
+    in result.errors so it's captured in enrichment_sources audit trail."""
+    provider = DiagnosticProvider()
+    lead = FakeLead()
+    ctx = EnrichmentContext()
+
+    monkeypatch.setattr(
+        "app.pipeline.enrichment.providers.diagnostic_provider.settings",
+        type("S", (), {"skip_service_level_analysis": True})(),
+    )
+
+    with patch(
+        "app.pipeline.enrichment.providers.diagnostic_provider.run_diagnostic",
+        return_value=None,
+    ):
+        result = provider.run(lead, ctx)
+
+    assert result.success is True
+    assert any("disabled" in e for e in result.errors)
 
 
 def test_run_persists_diagnostico_marketing_into_site_analysis():
