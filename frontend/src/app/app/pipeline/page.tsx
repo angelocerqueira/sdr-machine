@@ -14,6 +14,7 @@ import { FiltrosAtivosBanner } from "@/components/pipeline/filtros-ativos-banner
 import { PipelineFunnel } from "@/components/pipeline/pipeline-funnel";
 import { PipelinePageHeader } from "@/components/pipeline/pipeline-page-header";
 import { usePipelineCounts } from "@/components/pipeline/use-pipeline-counts";
+import { usePipelineDensity } from "@/components/pipeline/use-pipeline-density";
 import { getLeads } from "@/lib/api";
 import { exportLeadsCSV } from "@/lib/csv-export";
 import { useToast } from "@/components/ui/toast";
@@ -85,6 +86,7 @@ function PipelineInner() {
   }, [qsView, storedView]);
 
   const sel = useBulkSelection();
+  const { density, toggle: toggleDensity } = usePipelineDensity();
   const [visibleIds, setVisibleIds] = useState<number[]>([]);
   const [pageTotal, setPageTotal] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -168,7 +170,7 @@ function PipelineInner() {
 
   return (
     <div
-      className="pl-page p-5 md:p-6 pb-24"
+      className={`pl-page p-5 md:p-6 pb-24${density === "compact" ? " pl-density-compact" : ""}`}
       style={{ maxWidth: "calc(100vw - 64px)" }}
     >
       <PipelinePageHeader
@@ -180,7 +182,7 @@ function PipelineInner() {
         onEnrichScraped={handleEnrichScraped}
       />
       <PipelineControls onJobDone={() => window.location.reload()} />
-      <PipelineToolbar view={view} />
+      <PipelineToolbar view={view} density={density} onToggleDensity={toggleDensity} />
       <FiltrosAtivosBanner />
       <PipelineFunnel counts={counts} />
       {staleDelta != null && (
@@ -202,6 +204,7 @@ function PipelineInner() {
           />
           <PipelineTable
             sel={sel}
+            density={density}
             onVisibleIdsChange={setVisibleIds}
             onTotalChange={setPageTotal}
             refreshKey={refreshKey}

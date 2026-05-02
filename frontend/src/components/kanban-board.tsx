@@ -229,7 +229,7 @@ export function KanbanBoard(props: KanbanBoardProps = {}) {
 
       {/* Board */}
       <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
-        <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide">
+        <div className="pl-kbn-board scrollbar-hide">
           {KANBAN_COLUMNS.map((col) => (
             <KanbanColumn
               key={col.id}

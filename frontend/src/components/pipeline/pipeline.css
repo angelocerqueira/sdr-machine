@@ -436,32 +436,37 @@
   min-height: 0;
 }
 
-/* Kanban — mobile-first (1 col -> 2 -> 3 -> 5 as space allows) ---------- */
-.pl-kbn {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
+/* Kanban — mobile-first board (vertical stack -> horizontal scroll) ----- */
+.pl-kbn-board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-@media (min-width: 640px) {
-  .pl-kbn {
-    grid-template-columns: repeat(2, minmax(220px, 1fr));
+.pl-kbn-board > .pl-kbn-col {
+  width: 100%;
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .pl-kbn-board {
+    flex-direction: row;
     gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 16px;
+  }
+  .pl-kbn-board > .pl-kbn-col {
+    flex: 0 0 280px;
+    width: 280px;
+    min-width: 280px;
   }
 }
 @media (min-width: 1024px) {
-  .pl-kbn {
-    grid-template-columns: repeat(3, minmax(220px, 1fr));
-    gap: 14px;
-  }
-}
-@media (min-width: 1280px) {
-  .pl-kbn {
-    grid-template-columns: repeat(5, minmax(220px, 1fr));
-  }
+  .pl-kbn-board { gap: 14px; }
 }
 @media (min-width: 1440px) {
-  .pl-kbn {
-    grid-template-columns: repeat(5, minmax(260px, 1fr));
+  .pl-kbn-board > .pl-kbn-col {
+    flex-basis: 300px;
+    width: 300px;
+    min-width: 300px;
   }
 }
 .pl-kbn-col {

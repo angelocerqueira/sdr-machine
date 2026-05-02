@@ -7,7 +7,7 @@ import { LEAD_PROFILE_LABEL, NICHO_LABEL } from "@/lib/types";
 import type { LeadProfile, NichoCanonico } from "@/lib/types";
 import { track } from "@/lib/telemetry";
 import { Icon } from "@/components/ui";
-import { usePipelineDensity } from "./use-pipeline-density";
+import type { PipelineDensity } from "./use-pipeline-density";
 
 export type PipelineView = "kanban" | "table";
 
@@ -82,13 +82,18 @@ function ChipMenu({ active, label, count, ariaLabel, children }: ChipMenuProps) 
   );
 }
 
-export function PipelineToolbar({ view }: { view: PipelineView }) {
+interface PipelineToolbarProps {
+  view: PipelineView;
+  density: PipelineDensity;
+  onToggleDensity: () => void;
+}
+
+export function PipelineToolbar({ view, density, onToggleDensity }: PipelineToolbarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [nichos, setNichos] = useState<string[]>([]);
   const [cidades, setCidades] = useState<string[]>([]);
-  const { density, toggle: toggleDensity } = usePipelineDensity();
 
   const filters = useMemo(
     () => ({
@@ -171,16 +176,6 @@ export function PipelineToolbar({ view }: { view: PipelineView }) {
     else sp.set("adv", "1");
     router.replace(`?${sp.toString()}`, { scroll: false });
   }, [router, searchParams, advancedOpen]);
-
-  // Apply density class on the page wrapper so it cascades to kanban + table.
-  useEffect(() => {
-    const root = document.querySelector(".pl-page");
-    if (!root) return;
-    root.classList.toggle("pl-density-compact", density === "compact");
-    return () => {
-      root.classList.remove("pl-density-compact");
-    };
-  }, [density]);
 
   return (
     <div className="pl-toolbar">
@@ -375,7 +370,7 @@ export function PipelineToolbar({ view }: { view: PipelineView }) {
       {view === "table" && (
         <button
           type="button"
-          onClick={toggleDensity}
+          onClick={onToggleDensity}
           aria-label={density === "compact" ? "Aumentar densidade (confortável)" : "Reduzir densidade (compacto)"}
           title={density === "compact" ? "Atual: compacto" : "Atual: confortável"}
           className={`pl-density-btn${density === "compact" ? " active" : ""}`}

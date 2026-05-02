@@ -18,7 +18,7 @@ import { Badge, Icon, StatusPill } from "@/components/ui";
 import { buildWaLink } from "@/lib/format";
 import { deriveSignals } from "@/lib/pipeline-signals";
 import { ColumnVisibilityMenu } from "./column-visibility-menu";
-import { usePipelineDensity } from "./use-pipeline-density";
+import type { PipelineDensity } from "./use-pipeline-density";
 import type { useBulkSelection } from "./use-bulk-selection";
 
 const PER_PAGE = 50;
@@ -217,6 +217,7 @@ function ariaSortFor(columnId: string, sorting: SortingState): "ascending" | "de
 
 interface PipelineTableProps {
   sel: ReturnType<typeof useBulkSelection>;
+  density: PipelineDensity;
   onVisibleIdsChange?: (ids: number[]) => void;
   onTotalChange?: (total: number) => void;
   refreshKey?: number;
@@ -224,13 +225,13 @@ interface PipelineTableProps {
 
 export function PipelineTable({
   sel,
+  density,
   onVisibleIdsChange,
   onTotalChange,
   refreshKey,
 }: PipelineTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { density } = usePipelineDensity();
 
   // Filters from URL
   const filters = useMemo(() => {

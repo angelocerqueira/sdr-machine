@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Icon } from "@/components/ui";
@@ -30,6 +30,14 @@ export function KanbanCard({ lead, onSelect }: KanbanCardProps) {
   });
   const { toast } = useToast();
   const [enriching, setEnriching] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const style = transform ? { transform: CSS.Transform.toString(transform) } : undefined;
 
@@ -62,7 +70,9 @@ export function KanbanCard({ lead, onSelect }: KanbanCardProps) {
           variant: "error",
         });
       } finally {
-        setEnriching(false);
+        // Card may have unmounted (e.g. lead moved to another column after
+        // optimistic dnd update) by the time the request returns.
+        if (mountedRef.current) setEnriching(false);
       }
     },
     [enriching, lead.id, lead.nome, toast],

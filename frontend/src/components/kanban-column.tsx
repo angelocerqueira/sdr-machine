@@ -150,7 +150,6 @@ export function KanbanColumn({
     <div
       ref={setNodeRef}
       className={`pl-kbn-col${isOver ? " active" : ""}`}
-      style={{ minWidth: 280, width: 280 }}
     >
       <header className="pl-kbn-col-head">
         <div className="pl-kbn-col-title-wrap">

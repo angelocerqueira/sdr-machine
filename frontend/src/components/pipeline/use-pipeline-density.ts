@@ -6,7 +6,7 @@ export type PipelineDensity = "compact" | "comfortable";
 
 const STORAGE_KEY = "sdr-pipeline-density";
 
-function readStored(): PipelineDensity {
+export function readStoredDensity(): PipelineDensity {
   if (typeof window === "undefined") return "compact";
   try {
     const v = window.localStorage.getItem(STORAGE_KEY);
@@ -16,15 +16,24 @@ function readStored(): PipelineDensity {
   }
 }
 
+export function persistDensity(density: PipelineDensity) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, density);
+  } catch {
+    // localStorage unavailable
+  }
+}
+
+/**
+ * Owns density state. Call ONCE per page (in PipelinePage), then thread
+ * `density` + `toggle` down via props. Multiple instances would split state.
+ */
 export function usePipelineDensity() {
-  const [density, setDensity] = useState<PipelineDensity>(readStored);
+  const [density, setDensity] = useState<PipelineDensity>(readStoredDensity);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, density);
-    } catch {
-      // localStorage unavailable
-    }
+    persistDensity(density);
   }, [density]);
 
   const toggle = useCallback(() => {
