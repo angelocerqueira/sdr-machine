@@ -534,6 +534,7 @@ export function PipelineTable({
       {
         id: "nome",
         accessorKey: "nome",
+        size: 240,
         header: () => <span>Nome</span>,
         cell: ({ row }) => {
           const lead = row.original;
@@ -1007,7 +1008,7 @@ export function PipelineTable({
                           : null;
                     const size = header.column.columnDef.size;
                     const styleProp =
-                      typeof size === "number" && header.column.id !== "nome"
+                      typeof size === "number"
                         ? { width: size, minWidth: size }
                         : undefined;
                     return (
@@ -1141,7 +1142,7 @@ export function PipelineTable({
                       {row.getVisibleCells().map((cell) => {
                         const size = cell.column.columnDef.size;
                         const styleProp =
-                          typeof size === "number" && cell.column.id !== "nome"
+                          typeof size === "number"
                             ? { width: size, minWidth: size }
                             : undefined;
                         return (
