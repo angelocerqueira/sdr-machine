@@ -3,10 +3,41 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { KanbanCard } from "./kanban-card";
+import { Icon } from "@/components/ui";
 import { getLeads } from "@/lib/api";
 import type { Lead } from "@/lib/types";
 
 const PER_PAGE = 20;
+
+type ColumnTone = "muted" | "accent" | "warn" | "ok";
+
+const TONE_BY_STATUS: Record<string, ColumnTone> = {
+  scraped: "muted",
+  enriched: "accent",
+  lp_generated: "accent",
+  outreach_ready: "warn",
+  outreach_sent: "warn",
+  responded: "ok",
+  in_call: "ok",
+  closed: "ok",
+  delivered: "ok",
+  disqualified: "muted",
+  failed: "muted",
+};
+
+const EMPTY_HINTS: Record<string, string> = {
+  scraped: "rode o scrape pra popular",
+  enriched: "rode enriquecer pra popular",
+  lp_generated: "leads analisados aparecem aqui",
+  outreach_ready: "depois da geração de LP",
+  outreach_sent: "depois de disparar mensagens",
+  responded: "respostas chegam aqui",
+  in_call: "leads em call",
+  closed: "fechados aparecem aqui",
+  delivered: "entregues aparecem aqui",
+  disqualified: "desqualificados aparecem aqui",
+  failed: "falhas aparecem aqui",
+};
 
 interface KanbanColumnProps {
   id: string;
@@ -45,6 +76,9 @@ export function KanbanColumn({
   const scrollRef = useRef<HTMLDivElement>(null);
   const { setNodeRef, isOver } = useDroppable({ id });
 
+  const tone: ColumnTone = TONE_BY_STATUS[id] ?? "muted";
+  const isFailureColumn = id === "disqualified" || id === "failed";
+
   const hasMore = leads.length < total;
 
   const buildParams = useCallback(() => {
@@ -62,7 +96,6 @@ export function KanbanColumn({
     return params;
   }, [id, filterNicho, filterCidade, filterScoreMin, filterPerfil, filterNichoCanon, search, orderBy]);
 
-  // Load first page (also re-runs on filter change or refreshKey bump)
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -86,12 +119,10 @@ export function KanbanColumn({
     };
   }, [buildParams, refreshKey, id]);
 
-  // Sync count from parent
   useEffect(() => {
     setTotal(count);
   }, [count]);
 
-  // Load more (infinite scroll)
   const loadMore = useCallback(() => {
     if (loadingMore || !hasMore) return;
     const nextPage = page + 1;
@@ -118,63 +149,70 @@ export function KanbanColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-lg border bg-surface min-w-[280px] w-[280px] flex flex-col transition-default ${
-        isOver
-          ? "border-accent/40 bg-accent-subtle"
-          : id === "disqualified" || id === "failed"
-          ? "border-danger/20 bg-danger/[0.02]"
-          : "border-border"
-      }`}
+      className={`pl-kbn-col${isOver ? " active" : ""}`}
+      style={{ minWidth: 280, width: 280 }}
     >
-      {/* Column header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
-        <h3 className="t-eyebrow">
-          {label}
-        </h3>
-        <span
-          className={`text-[11px] font-medium font-mono tabular-nums rounded-full px-2 py-0.5 ${
-            total > 0 && (id === "disqualified" || id === "failed")
-              ? "bg-danger/10 text-danger"
-              : total > 0
-              ? "bg-accent-subtle text-accent"
-              : "bg-surface-raised text-text-muted"
-          }`}
-          style={{ fontFeatureSettings: '"tnum"' }}
-        >
-          {total}
-        </span>
-      </div>
+      <header className="pl-kbn-col-head">
+        <div className="pl-kbn-col-title-wrap">
+          <span className={`pl-kbn-col-pip pl-kbn-col-pip-${tone}`} />
+          <span className="pl-kbn-col-title">{label}</span>
+        </div>
+        <div className="pl-kbn-col-meta">
+          <span
+            className="pl-kbn-col-count"
+            style={
+              isFailureColumn && total > 0
+                ? { color: "var(--danger)", background: "var(--danger-soft)" }
+                : undefined
+            }
+          >
+            {total}
+          </span>
+        </div>
+      </header>
 
-      {/* Cards with scroll */}
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex flex-col gap-2 p-2 flex-1 min-h-[120px] max-h-[calc(100vh-200px)] overflow-y-auto overflow-x-hidden"
+        className="pl-kbn-col-body"
       >
         {loading ? (
-          <div className="space-y-2">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="rounded-lg border border-border-subtle p-3 space-y-2">
-                <div className="skeleton h-3.5 w-3/4" />
-                <div className="flex justify-between">
-                  <div className="skeleton h-3 w-16" />
-                  <div className="skeleton h-3 w-8" />
+          <>
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="pl-card" style={{ minHeight: 84 }}>
+                <div className="pl-card-rail" />
+                <div className="pl-card-body">
+                  <div className="skeleton" style={{ height: 12, width: "70%" }} />
+                  <div className="skeleton" style={{ height: 10, width: "50%", marginTop: 6 }} />
                 </div>
               </div>
             ))}
-          </div>
+          </>
         ) : leads.length === 0 ? (
-          <p className="text-[11px] text-text-muted text-center py-8 font-[family-name:var(--font-mono)]">
-            Nenhum lead
-          </p>
+          <div className="pl-kbn-empty">
+            <div className="pl-kbn-empty-icon">
+              <Icon name="empty" size={18} />
+            </div>
+            <div className="pl-kbn-empty-msg">Nenhum lead</div>
+            <div className="pl-kbn-empty-hint">{EMPTY_HINTS[id] ?? ""}</div>
+          </div>
         ) : (
           <>
             {leads.map((lead) => (
               <KanbanCard key={lead.id} lead={lead} onSelect={onSelectLead} />
             ))}
             {loadingMore && (
-              <div className="flex items-center justify-center py-2">
-                <span className="w-3 h-3 border-2 border-text-muted border-t-accent rounded-full animate-spin" />
+              <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}>
+                <span
+                  style={{
+                    width: 12,
+                    height: 12,
+                    border: "2px solid var(--text-muted)",
+                    borderTopColor: "var(--accent)",
+                    borderRadius: "50%",
+                    animation: "spin 1s linear infinite",
+                  }}
+                />
               </div>
             )}
           </>

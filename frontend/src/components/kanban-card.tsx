@@ -1,8 +1,13 @@
 "use client";
 
+import { useCallback, useState, type MouseEvent } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ProfileBadge } from "@/components/ui/profile-badge";
+import { Icon } from "@/components/ui";
+import { runEnrich } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
+import { buildWaLink } from "@/lib/format";
+import { deriveSignals } from "@/lib/pipeline-signals";
 import type { Lead } from "@/lib/types";
 
 interface KanbanCardProps {
@@ -10,62 +15,189 @@ interface KanbanCardProps {
   onSelect: (id: number) => void;
 }
 
+function scoreClass(score: number): "high" | "mid" | "low" {
+  if (score >= 80) return "high";
+  if (score >= 50) return "mid";
+  return "low";
+}
+
+const MAX_VISIBLE_SIGNALS = 3;
+
 export function KanbanCard({ lead, onSelect }: KanbanCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: lead.id,
     data: { lead },
   });
+  const { toast } = useToast();
+  const [enriching, setEnriching] = useState(false);
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
+  const style = transform ? { transform: CSS.Transform.toString(transform) } : undefined;
+
+  const score = lead.opportunity_score ?? 0;
+  const sc = scoreClass(score);
+  const isHot = score >= 80;
+  const hasError = lead.status.endsWith("_failed");
+
+  const signals = deriveSignals(lead.opportunity_reasons);
+  const visibleSignals = signals.slice(0, MAX_VISIBLE_SIGNALS);
+  const extraSignals = signals.length - visibleSignals.length;
+
+  const waLink = buildWaLink(lead.telefone);
+
+  const stop = (e: MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
   };
 
-  const hasError = lead.status.endsWith("_failed");
-  const score = lead.opportunity_score ?? 0;
-  const scoreClass = score >= 80 ? "score-high" : score >= 50 ? "score-mid" : "score-low";
-  const borderColor = score >= 80 ? "border-l-score-high" : score >= 50 ? "border-l-score-mid" : "border-l-score-low";
+  const handleEnrich = useCallback(
+    async (e: MouseEvent) => {
+      stop(e);
+      if (enriching) return;
+      setEnriching(true);
+      try {
+        await runEnrich({ lead_ids: [lead.id], force_providers: [] });
+        toast(`Enriquecimento iniciado para ${lead.nome}.`, { variant: "success" });
+      } catch (err) {
+        toast(`Erro: ${err instanceof Error ? err.message : "falha ao enriquecer"}`, {
+          variant: "error",
+        });
+      } finally {
+        setEnriching(false);
+      }
+    },
+    [enriching, lead.id, lead.nome, toast],
+  );
+
+  const handleWa = (e: MouseEvent) => {
+    stop(e);
+    if (waLink) window.open(waLink, "_blank", "noopener,noreferrer");
+  };
+
+  const handleSelect = () => onSelect(lead.id);
 
   return (
-    <div
+    <article
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
-      className={`group rounded-md border border-border bg-surface-raised p-3 cursor-grab active:cursor-grabbing transition-default border-l-2 hover:border-border-strong ${borderColor} ${
-        isDragging ? "kanban-card-dragging" : ""
-      } ${hasError ? "border-danger/30" : ""}`}
+      onClick={handleSelect}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleSelect();
+        }
+      }}
+      aria-label={`${lead.nome} — score ${score}`}
+      className={`pl-card pl-card-${sc}${isHot ? " pl-card-hot" : ""}${
+        isDragging ? " kanban-card-dragging" : ""
+      }${hasError ? " pl-card-error" : ""}`}
     >
-      <div onClick={() => onSelect(lead.id)} className="min-w-0">
-        <p className="text-[13px] font-medium text-text truncate">{lead.nome}</p>
-        {lead.perfil_lead && (
-          <div className="mt-1.5">
-            <ProfileBadge profile={lead.perfil_lead} size="sm" />
+      <div className="pl-card-rail" />
+      <div className="pl-card-body">
+        <div className="pl-card-head">
+          <h3 className="pl-card-name">{lead.nome}</h3>
+          <div
+            className={`pl-card-score pl-card-score-${sc}`}
+            aria-label={`Score ${score} de 100`}
+          >
+            {lead.opportunity_score ?? "—"}
           </div>
-        )}
-        <div className="flex items-center justify-between mt-2">
-          <span className="text-[11px] text-text-muted font-mono truncate mr-2">{lead.nicho}</span>
-          <span className={`tooltip text-[11px] font-semibold font-mono tabular-nums shrink-0 ${scoreClass}`}>
-            {lead.opportunity_score ?? "\u2014"}
-            {lead.opportunity_reasons?.length > 0 && (
-              <span className="tooltip-content">
-                {lead.opportunity_reasons.slice(0, 4).map(r => r.replace(/^\[[A-Z_]+\]\s*/, "")).join(" \u00b7 ")}
-              </span>
-            )}
-          </span>
         </div>
-        {lead.rating && (
-          <div className="flex items-center gap-1.5 mt-1.5">
-            <span className="text-[10px] text-text-muted font-mono tabular-nums">{lead.rating}</span>
-            <svg className="w-2.5 h-2.5 text-warning shrink-0" viewBox="0 0 12 12" fill="currentColor">
-              <path d="M6 0l1.8 3.6L12 4.2l-3 2.9.7 4.1L6 9.1 2.3 11.2l.7-4.1-3-2.9 4.2-.6z" />
-            </svg>
-            <span className="text-[10px] text-text-muted font-mono truncate">{lead.cidade}</span>
+
+        <div className="pl-card-meta">
+          {lead.nicho && <span className="pl-card-meta-niche">{lead.nicho}</span>}
+          {lead.rating != null && (
+            <>
+              <span className="pl-card-meta-dot">·</span>
+              <span className="pl-card-meta-rating">
+                <span className="pl-card-meta-star">★</span>
+                <span>{lead.rating.toFixed(1).replace(".", ",")}</span>
+                {lead.reviews_count > 0 && (
+                  <span className="pl-card-meta-reviews">({lead.reviews_count})</span>
+                )}
+              </span>
+            </>
+          )}
+          {lead.cidade && (
+            <>
+              <span className="pl-card-meta-dot">·</span>
+              <span className="pl-card-meta-city">{lead.cidade}</span>
+            </>
+          )}
+        </div>
+
+        {visibleSignals.length > 0 && (
+          <div className="pl-card-signals">
+            {visibleSignals.map((s) => (
+              <span
+                key={s.key}
+                className={`pl-signal pl-signal-${s.tone}`}
+                aria-label={`Sinal: ${s.label}`}
+              >
+                {s.tone === "danger" && <span className="pl-signal-dot" />}
+                {s.label}
+              </span>
+            ))}
+            {extraSignals > 0 && (
+              <span className="pl-signal pl-signal-muted">+{extraSignals}</span>
+            )}
           </div>
         )}
+
         {hasError && (
-          <p className="text-[10px] text-danger mt-1.5 font-mono">Erro na fase</p>
+          <div className="pl-signal pl-signal-danger" style={{ alignSelf: "flex-start" }}>
+            <span className="pl-signal-dot" />
+            Erro na fase
+          </div>
         )}
+
+        <div className="pl-card-actions" onClick={stop}>
+          <button
+            type="button"
+            className="pl-card-action"
+            onClick={handleEnrich}
+            disabled={enriching}
+            title={enriching ? "Enriquecendo..." : "Enriquecer"}
+          >
+            <Icon name="sparkle" size={13} />
+            {enriching ? "Enriquecendo" : "Enriquecer"}
+          </button>
+          <button
+            type="button"
+            className="pl-card-action pl-card-action-icon"
+            onClick={handleWa}
+            disabled={!waLink}
+            title={waLink ? `Abrir WhatsApp (${lead.telefone})` : "Sem telefone"}
+            aria-label="Abrir WhatsApp"
+          >
+            <Icon name="phone" size={13} />
+          </button>
+          <button
+            type="button"
+            className="pl-card-action pl-card-action-icon"
+            disabled
+            title="Cadência de email em breve"
+            aria-label="Email"
+          >
+            <Icon name="mail" size={13} />
+          </button>
+          <button
+            type="button"
+            className="pl-card-action pl-card-action-icon pl-card-action-more"
+            onClick={(e) => {
+              stop(e);
+              onSelect(lead.id);
+            }}
+            title="Ver detalhes"
+            aria-label="Ver detalhes"
+          >
+            <Icon name="more" size={13} />
+          </button>
+        </div>
       </div>
-    </div>
+    </article>
   );
 }
