@@ -764,10 +764,11 @@
 .pl-tbl-sort:hover { color: var(--text-strong); }
 
 .pl-tbl tbody td {
-  padding: 11px 14px;
+  padding: 16px 14px;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
   color: var(--text-body);
+  overflow: hidden;
 }
 .pl-tbl tbody tr:last-child td { border-bottom: 0; }
 .pl-tbl tbody tr:hover { background: var(--surface-raised); }
@@ -778,14 +779,21 @@
 
 .pl-tbl-check { width: 36px; padding-right: 0 !important; }
 
-.pl-tbl-name { min-width: 200px; max-width: 320px; }
+.pl-tbl-name {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
 .pl-tbl-name-strong {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-strong);
   letter-spacing: -0.005em;
   line-height: 1.3;
-  margin-bottom: 2px;
+  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .pl-tbl-name-sub {
   font-family: var(--font-mono);
@@ -794,11 +802,17 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  flex-wrap: wrap;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.pl-tbl-rating { display: inline-flex; align-items: center; gap: 3px; }
+.pl-tbl-rating { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; }
 .pl-tbl-rating .pl-card-meta-star { color: var(--warn); }
-.pl-tbl-reviews { color: var(--text-subtle); }
+.pl-tbl-reviews {
+  color: var(--text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .pl-tbl-niche-chip {
   display: inline-block;
@@ -808,12 +822,20 @@
   background: var(--surface-raised);
   border-radius: var(--r-1);
   color: var(--text-strong);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pl-tbl-city {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
 }
 
 .pl-tbl-score-cell {
@@ -912,8 +934,9 @@
 .pl-tbl-foot-r { display: flex; gap: 6px; }
 
 /* Compact table density */
-.pl-tbl-compact .pl-tbl tbody td { padding: 7px 12px; }
+.pl-tbl-compact .pl-tbl tbody td { padding: 10px 12px; }
 .pl-tbl-compact .pl-tbl-name-sub { display: none; }
+.pl-tbl-compact .pl-tbl-name-strong { margin-bottom: 0; }
 
 /* Mobile defaults — small screens get a tighter funnel and header.        */
 .pl-funnel { padding: 14px 12px; }
