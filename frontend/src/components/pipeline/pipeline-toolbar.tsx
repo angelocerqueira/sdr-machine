@@ -32,6 +32,9 @@ export function PipelineToolbar({ view }: { view: PipelineView }) {
       nicho: searchParams.get("nicho") ?? "",
       cidade: searchParams.get("cidade") ?? "",
       score_min: searchParams.get("score_min") ?? "",
+      score_max: searchParams.get("score_max") ?? "",
+      has_telefone: searchParams.get("has_telefone") ?? "",
+      has_email: searchParams.get("has_email") ?? "",
       perfil_lead: (searchParams.get("perfil_lead") ?? "") as LeadProfile | "",
       nicho_canonico: (searchParams.get("nicho_canonico") ?? "") as NichoCanonico | "",
       order_by: searchParams.get("order_by") ?? "score_desc",
@@ -124,6 +127,31 @@ export function PipelineToolbar({ view }: { view: PipelineView }) {
           onChange={(e) => setQuery("score_min", e.target.value)}
           className={INPUT_CLASS}
         />
+        <input
+          type="number"
+          placeholder="Score máx"
+          value={filters.score_max}
+          onChange={(e) => setQuery("score_max", e.target.value)}
+          className={INPUT_CLASS}
+        />
+        <select
+          value={filters.has_telefone}
+          onChange={(e) => setQuery("has_telefone", e.target.value)}
+          className={SELECT_CLASS}
+        >
+          <option value="">Telefone: qualquer</option>
+          <option value="true">Com telefone</option>
+          <option value="false">Sem telefone</option>
+        </select>
+        <select
+          value={filters.has_email}
+          onChange={(e) => setQuery("has_email", e.target.value)}
+          className={SELECT_CLASS}
+        >
+          <option value="">Email: qualquer</option>
+          <option value="true">Com email</option>
+          <option value="false">Sem email</option>
+        </select>
         <select
           value={filters.perfil_lead}
           onChange={(e) => setQuery("perfil_lead", e.target.value)}

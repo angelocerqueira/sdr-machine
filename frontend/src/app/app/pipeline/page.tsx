@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PipelineControls } from "@/components/pipeline-controls";
 import { PipelineKanban } from "@/components/pipeline/pipeline-kanban";
@@ -9,6 +9,9 @@ import { PipelineToolbar } from "@/components/pipeline/pipeline-toolbar";
 import { SelectAllBanner } from "@/components/pipeline/select-all-banner";
 import { BulkActionBar } from "@/components/pipeline/bulk-action-bar";
 import { useBulkSelection } from "@/components/pipeline/use-bulk-selection";
+import { FiltrosAtivosBanner } from "@/components/pipeline/filtros-ativos-banner";
+import { PipelineFunnel } from "@/components/pipeline/pipeline-funnel";
+import { usePipelineCounts } from "@/components/pipeline/use-pipeline-counts";
 
 type PipelineView = "kanban" | "table";
 
@@ -78,7 +81,14 @@ function PipelineInner() {
     return out;
   }, [sp]);
 
+  const { counts, staleDelta, dismissStale, refresh: refreshCounts } = usePipelineCounts(filters);
+
   const handleChanged = () => setRefreshKey((k) => k + 1);
+
+  const handleRefresh = useCallback(async () => {
+    await refreshCounts();
+    setRefreshKey((k) => k + 1);
+  }, [refreshCounts]);
 
   return (
     <div
@@ -95,6 +105,17 @@ function PipelineInner() {
       </div>
       <PipelineControls onJobDone={() => window.location.reload()} />
       <PipelineToolbar view={view} />
+      <FiltrosAtivosBanner />
+      <PipelineFunnel counts={counts} />
+      {staleDelta != null && (
+        <div className="flex items-center justify-between rounded-md border border-accent/30 bg-accent-soft px-3 py-2 text-[13px]">
+          <span>{Math.abs(staleDelta)} {staleDelta > 0 ? "novos" : "atualizados"} desde a última carga.</span>
+          <div className="flex gap-3">
+            <button onClick={handleRefresh} className="t-eyebrow text-accent hover:underline">Atualizar</button>
+            <button onClick={dismissStale} className="t-eyebrow text-text-muted hover:text-text">Dispensar</button>
+          </div>
+        </div>
+      )}
       {view === "table" ? (
         <>
           <SelectAllBanner
