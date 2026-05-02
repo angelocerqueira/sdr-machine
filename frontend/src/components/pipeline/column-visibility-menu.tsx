@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui";
+import { track } from "@/lib/telemetry";
 
 interface ColumnDescriptor {
   id: string;
@@ -33,6 +34,8 @@ export function ColumnVisibilityMenu({ columns, visibility, onChange }: Props) {
 
   const toggle = (id: string) => {
     if (FIXED_COLUMNS.has(id)) return;
+    const isOn = visibility[id] !== false;
+    track("column_visibility_changed", { column: id, visible: !isOn });
     onChange({ ...visibility, [id]: !visibility[id] });
   };
 
