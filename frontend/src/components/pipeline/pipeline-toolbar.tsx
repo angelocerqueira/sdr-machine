@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getLeadFilters } from "@/lib/api";
 import { LEAD_PROFILE_LABEL, NICHO_LABEL } from "@/lib/types";
 import type { LeadProfile, NichoCanonico } from "@/lib/types";
+import { track } from "@/lib/telemetry";
 
 const SELECT_CLASS =
   "bg-surface-raised border border-border rounded-md px-3 py-1.5 text-[13px] text-text-secondary font-mono focus:border-accent/50 focus:outline-none transition-default appearance-none cursor-pointer hover:border-border-strong";
@@ -78,11 +79,12 @@ export function PipelineToolbar({ view }: { view: PipelineView }) {
       } catch {
         // ignore
       }
+      track("pipeline_view_toggled", { from: view, to: next });
       const sp = new URLSearchParams(searchParams.toString());
       sp.set("view", next);
       router.replace(`?${sp.toString()}`, { scroll: false });
     },
-    [router, searchParams],
+    [router, searchParams, view],
   );
 
   return (

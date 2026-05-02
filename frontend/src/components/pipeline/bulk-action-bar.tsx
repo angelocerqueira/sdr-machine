@@ -5,6 +5,7 @@ import {
   bulkDeleteLeads,
   bulkUpdateLeads,
   getJob,
+  getLead,
   getPipelineStatus,
   previewPipeline,
   runEnrich,
@@ -16,9 +17,9 @@ import type { Job, PipelineAction, PipelinePreviewResponse } from "@/lib/types";
 import type { useBulkSelection } from "./use-bulk-selection";
 import { BulkConfirmModal } from "./bulk-confirm-modal";
 import { BulkResultModal } from "./bulk-result-modal";
-
-// NOTE: PR 3/5 intentionally omits the "Editar ▾" dropdown and "Exportar CSV"
-// from the action bar — those will land in PR 4/5 with their own confirm flows.
+import { useToast } from "@/components/ui/toast";
+import { exportLeadsCSV } from "@/lib/csv-export";
+import { track } from "@/lib/telemetry";
 
 interface Props {
   sel: ReturnType<typeof useBulkSelection>;
@@ -35,6 +36,7 @@ type DialogState =
       pendingIds: number[];
     }
   | { kind: "move"; status: string; pendingIds: number[] }
+  | { kind: "edit"; data: Record<string, unknown>; pendingIds: number[] }
   | { kind: "delete"; pendingIds: number[] };
 
 const ACTION_LABEL: Record<PipelineAction, string> = {
@@ -45,11 +47,23 @@ const ACTION_LABEL: Record<PipelineAction, string> = {
 };
 
 export function BulkActionBar({ sel, onChanged }: Props) {
+  const { toast } = useToast();
   const [dialog, setDialog] = useState<DialogState>({ kind: "none" });
   const [busy, setBusy] = useState(false);
   const [runningJobs, setRunningJobs] = useState<string[]>([]);
   const [moveMenuOpen, setMoveMenuOpen] = useState(false);
   const moveMenuRef = useRef<HTMLDivElement | null>(null);
+  const [editMenuOpen, setEditMenuOpen] = useState(false);
+  const editMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Detect 0 → >0 transition to fire bulk_selection_started once per session.
+  const prevSizeRef = useRef(0);
+  useEffect(() => {
+    if (prevSizeRef.current === 0 && sel.size > 0) {
+      track("bulk_selection_started", { count: sel.size, mode: sel.mode });
+    }
+    prevSizeRef.current = sel.size;
+  }, [sel.size, sel.mode]);
 
   // Track the last bulk-dispatched job so we can surface a BulkResultModal
   // when it completes. We poll getJob(id) directly so fast jobs that finish
@@ -69,6 +83,13 @@ export function BulkActionBar({ sel, onChanged }: Props) {
         const job = await getJob(pendingJobId);
         if (cancelled) return;
         if (TERMINAL.has(job.status)) {
+          track("bulk_action_completed", {
+            action: job.type,
+            success: job.status !== "failed",
+            failed:
+              (job.result_summary?.errors as unknown[] | undefined)?.length ??
+              0,
+          });
           setResultJob(job);
           setPendingJobId(null);
         }
@@ -124,6 +145,21 @@ export function BulkActionBar({ sel, onChanged }: Props) {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [moveMenuOpen]);
 
+  // Close edit menu on outside click
+  useEffect(() => {
+    if (!editMenuOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (
+        editMenuRef.current &&
+        !editMenuRef.current.contains(e.target as Node)
+      ) {
+        setEditMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [editMenuOpen]);
+
   const isJobRunning = (action: PipelineAction) => runningJobs.includes(action);
 
   const dispatchAction = useCallback(
@@ -132,22 +168,24 @@ export function BulkActionBar({ sel, onChanged }: Props) {
       setBusy(true);
       try {
         const ids = await sel.materializeIds();
+        track("bulk_action_dispatched", { action, count: ids.length });
         const preview = await previewPipeline({ action, lead_ids: ids });
         setDialog({ kind: "preview", action, preview, pendingIds: ids });
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Erro desconhecido";
         if (msg === "BULK_LIMIT_EXCEEDED") {
-          alert(
+          toast(
             "Reduza o filtro pra ≤5000 leads ou aguarde endpoint by_filter.",
+            { variant: "warning" },
           );
         } else {
-          alert(`Erro: ${msg}`);
+          toast(`Erro: ${msg}`, { variant: "error" });
         }
       } finally {
         setBusy(false);
       }
     },
-    [busy, sel],
+    [busy, sel, toast],
   );
 
   const handleConfirmAction = useCallback(
@@ -170,18 +208,20 @@ export function BulkActionBar({ sel, onChanged }: Props) {
           job = await runOutreach({ lead_ids: pendingIds });
         }
         if (job?.id != null) setPendingJobId(job.id);
+        onChanged?.();
+        toast("Job iniciado.", { variant: "success" });
         sel.clear();
         setDialog({ kind: "none" });
-        onChanged?.();
       } catch (err) {
-        alert(
+        toast(
           `Erro: ${err instanceof Error ? err.message : "Erro desconhecido"}`,
+          { variant: "error" },
         );
       } finally {
         setBusy(false);
       }
     },
-    [dialog, sel, onChanged],
+    [dialog, sel, onChanged, toast],
   );
 
   const handleMove = useCallback(
@@ -191,10 +231,10 @@ export function BulkActionBar({ sel, onChanged }: Props) {
         const ids = await sel.materializeIds();
         setDialog({ kind: "move", status, pendingIds: ids });
       } catch (err) {
-        alert(err instanceof Error ? err.message : "Erro");
+        toast(err instanceof Error ? err.message : "Erro", { variant: "error" });
       }
     },
-    [sel],
+    [sel, toast],
   );
 
   const handleConfirmMove = useCallback(async () => {
@@ -206,20 +246,89 @@ export function BulkActionBar({ sel, onChanged }: Props) {
       setDialog({ kind: "none" });
       onChanged?.();
     } catch (err) {
-      alert(`Erro: ${err instanceof Error ? err.message : "Erro"}`);
+      toast(`Erro: ${err instanceof Error ? err.message : "Erro"}`, {
+        variant: "error",
+      });
     } finally {
       setBusy(false);
     }
-  }, [dialog, sel, onChanged]);
+  }, [dialog, sel, onChanged, toast]);
+
+  const handleEdit = useCallback(
+    async (data: Record<string, unknown>) => {
+      setEditMenuOpen(false);
+      try {
+        const ids = await sel.materializeIds();
+        setDialog({ kind: "edit", data, pendingIds: ids });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Erro";
+        if (msg === "BULK_LIMIT_EXCEEDED") {
+          toast(
+            "Reduza o filtro pra ≤5000 leads ou aguarde endpoint by_filter.",
+            { variant: "warning" },
+          );
+        } else {
+          toast(msg, { variant: "error" });
+        }
+      }
+    },
+    [sel, toast],
+  );
+
+  const handleConfirmEdit = useCallback(async () => {
+    if (dialog.kind !== "edit") return;
+    setBusy(true);
+    try {
+      await bulkUpdateLeads(dialog.pendingIds, dialog.data);
+      toast(`${dialog.pendingIds.length} leads atualizados.`, {
+        variant: "success",
+      });
+      sel.clear();
+      setDialog({ kind: "none" });
+      onChanged?.();
+    } catch (err) {
+      toast(`Erro: ${err instanceof Error ? err.message : "Erro"}`, {
+        variant: "error",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }, [dialog, sel, onChanged, toast]);
+
+  const handleExport = useCallback(async () => {
+    if (sel.size > 50) {
+      toast("Reduza a seleção pra ≤50 leads pra exportar (limite v1).", {
+        variant: "warning",
+      });
+      return;
+    }
+    try {
+      const ids = await sel.materializeIds();
+      if (ids.length === 0) return;
+      // Fetch lead details one-by-one; OK for ≤50.
+      const results = await Promise.all(ids.map((id) => getLead(id)));
+      const leads = results.filter(
+        (l): l is NonNullable<typeof l> => l != null,
+      );
+      exportLeadsCSV(leads);
+      track("csv_exported", { count: leads.length });
+      toast(`${leads.length} leads exportados.`, { variant: "success" });
+    } catch (err) {
+      toast(
+        `Erro ao exportar: ${err instanceof Error ? err.message : "?"}`,
+        { variant: "error" },
+      );
+    }
+  }, [sel, toast]);
 
   const handleDelete = useCallback(async () => {
     try {
       const ids = await sel.materializeIds();
       setDialog({ kind: "delete", pendingIds: ids });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Erro");
+      toast(err instanceof Error ? err.message : "Erro", { variant: "error" });
     }
-  }, [sel]);
+  }, [sel, toast]);
 
   const handleConfirmDelete = useCallback(async () => {
     if (dialog.kind !== "delete") return;
@@ -230,11 +339,13 @@ export function BulkActionBar({ sel, onChanged }: Props) {
       setDialog({ kind: "none" });
       onChanged?.();
     } catch (err) {
-      alert(`Erro: ${err instanceof Error ? err.message : "Erro"}`);
+      toast(`Erro: ${err instanceof Error ? err.message : "Erro"}`, {
+        variant: "error",
+      });
     } finally {
       setBusy(false);
     }
-  }, [dialog, sel, onChanged]);
+  }, [dialog, sel, onChanged, toast]);
 
   if (sel.size === 0) return null;
 
@@ -332,6 +443,46 @@ export function BulkActionBar({ sel, onChanged }: Props) {
                 </div>
               )}
             </div>
+            <div className="relative" ref={editMenuRef}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setEditMenuOpen((v) => !v)}
+                className="rounded-md border border-border bg-surface-raised px-3 py-1.5 text-[13px] text-text-secondary hover:border-border-strong hover:text-text disabled:opacity-50 transition-default cursor-pointer"
+              >
+                Editar ▾
+              </button>
+              {editMenuOpen && (
+                <div className="absolute bottom-full mb-2 right-0 w-56 rounded-md border border-border bg-surface shadow-lg p-2 space-y-2">
+                  <div>
+                    <div className="t-eyebrow px-2 py-1">Pacote sugerido</div>
+                    {(["essencial", "profissional", "premium", "skip"] as const).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => handleEdit({ pacote_sugerido: p })}
+                        className="block w-full px-2 py-1.5 text-left text-[13px] text-text-secondary hover:bg-surface-raised hover:text-text rounded transition-default cursor-pointer"
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t border-border-subtle pt-2">
+                    <div className="t-eyebrow px-2 py-1">Prioridade</div>
+                    {(["maxima", "alta", "media", "baixa", "pular"] as const).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => handleEdit({ prioridade: p })}
+                        className="block w-full px-2 py-1.5 text-left text-[13px] text-text-secondary hover:bg-surface-raised hover:text-text rounded transition-default cursor-pointer"
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             <button
               type="button"
               disabled={busy}
@@ -339,6 +490,14 @@ export function BulkActionBar({ sel, onChanged }: Props) {
               className="rounded-md border border-danger/30 bg-danger-soft px-3 py-1.5 text-[13px] text-danger hover:opacity-80 disabled:opacity-50 transition-default cursor-pointer"
             >
               Excluir
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={handleExport}
+              className="rounded-md border border-border bg-surface-raised px-3 py-1.5 text-[13px] text-text-secondary hover:border-border-strong hover:text-text disabled:opacity-50 transition-default cursor-pointer"
+            >
+              Exportar CSV
             </button>
             <button
               type="button"
@@ -373,6 +532,26 @@ export function BulkActionBar({ sel, onChanged }: Props) {
           variant="soft"
           title={moveTitle}
           confirmLabel="Mover"
+          busy={busy}
+        />
+      )}
+
+      {dialog.kind === "edit" && (
+        <BulkConfirmModal
+          open
+          onClose={() => setDialog({ kind: "none" })}
+          onConfirm={handleConfirmEdit}
+          variant="soft"
+          title={`Atualizar ${dialog.pendingIds.length} leads?`}
+          description={
+            <p>
+              Vai aplicar:{" "}
+              <code className="rounded bg-surface-raised px-1 font-mono text-[12px]">
+                {JSON.stringify(dialog.data)}
+              </code>
+            </p>
+          }
+          confirmLabel="Atualizar"
           busy={busy}
         />
       )}

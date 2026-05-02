@@ -7,6 +7,7 @@ import { CommandSearch } from "./command-search";
 import { authClient } from "@/lib/auth-client";
 import { getLeadsForReview } from "@/lib/api";
 import { useActiveJobs } from "./use-active-jobs";
+import { useToast } from "@/components/ui/toast";
 
 const NAV_ITEMS: { key: string; icon: IconName; label: string; href: string }[] = [
   { key: "home", icon: "home", label: "Dashboard", href: "/app" },
@@ -58,16 +59,19 @@ function ReviewNavCount() {
 function JobBadge() {
   const { runningCount, recentlyCompleted } = useActiveJobs();
   const announcedRef = useRef<Set<number>>(new Set());
+  const { toast } = useToast();
 
-  // Toast on newly-completed jobs (best-effort console for now; real toast in PR 5).
   useEffect(() => {
     for (const job of recentlyCompleted) {
       if (announcedRef.current.has(job.id)) continue;
       announcedRef.current.add(job.id);
-      const summary = job.status === "failed" ? "falhou" : "concluído";
-      console.info(`[Jobs] Job ${job.id} (${job.type}) ${summary}.`);
+      if (job.status === "failed") {
+        toast(`Job #${job.id} (${job.type}) falhou.`, { variant: "error" });
+      } else {
+        toast(`Job #${job.id} (${job.type}) concluído.`, { variant: "success" });
+      }
     }
-  }, [recentlyCompleted]);
+  }, [recentlyCompleted, toast]);
 
   if (runningCount === 0) return null;
 

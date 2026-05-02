@@ -98,6 +98,8 @@ class LeadUpdate(BaseModel):
         "loja_roupas", "auto_escola", "advocacia", "industria",
         "clinica_medica", "escola_curso", "outros",
     ] | None = None
+    pacote_sugerido: Literal["essencial", "profissional", "premium", "skip"] | None = None
+    prioridade: Literal["maxima", "alta", "media", "baixa", "pular"] | None = None
 
 
 class ReclassifyRequest(BaseModel):

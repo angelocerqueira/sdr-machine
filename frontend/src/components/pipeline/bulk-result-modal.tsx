@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Icon } from "@/components/ui";
+import { useFocusTrap } from "@/components/ui/use-focus-trap";
 import type { Job } from "@/lib/types";
 
 interface Props {
@@ -58,6 +59,9 @@ function extractFailedIds(errors: string[]): number[] {
 }
 
 export function BulkResultModal({ job, onClose }: Props) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, job !== null);
+
   useEffect(() => {
     if (!job) return;
     function onKeyDown(e: KeyboardEvent) {
@@ -95,6 +99,7 @@ export function BulkResultModal({ job, onClose }: Props) {
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="bulk-result-title"
