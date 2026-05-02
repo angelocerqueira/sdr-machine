@@ -8,16 +8,95 @@ import {
   useReactTable,
   type ColumnDef,
   type SortingState,
+  type VisibilityState,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { getLeads } from "@/lib/api";
 import { LEAD_PROFILE_LABEL, NICHO_LABEL, type Lead } from "@/lib/types";
 import { Badge, Icon, StatusPill, Tag } from "@/components/ui";
+import { ColumnVisibilityMenu } from "./column-visibility-menu";
 import type { useBulkSelection } from "./use-bulk-selection";
 
 const PER_PAGE = 50;
 const ROW_HEIGHT = 48;
+const COLUMN_VISIBILITY_STORAGE_KEY = "sdr-table-columns";
+
+const DEFAULT_COLUMN_VISIBILITY: VisibilityState = {
+  select: true,
+  nome: true,
+  cidade: true,
+  nicho: true,
+  opportunity_score: true,
+  perfil_lead: true,
+  status: true,
+  updated_at: true,
+  // optional defaults to false
+  telefone: false,
+  email: false,
+  cnpj: false,
+  razao_social: false,
+  tech_stack: false,
+  reviews: false,
+  pacote_sugerido: false,
+  prioridade: false,
+  created_at: false,
+};
+
+const MOBILE_COLUMN_VISIBILITY: VisibilityState = {
+  select: true,
+  nome: true,
+  cidade: false,
+  nicho: false,
+  opportunity_score: true,
+  perfil_lead: false,
+  status: true,
+  updated_at: false,
+  telefone: false,
+  email: false,
+  cnpj: false,
+  razao_social: false,
+  tech_stack: false,
+  reviews: false,
+  pacote_sugerido: false,
+  prioridade: false,
+  created_at: false,
+};
+
+const COLUMN_DESCRIPTORS: Array<{ id: string; label: string }> = [
+  { id: "nome", label: "Nome" },
+  { id: "cidade", label: "Cidade" },
+  { id: "nicho", label: "Nicho" },
+  { id: "opportunity_score", label: "Score" },
+  { id: "perfil_lead", label: "Perfil" },
+  { id: "status", label: "Status" },
+  { id: "updated_at", label: "Atualizado" },
+  { id: "telefone", label: "Telefone" },
+  { id: "email", label: "Email" },
+  { id: "cnpj", label: "CNPJ" },
+  { id: "razao_social", label: "Razão social" },
+  { id: "tech_stack", label: "Tech stack" },
+  { id: "reviews", label: "Reviews" },
+  { id: "pacote_sugerido", label: "Pacote" },
+  { id: "prioridade", label: "Prioridade" },
+  { id: "created_at", label: "Criado" },
+];
+
+function loadVisibility(isMobile: boolean): VisibilityState {
+  if (typeof window === "undefined") {
+    return isMobile ? MOBILE_COLUMN_VISIBILITY : DEFAULT_COLUMN_VISIBILITY;
+  }
+  try {
+    const raw = window.localStorage.getItem(COLUMN_VISIBILITY_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as VisibilityState;
+      return { ...DEFAULT_COLUMN_VISIBILITY, ...parsed };
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return isMobile ? MOBILE_COLUMN_VISIBILITY : DEFAULT_COLUMN_VISIBILITY;
+}
 
 // ----- helpers -----
 
@@ -181,6 +260,49 @@ export function PipelineTable({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Mobile detection (≤768px) — used for default visibility on first load.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 768px)");
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  // Column visibility — persisted to localStorage.
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
+    () => loadVisibility(false),
+  );
+
+  // Re-evaluate defaults once we know if we're mobile and there's no stored value.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(COLUMN_VISIBILITY_STORAGE_KEY);
+      if (!raw) {
+        setColumnVisibility(
+          isMobile ? MOBILE_COLUMN_VISIBILITY : DEFAULT_COLUMN_VISIBILITY,
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }, [isMobile]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        COLUMN_VISIBILITY_STORAGE_KEY,
+        JSON.stringify(columnVisibility),
+      );
+    } catch {
+      // ignore quota / private mode errors
+    }
+  }, [columnVisibility]);
+
   // Bulk selection (sel passed from parent)
   const visibleIds = useMemo(() => data.map((l) => l.id), [data]);
 
@@ -301,7 +423,7 @@ export function PipelineTable({
         id: "select",
         size: 40,
         header: () => (
-          <div className="flex items-center justify-center px-2">
+          <div className="flex h-full min-h-[40px] w-full items-center justify-center px-2">
             <button
               type="button"
               role="checkbox"
@@ -332,9 +454,16 @@ export function PipelineTable({
           const checked = sel.has(lead.id);
           return (
             <div
-              className="flex items-center justify-center px-2"
+              className="flex h-full min-h-[40px] w-full items-center justify-center px-2"
               data-cell="select"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                // Wider touch hit area: clicking anywhere in the cell toggles
+                // the checkbox without navigating into the row.
+                e.stopPropagation();
+                if (e.target === e.currentTarget) {
+                  sel.toggle(lead.id);
+                }
+              }}
             >
               <button
                 type="button"
@@ -491,6 +620,161 @@ export function PipelineTable({
         ),
         enableSorting: true,
       },
+      {
+        id: "telefone",
+        accessorKey: "telefone",
+        header: () => <span>Telefone</span>,
+        size: 140,
+        cell: ({ row }) => {
+          const v = row.original.telefone;
+          return v ? (
+            <span className="font-mono tabular-nums text-[13px] px-3 truncate block">
+              {v}
+            </span>
+          ) : (
+            <span className="text-text-muted text-[13px] px-3">—</span>
+          );
+        },
+        enableSorting: false,
+      },
+      {
+        id: "email",
+        accessorKey: "email",
+        header: () => <span>Email</span>,
+        size: 200,
+        cell: ({ row }) => {
+          const v = row.original.email;
+          return v ? (
+            <span className="text-[13px] px-3 truncate block">{v}</span>
+          ) : (
+            <span className="text-text-muted text-[13px] px-3">—</span>
+          );
+        },
+        enableSorting: false,
+      },
+      {
+        id: "cnpj",
+        accessorKey: "cnpj",
+        header: () => <span>CNPJ</span>,
+        size: 160,
+        cell: ({ row }) => {
+          const v = row.original.cnpj;
+          return v ? (
+            <span className="font-mono tabular-nums text-[12px] px-3 truncate block">
+              {v}
+            </span>
+          ) : (
+            <span className="text-text-muted text-[13px] px-3">—</span>
+          );
+        },
+        enableSorting: false,
+      },
+      {
+        id: "razao_social",
+        accessorKey: "razao_social",
+        header: () => <span>Razão social</span>,
+        size: 200,
+        cell: ({ row }) => {
+          const v = row.original.razao_social;
+          return v ? (
+            <span className="text-[13px] px-3 truncate block">{v}</span>
+          ) : (
+            <span className="text-text-muted text-[13px] px-3">—</span>
+          );
+        },
+        enableSorting: false,
+      },
+      {
+        id: "tech_stack",
+        accessorKey: "tech_stack",
+        header: () => <span>Tech</span>,
+        size: 180,
+        cell: ({ row }) => {
+          const v = row.original.tech_stack ?? [];
+          if (v.length === 0) {
+            return <span className="text-text-muted text-[13px] px-3">—</span>;
+          }
+          return (
+            <div className="flex flex-wrap gap-1 px-3">
+              {v.slice(0, 3).map((t, i) => (
+                <span
+                  key={i}
+                  className="t-eyebrow rounded bg-surface-raised px-1.5 py-0.5"
+                >
+                  {t.name}
+                </span>
+              ))}
+              {v.length > 3 && (
+                <span className="t-eyebrow text-text-muted">
+                  +{v.length - 3}
+                </span>
+              )}
+            </div>
+          );
+        },
+        enableSorting: false,
+      },
+      {
+        id: "reviews",
+        header: () => <span>Reviews</span>,
+        size: 110,
+        cell: ({ row }) => {
+          const rating = row.original.rating;
+          const count = row.original.reviews_count ?? 0;
+          if (rating == null) {
+            return <span className="text-text-muted text-[13px] px-3">—</span>;
+          }
+          return (
+            <span className="font-mono tabular-nums text-[12px] px-3">
+              {rating.toFixed(1)}{" "}
+              <span className="text-text-muted">({count})</span>
+            </span>
+          );
+        },
+        enableSorting: false,
+      },
+      {
+        id: "pacote_sugerido",
+        accessorKey: "pacote_sugerido",
+        header: () => <span>Pacote</span>,
+        size: 120,
+        cell: ({ row }) => {
+          const v = row.original.pacote_sugerido;
+          return v ? (
+            <span className="t-eyebrow uppercase px-3">{v}</span>
+          ) : (
+            <span className="text-text-muted text-[13px] px-3">—</span>
+          );
+        },
+        enableSorting: false,
+      },
+      {
+        id: "prioridade",
+        accessorKey: "prioridade",
+        header: () => <span>Prioridade</span>,
+        size: 120,
+        cell: ({ row }) => {
+          const v = row.original.prioridade;
+          return v ? (
+            <span className="t-eyebrow uppercase px-3">{v}</span>
+          ) : (
+            <span className="text-text-muted text-[13px] px-3">—</span>
+          );
+        },
+        enableSorting: false,
+      },
+      {
+        id: "created_at",
+        accessorKey: "created_at",
+        header: () => <span>Criado</span>,
+        size: 120,
+        cell: ({ row }) => (
+          <span className="text-text-muted text-[12px] font-mono tabular-nums px-3">
+            {formatRelativeTime(row.original.created_at)}
+          </span>
+        ),
+        enableSorting: false,
+      },
     ],
     [sel, visibleIds, headerCheckState],
   );
@@ -498,7 +782,8 @@ export function PipelineTable({
   const table = useReactTable({
     data,
     columns,
-    state: { sorting },
+    state: { sorting, columnVisibility },
+    onColumnVisibilityChange: setColumnVisibility,
     manualSorting: true,
     manualPagination: true,
     pageCount: Math.max(1, Math.ceil(total / PER_PAGE)),
@@ -538,6 +823,13 @@ export function PipelineTable({
 
   return (
     <div className="space-y-3">
+      <div className="flex justify-end">
+        <ColumnVisibilityMenu
+          columns={COLUMN_DESCRIPTORS}
+          visibility={columnVisibility as Record<string, boolean>}
+          onChange={setColumnVisibility}
+        />
+      </div>
       <div className="border border-border rounded-lg bg-surface overflow-hidden">
         <div
           ref={scrollRef}
