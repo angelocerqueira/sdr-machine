@@ -14,7 +14,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { getLeads } from "@/lib/api";
 import { LEAD_PROFILE_LABEL, NICHO_LABEL, type Lead } from "@/lib/types";
 import { Badge, Icon, StatusPill, Tag } from "@/components/ui";
-import { useBulkSelection } from "./use-bulk-selection";
+import type { useBulkSelection } from "./use-bulk-selection";
 
 const PER_PAGE = 50;
 const ROW_HEIGHT = 48;
@@ -125,7 +125,19 @@ function ariaSortFor(columnId: string, sorting: SortingState): "ascending" | "de
 
 // ----- component -----
 
-export function PipelineTable() {
+interface PipelineTableProps {
+  sel: ReturnType<typeof useBulkSelection>;
+  onVisibleIdsChange?: (ids: number[]) => void;
+  onTotalChange?: (total: number) => void;
+  refreshKey?: number;
+}
+
+export function PipelineTable({
+  sel,
+  onVisibleIdsChange,
+  onTotalChange,
+  refreshKey,
+}: PipelineTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -169,9 +181,17 @@ export function PipelineTable() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Bulk selection
-  const sel = useBulkSelection();
+  // Bulk selection (sel passed from parent)
   const visibleIds = useMemo(() => data.map((l) => l.id), [data]);
+
+  // Bubble visible ids and total up to parent so it can wire banner / action bar.
+  useEffect(() => {
+    onVisibleIdsChange?.(visibleIds);
+  }, [visibleIds, onVisibleIdsChange]);
+
+  useEffect(() => {
+    onTotalChange?.(total);
+  }, [total, onTotalChange]);
   const headerCheckState: "checked" | "indeterminate" | "unchecked" = useMemo(() => {
     if (visibleIds.length === 0) return "unchecked";
     const allSelected = visibleIds.every((id) => sel.has(id));
@@ -228,7 +248,7 @@ export function PipelineTable() {
     return () => {
       cancelled = true;
     };
-  }, [filters, sorting, page, orderByParam]);
+  }, [filters, sorting, page, orderByParam, refreshKey]);
 
   // Keyboard shortcuts: Cmd/Ctrl+A selects current page, Esc clears selection
   useEffect(() => {
