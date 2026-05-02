@@ -260,36 +260,20 @@ export function PipelineTable({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Mobile detection (≤768px) — used for default visibility on first load.
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(max-width: 768px)");
-    const sync = () => setIsMobile(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-
   // Column visibility — persisted to localStorage.
+  // Detect mobile synchronously in the lazy initializer so the right default
+  // is picked on first render. If we deferred mobile detection to an effect,
+  // the persist effect below would write desktop defaults to localStorage
+  // before the mobile effect ran — locking first-time mobile users into
+  // desktop columns forever.
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
-    () => loadVisibility(false),
+    () => {
+      const isMobileAtMount =
+        typeof window !== "undefined" &&
+        window.matchMedia("(max-width: 768px)").matches;
+      return loadVisibility(isMobileAtMount);
+    },
   );
-
-  // Re-evaluate defaults once we know if we're mobile and there's no stored value.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(COLUMN_VISIBILITY_STORAGE_KEY);
-      if (!raw) {
-        setColumnVisibility(
-          isMobile ? MOBILE_COLUMN_VISIBILITY : DEFAULT_COLUMN_VISIBILITY,
-        );
-      }
-    } catch {
-      // ignore
-    }
-  }, [isMobile]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

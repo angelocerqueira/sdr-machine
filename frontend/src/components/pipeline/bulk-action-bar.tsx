@@ -279,11 +279,6 @@ export function BulkActionBar({ sel, onChanged }: Props) {
     if (dialog.kind !== "edit") return;
     setBusy(true);
     try {
-      // NOTE: backend `LeadUpdate` Pydantic schema (backend/app/schemas.py)
-      // does NOT yet include `pacote_sugerido` or `prioridade` — Pydantic
-      // silently ignores unknown fields, so the bulk PATCH will succeed but
-      // the columns won't actually be updated. Schema needs to be widened in
-      // a small follow-up before this UI is functional end-to-end.
       await bulkUpdateLeads(dialog.pendingIds, dialog.data);
       toast(`${dialog.pendingIds.length} leads atualizados.`, {
         variant: "success",
