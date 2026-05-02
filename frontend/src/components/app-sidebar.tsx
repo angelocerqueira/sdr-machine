@@ -6,6 +6,7 @@ import { Icon, type IconName } from "@/components/ui";
 import { CommandSearch } from "./command-search";
 import { authClient } from "@/lib/auth-client";
 import { getLeadsForReview } from "@/lib/api";
+import { useActiveJobs } from "./use-active-jobs";
 
 const NAV_ITEMS: { key: string; icon: IconName; label: string; href: string }[] = [
   { key: "home", icon: "home", label: "Dashboard", href: "/app" },
@@ -50,6 +51,45 @@ function ReviewNavCount() {
       }}
     >
       {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+function JobBadge() {
+  const { runningCount, recentlyCompleted } = useActiveJobs();
+  const announcedRef = useRef<Set<number>>(new Set());
+
+  // Toast on newly-completed jobs (best-effort console for now; real toast in PR 5).
+  useEffect(() => {
+    for (const job of recentlyCompleted) {
+      if (announcedRef.current.has(job.id)) continue;
+      announcedRef.current.add(job.id);
+      const summary = job.status === "failed" ? "falhou" : "concluído";
+      console.info(`[Jobs] Job ${job.id} (${job.type}) ${summary}.`);
+    }
+  }, [recentlyCompleted]);
+
+  if (runningCount === 0) return null;
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minWidth: "18px",
+        height: "18px",
+        padding: "0 4px",
+        borderRadius: "9px",
+        background: "var(--accent)",
+        color: "#fff",
+        fontSize: "10px",
+        fontWeight: 700,
+        lineHeight: 1,
+        fontFamily: "var(--font-mono)",
+      }}
+    >
+      {runningCount > 99 ? "99+" : runningCount}
     </span>
   );
 }
@@ -154,7 +194,14 @@ export function AppSidebar() {
             }}
           >
             <Icon name={it.icon} size={18} />
-            <span className="app-sidebar-label">{it.label}</span>
+            {it.key === "job" ? (
+              <span className="app-sidebar-label" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                {it.label}
+                <JobBadge />
+              </span>
+            ) : (
+              <span className="app-sidebar-label">{it.label}</span>
+            )}
             <span className="app-sidebar-tip">{it.label}</span>
           </button>
         ))}
