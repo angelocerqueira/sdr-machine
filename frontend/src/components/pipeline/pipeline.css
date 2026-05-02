@@ -436,11 +436,33 @@
   min-height: 0;
 }
 
-/* Kanban ---------------------------------------------------------------- */
+/* Kanban — mobile-first (1 col -> 2 -> 3 -> 5 as space allows) ---------- */
 .pl-kbn {
   display: grid;
-  grid-template-columns: repeat(5, minmax(260px, 1fr));
-  gap: 14px;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+@media (min-width: 640px) {
+  .pl-kbn {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+    gap: 12px;
+  }
+}
+@media (min-width: 1024px) {
+  .pl-kbn {
+    grid-template-columns: repeat(3, minmax(220px, 1fr));
+    gap: 14px;
+  }
+}
+@media (min-width: 1280px) {
+  .pl-kbn {
+    grid-template-columns: repeat(5, minmax(220px, 1fr));
+  }
+}
+@media (min-width: 1440px) {
+  .pl-kbn {
+    grid-template-columns: repeat(5, minmax(260px, 1fr));
+  }
 }
 .pl-kbn-col {
   display: flex;
@@ -883,32 +905,39 @@
 .pl-tbl-compact .pl-tbl tbody td { padding: 7px 12px; }
 .pl-tbl-compact .pl-tbl-name-sub { display: none; }
 
-/* Responsive ------------------------------------------------------------ */
-@media (max-width: 1400px) {
-  .pl-kbn { grid-template-columns: repeat(5, minmax(220px, 1fr)); }
-  .pl-funnel-step { padding: 12px; }
-  .pl-funnel-step-value { font-size: 22px; }
+/* Mobile defaults — small screens get a tighter funnel and header.        */
+.pl-funnel { padding: 14px 12px; }
+.pl-funnel-step { min-width: 140px; padding: 10px 12px; }
+.pl-funnel-step-value { font-size: 20px; }
+.pl-funnel-step-hint { display: none; }
+.pl-funnel-arrow { display: none; }
+.pl-header-title { font-size: 24px; }
+.pl-header-actions { width: 100%; }
+.pl-tbl-name { min-width: 160px; }
+
+/* Tablet+: bring back arrows and breathing room. */
+@media (min-width: 640px) {
+  .pl-funnel-arrow { display: flex; padding: 0 4px; }
 }
-@media (max-width: 1280px) {
+@media (min-width: 768px) {
+  .pl-funnel { padding: 18px 20px 20px; }
+  .pl-funnel-arrow { padding: 0 8px; }
+  .pl-funnel-step { padding: 12px 14px; }
+  .pl-funnel-step-value { font-size: 22px; }
+  .pl-funnel-step-hint { display: block; }
+  .pl-header-title { font-size: 28px; }
+  .pl-header-actions { width: auto; }
+  .pl-tbl-name { min-width: 200px; }
+}
+@media (min-width: 1024px) {
   .pl-kbn-col-body { min-height: 220px; }
 }
-@media (max-width: 1024px) {
-  .pl-kbn { grid-template-columns: repeat(3, minmax(220px, 1fr)); }
+@media (min-width: 1280px) {
+  .pl-funnel-step { padding: 14px 16px; }
 }
-@media (max-width: 768px) {
-  .pl-kbn { grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 10px; }
-  .pl-funnel { padding: 14px 12px; }
-  .pl-funnel-step { min-width: 140px; padding: 10px 12px; }
-  .pl-funnel-step-value { font-size: 20px; }
-  .pl-funnel-step-hint { display: none; }
-  .pl-funnel-arrow { padding: 0 4px; }
-  .pl-header-title { font-size: 24px; }
-  .pl-header-actions { width: 100%; }
-}
-@media (max-width: 640px) {
-  .pl-kbn { grid-template-columns: 1fr; }
-  .pl-funnel-arrow { display: none; }
-  .pl-tbl-name { min-width: 160px; }
+@media (min-width: 1440px) {
+  .pl-funnel-step-value { font-size: 26px; }
+  .pl-header-title { font-size: 32px; }
 }
 
 /* Dark theme tweaks ----------------------------------------------------- */
