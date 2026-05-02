@@ -16,6 +16,7 @@ import type { Job, PipelineAction, PipelinePreviewResponse } from "@/lib/types";
 import type { useBulkSelection } from "./use-bulk-selection";
 import { BulkConfirmModal } from "./bulk-confirm-modal";
 import { BulkResultModal } from "./bulk-result-modal";
+import { useToast } from "@/components/ui/toast";
 
 // NOTE: PR 3/5 intentionally omits the "Editar ▾" dropdown and "Exportar CSV"
 // from the action bar — those will land in PR 4/5 with their own confirm flows.
@@ -45,6 +46,7 @@ const ACTION_LABEL: Record<PipelineAction, string> = {
 };
 
 export function BulkActionBar({ sel, onChanged }: Props) {
+  const { toast } = useToast();
   const [dialog, setDialog] = useState<DialogState>({ kind: "none" });
   const [busy, setBusy] = useState(false);
   const [runningJobs, setRunningJobs] = useState<string[]>([]);
@@ -137,17 +139,18 @@ export function BulkActionBar({ sel, onChanged }: Props) {
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Erro desconhecido";
         if (msg === "BULK_LIMIT_EXCEEDED") {
-          alert(
+          toast(
             "Reduza o filtro pra ≤5000 leads ou aguarde endpoint by_filter.",
+            { variant: "warning" },
           );
         } else {
-          alert(`Erro: ${msg}`);
+          toast(`Erro: ${msg}`, { variant: "error" });
         }
       } finally {
         setBusy(false);
       }
     },
-    [busy, sel],
+    [busy, sel, toast],
   );
 
   const handleConfirmAction = useCallback(
@@ -170,18 +173,20 @@ export function BulkActionBar({ sel, onChanged }: Props) {
           job = await runOutreach({ lead_ids: pendingIds });
         }
         if (job?.id != null) setPendingJobId(job.id);
+        onChanged?.();
+        toast("Job iniciado.", { variant: "success" });
         sel.clear();
         setDialog({ kind: "none" });
-        onChanged?.();
       } catch (err) {
-        alert(
+        toast(
           `Erro: ${err instanceof Error ? err.message : "Erro desconhecido"}`,
+          { variant: "error" },
         );
       } finally {
         setBusy(false);
       }
     },
-    [dialog, sel, onChanged],
+    [dialog, sel, onChanged, toast],
   );
 
   const handleMove = useCallback(
@@ -191,10 +196,10 @@ export function BulkActionBar({ sel, onChanged }: Props) {
         const ids = await sel.materializeIds();
         setDialog({ kind: "move", status, pendingIds: ids });
       } catch (err) {
-        alert(err instanceof Error ? err.message : "Erro");
+        toast(err instanceof Error ? err.message : "Erro", { variant: "error" });
       }
     },
-    [sel],
+    [sel, toast],
   );
 
   const handleConfirmMove = useCallback(async () => {
@@ -206,20 +211,22 @@ export function BulkActionBar({ sel, onChanged }: Props) {
       setDialog({ kind: "none" });
       onChanged?.();
     } catch (err) {
-      alert(`Erro: ${err instanceof Error ? err.message : "Erro"}`);
+      toast(`Erro: ${err instanceof Error ? err.message : "Erro"}`, {
+        variant: "error",
+      });
     } finally {
       setBusy(false);
     }
-  }, [dialog, sel, onChanged]);
+  }, [dialog, sel, onChanged, toast]);
 
   const handleDelete = useCallback(async () => {
     try {
       const ids = await sel.materializeIds();
       setDialog({ kind: "delete", pendingIds: ids });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Erro");
+      toast(err instanceof Error ? err.message : "Erro", { variant: "error" });
     }
-  }, [sel]);
+  }, [sel, toast]);
 
   const handleConfirmDelete = useCallback(async () => {
     if (dialog.kind !== "delete") return;
@@ -230,11 +237,13 @@ export function BulkActionBar({ sel, onChanged }: Props) {
       setDialog({ kind: "none" });
       onChanged?.();
     } catch (err) {
-      alert(`Erro: ${err instanceof Error ? err.message : "Erro"}`);
+      toast(`Erro: ${err instanceof Error ? err.message : "Erro"}`, {
+        variant: "error",
+      });
     } finally {
       setBusy(false);
     }
-  }, [dialog, sel, onChanged]);
+  }, [dialog, sel, onChanged, toast]);
 
   if (sel.size === 0) return null;
 
