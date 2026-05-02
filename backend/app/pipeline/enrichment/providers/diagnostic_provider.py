@@ -5,18 +5,32 @@ Generates ServiceLevelAnalysis + MarketingDiagnostic and persists both into
 generator/outreach/UI consume them via the standard merge path.
 
 Reads crawl intermediates (site_data, html_analysis, pagespeed, social_profiles)
-from EnrichmentContext, populated by WebsiteCrawlerProvider.
+from EnrichmentContext, populated by WebsiteCrawlerProvider. Runs even when
+the crawl chain is empty: the LLM still receives lead_info (nicho, cidade,
+rating, reviews, top_reviews) and produces a marketing diagnostic from that.
 """
 from __future__ import annotations
 
 import logging
 
+from app.config import settings
+from app.integrations.resolver import provider_config_for
 from app.pipeline.enrichment.base_provider import (
     BaseProvider, EnrichmentContext, ProviderResult,
 )
 from app.pipeline.diagnostic import run_diagnostic
 
 logger = logging.getLogger(__name__)
+
+
+def _none_reason() -> str:
+    """Why run_diagnostic might have returned None — used for audit trail."""
+    if settings.skip_service_level_analysis:
+        return "service level analysis disabled (settings.skip_service_level_analysis)"
+    llm_cfg = provider_config_for("llm") or {}
+    if not llm_cfg.get("api_key"):
+        return "LLM_API_KEY not configured"
+    return "graph returned None (check logs for upstream cause)"
 
 
 def _normalize_top_reviews(raw, limit: int = 3) -> list[str]:
@@ -48,10 +62,10 @@ class DiagnosticProvider(BaseProvider):
     cost = "paid"  # LLM call
 
     def can_run(self, lead, context: EnrichmentContext | None = None) -> bool:
-        if context is None:
-            return False
-        # Needs a successful crawl to have content to diagnose
-        return bool(context.html_content)
+        # Always runs — generates MarketingDiagnostic from lead_info even
+        # when no site was crawled. Leads without a website are the highest
+        # opportunity ones and need the strategy the most.
+        return True
 
     def run(self, lead, context: EnrichmentContext) -> ProviderResult:
         try:
@@ -79,9 +93,13 @@ class DiagnosticProvider(BaseProvider):
             )
 
             if service_levels is None:
-                # LLM disabled or graph failed — non-fatal, just no diagnostic data
+                # LLM disabled or graph failed — non-fatal, but surface the
+                # reason in result.errors so the orchestrator records it in
+                # enrichment_sources (otherwise the skip is invisible).
+                reason = _none_reason()
+                logger.warning("diagnostic skipped: %s", reason)
                 return ProviderResult(
-                    success=True, data={}, errors=[], source=self.name,
+                    success=True, data={}, errors=[reason], source=self.name,
                 )
 
             site_analysis: dict = {"service_levels": service_levels.model_dump()}

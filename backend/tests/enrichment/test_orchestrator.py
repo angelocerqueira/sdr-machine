@@ -59,13 +59,19 @@ def test_plan_with_website_runs_crawler_chain():
     assert "diagnostic" in names
 
 
-def test_plan_without_website_skips_diagnostic():
-    """Sem crawl chain (sem website nem cnpj), diagnostic não deve ser planejado."""
+def test_plan_without_website_still_includes_diagnostic():
+    """Diagnostic agora roda sempre — leads sem site são justamente os de
+    oportunidade máxima e precisam da estratégia de marketing (descoberta /
+    atracao / consideracao / acao / apologia) gerada via lead_info do Maps."""
     lead = FakeLead(nome="Solo", telefone="+554999")
     orch = EnrichmentOrchestrator()
     plan = orch.plan(lead)
     names = [p.name for p in plan.providers]
-    assert "diagnostic" not in names
+    assert "diagnostic" in names
+    # Mas crawl chain real continua condicional — sem website/cnpj não roda.
+    assert "website_crawler" not in names
+    assert "schema_extractor" not in names
+    assert "tech_stack" not in names
 
 
 def test_plan_without_website_but_with_cnpj_discovers_first():
