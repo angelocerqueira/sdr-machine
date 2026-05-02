@@ -4,6 +4,7 @@ import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PipelineControls } from "@/components/pipeline-controls";
 import { PipelineKanban } from "@/components/pipeline/pipeline-kanban";
+import { PipelineToolbar } from "@/components/pipeline/pipeline-toolbar";
 
 type PipelineView = "kanban" | "table";
 
@@ -52,6 +53,7 @@ function PipelineInner() {
         <p className="text-text-secondary text-sm mt-1">Gerencie leads pelo pipeline</p>
       </div>
       <PipelineControls onJobDone={() => window.location.reload()} />
+      <PipelineToolbar view={view} />
       {view === "table" ? (
         <div className="rounded-lg border border-border bg-surface p-8 text-center">
           <p className="t-eyebrow text-text-muted">Tabela em breve</p>
