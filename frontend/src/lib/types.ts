@@ -217,3 +217,48 @@ export const KANBAN_COLUMNS = [
   { id: "closed", label: "Fechado" },
   { id: "delivered", label: "Entregue" },
 ] as const;
+
+export interface BulkUpdateError {
+  lead_id: number;
+  error: string;
+}
+
+export interface BulkUpdateResult {
+  updated: number;
+  errors: BulkUpdateError[];
+}
+
+export interface BulkDeleteResult {
+  deleted: number;
+  errors: BulkUpdateError[];
+}
+
+export interface LeadIdsResponse {
+  ids: number[];
+  total: number;
+  truncated: boolean;
+}
+
+export type PipelineAction = "enrich" | "generate" | "outreach" | "classify";
+export type SkippedReason = "disqualified";
+
+export interface PipelinePreviewRequest {
+  action: PipelineAction;
+  lead_ids: number[];
+  options?: Record<string, unknown>;
+}
+
+export interface PipelinePreviewResponse {
+  action: PipelineAction;
+  total_leads: number;
+  eligible: number;
+  skipped: number;
+  skipped_reasons: Partial<Record<SkippedReason, number>>;
+  cost_estimate: {
+    currency: string;
+    total: number;
+    breakdown: Array<{ provider: string; calls: number; cost: number }>;
+  } | null;
+  quota_status: Array<{ provider: string; used: number; limit: number; would_hit_limit: boolean }> | null;
+  warnings: string[];
+}

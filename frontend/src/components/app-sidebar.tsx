@@ -9,7 +9,7 @@ import { getLeadsForReview } from "@/lib/api";
 
 const NAV_ITEMS: { key: string; icon: IconName; label: string; href: string }[] = [
   { key: "home", icon: "home", label: "Dashboard", href: "/app" },
-  { key: "board", icon: "board", label: "Pipeline", href: "/app/kanban" },
+  { key: "board", icon: "board", label: "Pipeline", href: "/app/pipeline" },
   { key: "leads", icon: "lead", label: "Leads", href: "/app/leads" },
   { key: "job", icon: "job", label: "Jobs", href: "/app/jobs" },
 ];

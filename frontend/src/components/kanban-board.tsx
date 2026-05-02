@@ -9,7 +9,29 @@ import { getLeadCounts, getLeadFilters, updateLead } from "@/lib/api";
 import { KANBAN_COLUMNS, LEAD_PROFILE_LABEL, NICHO_LABEL } from "@/lib/types";
 import type { Lead, LeadProfile, NichoCanonico } from "@/lib/types";
 
-export function KanbanBoard() {
+export interface KanbanBoardProps {
+  filterNicho?: string;
+  filterCidade?: string;
+  filterScoreMin?: string;
+  filterPerfil?: LeadProfile | "";
+  filterNichoCanon?: NichoCanonico | "";
+  search?: string;
+  orderBy?: string;
+  hideInlineFilters?: boolean;
+}
+
+export function KanbanBoard(props: KanbanBoardProps = {}) {
+  const {
+    filterNicho: extFilterNicho,
+    filterCidade: extFilterCidade,
+    filterScoreMin: extFilterScoreMin,
+    filterPerfil: extFilterPerfil,
+    filterNichoCanon: extFilterNichoCanon,
+    search: extSearch,
+    orderBy: extOrderBy,
+    hideInlineFilters = false,
+  } = props;
+
   const searchParams = useSearchParams();
 
   const sensors = useSensors(
@@ -19,18 +41,29 @@ export function KanbanBoard() {
   const [nichos, setNichos] = useState<string[]>([]);
   const [cidades, setCidades] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterNicho, setFilterNicho] = useState("");
-  const [filterCidade, setFilterCidade] = useState("");
-  const [filterScoreMin, setFilterScoreMin] = useState("");
-  const [filterPerfil, setFilterPerfil] = useState<LeadProfile | "">(
+
+  // Internal state — used only when corresponding external prop is undefined.
+  const [internalFilterNicho, setInternalFilterNicho] = useState("");
+  const [internalFilterCidade, setInternalFilterCidade] = useState("");
+  const [internalFilterScoreMin, setInternalFilterScoreMin] = useState("");
+  const [internalFilterPerfil, setInternalFilterPerfil] = useState<LeadProfile | "">(
     (searchParams.get("perfil_lead") as LeadProfile) || "",
   );
-  const [filterNichoCanon, setFilterNichoCanon] = useState<NichoCanonico | "">(
+  const [internalFilterNichoCanon, setInternalFilterNichoCanon] = useState<NichoCanonico | "">(
     (searchParams.get("nicho_canonico") as NichoCanonico) || "",
   );
-  const [search, setSearch] = useState("");
-  const [orderBy, setOrderBy] = useState("score_desc");
+  const [internalSearch, setInternalSearch] = useState("");
+  const [internalOrderBy, setInternalOrderBy] = useState("score_desc");
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
+
+  // Effective values: external prop (if provided) > internal state.
+  const filterNicho = extFilterNicho ?? internalFilterNicho;
+  const filterCidade = extFilterCidade ?? internalFilterCidade;
+  const filterScoreMin = extFilterScoreMin ?? internalFilterScoreMin;
+  const filterPerfil = extFilterPerfil ?? internalFilterPerfil;
+  const filterNichoCanon = extFilterNichoCanon ?? internalFilterNichoCanon;
+  const search = extSearch ?? internalSearch;
+  const orderBy = extOrderBy ?? internalOrderBy;
 
   // Per-column refresh triggers: bump to make a column refetch
   const [refreshKeys, setRefreshKeys] = useState<Record<string, number>>({});
@@ -119,78 +152,80 @@ export function KanbanBoard() {
 
   return (
     <div className="space-y-5">
-      {/* Filters */}
-      <div className="flex gap-3 flex-wrap items-center">
-        <span className="t-eyebrow">
-          Filtros
-        </span>
-        <input
-          type="text"
-          placeholder="Buscar por nome ou telefone..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="bg-surface-raised border border-border rounded-md px-3 py-1.5 text-[13px] text-text-secondary placeholder:text-text-muted focus:border-accent/50 focus:outline-none transition-default w-64"
-        />
-        <select
-          value={filterNicho}
-          onChange={(e) => setFilterNicho(e.target.value)}
-          className={selectClass}
-        >
-          <option value="">Todos nichos</option>
-          {nichos.map((n) => (
-            <option key={n} value={n}>{n}</option>
-          ))}
-        </select>
-        <select
-          value={filterCidade}
-          onChange={(e) => setFilterCidade(e.target.value)}
-          className={selectClass}
-        >
-          <option value="">Todas cidades</option>
-          {cidades.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-        <input
-          type="number"
-          placeholder="Score min"
-          value={filterScoreMin}
-          onChange={(e) => setFilterScoreMin(e.target.value)}
-          className={inputClass}
-        />
-        <select
-          value={filterPerfil}
-          onChange={(e) => setFilterPerfil(e.target.value as LeadProfile | "")}
-          className={selectClass}
-        >
-          <option value="">Todos os perfis</option>
-          {(Object.entries(LEAD_PROFILE_LABEL) as [LeadProfile, string][]).map(([k, label]) => (
-            <option key={k} value={k}>{label}</option>
-          ))}
-        </select>
-        <select
-          value={filterNichoCanon}
-          onChange={(e) => setFilterNichoCanon(e.target.value as NichoCanonico | "")}
-          className={selectClass}
-        >
-          <option value="">Todos os nichos</option>
-          {(Object.entries(NICHO_LABEL) as [NichoCanonico, string][]).map(([k, label]) => (
-            <option key={k} value={k}>{label}</option>
-          ))}
-        </select>
-        <select
-          value={orderBy}
-          onChange={(e) => setOrderBy(e.target.value)}
-          className={selectClass}
-        >
-          <option value="score_desc">Maior score</option>
-          <option value="score_asc">Menor score</option>
-          <option value="prioridade">Prioridade</option>
-          <option value="created_desc">Mais recente</option>
-          <option value="updated_desc">Atualizado recente</option>
-          <option value="name_asc">Nome A-Z</option>
-        </select>
-      </div>
+      {/* Filters (legacy inline — hidden when toolbar drives filters externally) */}
+      {!hideInlineFilters && (
+        <div className="flex gap-3 flex-wrap items-center">
+          <span className="t-eyebrow">
+            Filtros
+          </span>
+          <input
+            type="text"
+            placeholder="Buscar por nome ou telefone..."
+            value={search}
+            onChange={(e) => setInternalSearch(e.target.value)}
+            className="bg-surface-raised border border-border rounded-md px-3 py-1.5 text-[13px] text-text-secondary placeholder:text-text-muted focus:border-accent/50 focus:outline-none transition-default w-64"
+          />
+          <select
+            value={filterNicho}
+            onChange={(e) => setInternalFilterNicho(e.target.value)}
+            className={selectClass}
+          >
+            <option value="">Todos nichos</option>
+            {nichos.map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+          <select
+            value={filterCidade}
+            onChange={(e) => setInternalFilterCidade(e.target.value)}
+            className={selectClass}
+          >
+            <option value="">Todas cidades</option>
+            {cidades.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <input
+            type="number"
+            placeholder="Score min"
+            value={filterScoreMin}
+            onChange={(e) => setInternalFilterScoreMin(e.target.value)}
+            className={inputClass}
+          />
+          <select
+            value={filterPerfil}
+            onChange={(e) => setInternalFilterPerfil(e.target.value as LeadProfile | "")}
+            className={selectClass}
+          >
+            <option value="">Todos os perfis</option>
+            {(Object.entries(LEAD_PROFILE_LABEL) as [LeadProfile, string][]).map(([k, label]) => (
+              <option key={k} value={k}>{label}</option>
+            ))}
+          </select>
+          <select
+            value={filterNichoCanon}
+            onChange={(e) => setInternalFilterNichoCanon(e.target.value as NichoCanonico | "")}
+            className={selectClass}
+          >
+            <option value="">Todos os nichos</option>
+            {(Object.entries(NICHO_LABEL) as [NichoCanonico, string][]).map(([k, label]) => (
+              <option key={k} value={k}>{label}</option>
+            ))}
+          </select>
+          <select
+            value={orderBy}
+            onChange={(e) => setInternalOrderBy(e.target.value)}
+            className={selectClass}
+          >
+            <option value="score_desc">Maior score</option>
+            <option value="score_asc">Menor score</option>
+            <option value="prioridade">Prioridade</option>
+            <option value="created_desc">Mais recente</option>
+            <option value="updated_desc">Atualizado recente</option>
+            <option value="name_asc">Nome A-Z</option>
+          </select>
+        </div>
+      )}
 
       {/* Board */}
       <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
