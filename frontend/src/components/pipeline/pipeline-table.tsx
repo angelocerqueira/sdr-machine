@@ -12,9 +12,10 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
-import { getLeads } from "@/lib/api";
+import { getLeads, runEnrich } from "@/lib/api";
 import { LEAD_PROFILE_LABEL, NICHO_LABEL, type Lead } from "@/lib/types";
 import { Badge, Icon, StatusPill } from "@/components/ui";
+import { useToast } from "@/components/ui/toast";
 import { buildWaLink } from "@/lib/format";
 import { deriveSignals } from "@/lib/pipeline-signals";
 import { ColumnVisibilityMenu } from "./column-visibility-menu";
@@ -22,7 +23,12 @@ import type { PipelineDensity } from "./use-pipeline-density";
 import type { useBulkSelection } from "./use-bulk-selection";
 
 const PER_PAGE = 50;
-const ROW_HEIGHT = 48;
+// Estimated height — virtualizer measures actual row heights via measureElement
+// once they render, so this is just a starting hint. Comfortable rows are
+// taller (name + sub line + signal chips with wrap); compact rows ~36px.
+const ROW_HEIGHT_COMPACT = 36;
+const ROW_HEIGHT_COMFORTABLE = 56;
+const MAX_TABLE_SIGNALS = 2;
 const COLUMN_VISIBILITY_STORAGE_KEY = "sdr-table-columns";
 
 const DEFAULT_COLUMN_VISIBILITY: VisibilityState = {
@@ -232,6 +238,8 @@ export function PipelineTable({
 }: PipelineTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { toast } = useToast();
+  const [enrichingIds, setEnrichingIds] = useState<Set<number>>(new Set());
 
   // Filters from URL
   const filters = useMemo(() => {
@@ -413,6 +421,34 @@ export function PipelineTable({
     [updateUrl],
   );
 
+  const handleEnrichSingle = useCallback(
+    async (leadId: number, leadName: string) => {
+      setEnrichingIds((prev) => {
+        if (prev.has(leadId)) return prev;
+        const next = new Set(prev);
+        next.add(leadId);
+        return next;
+      });
+      try {
+        await runEnrich({ lead_ids: [leadId], force_providers: [] });
+        toast(`Enriquecimento iniciado para ${leadName}.`, { variant: "success" });
+      } catch (err) {
+        toast(
+          `Erro: ${err instanceof Error ? err.message : "falha ao enriquecer"}`,
+          { variant: "error" },
+        );
+      } finally {
+        setEnrichingIds((prev) => {
+          if (!prev.has(leadId)) return prev;
+          const next = new Set(prev);
+          next.delete(leadId);
+          return next;
+        });
+      }
+    },
+    [toast],
+  );
+
   // Columns
   const columns = useMemo<ColumnDef<Lead>[]>(
     () => [
@@ -574,18 +610,28 @@ export function PipelineTable({
         size: 220,
         header: () => <span>Sinais</span>,
         cell: ({ row }) => {
-          const signals = deriveSignals(row.original.opportunity_reasons).slice(0, 3);
-          if (signals.length === 0) {
+          const all = deriveSignals(row.original.opportunity_reasons);
+          if (all.length === 0) {
             return <span className="text-text-muted text-[13px] px-3">—</span>;
           }
+          const visible = all.slice(0, MAX_TABLE_SIGNALS);
+          const extra = all.length - visible.length;
           return (
             <div className="pl-tbl-signals-list">
-              {signals.map((s) => (
+              {visible.map((s) => (
                 <span key={s.key} className={`pl-signal pl-signal-${s.tone}`}>
                   {s.tone === "danger" && <span className="pl-signal-dot" />}
                   {s.label}
                 </span>
               ))}
+              {extra > 0 && (
+                <span
+                  className="pl-signal pl-signal-muted"
+                  title={all.slice(MAX_TABLE_SIGNALS).map((s) => s.label).join(" · ")}
+                >
+                  +{extra}
+                </span>
+              )}
             </div>
           );
         },
@@ -674,6 +720,7 @@ export function PipelineTable({
         cell: ({ row }) => {
           const lead = row.original;
           const waLink = buildWaLink(lead.telefone);
+          const isEnriching = enrichingIds.has(lead.id);
           return (
             <div
               className="pl-tbl-actions"
@@ -682,9 +729,13 @@ export function PipelineTable({
               <button
                 type="button"
                 className="pl-tbl-action"
-                title="Enriquecer"
+                title={isEnriching ? "Enriquecendo..." : "Enriquecer"}
                 aria-label={`Enriquecer ${lead.nome}`}
-                onClick={() => router.push(`/app/leads/${lead.id}`)}
+                disabled={isEnriching}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEnrichSingle(lead.id, lead.nome);
+                }}
               >
                 <Icon name="sparkle" size={13} />
               </button>
@@ -694,16 +745,22 @@ export function PipelineTable({
                 title={waLink ? "Abrir WhatsApp" : "Sem telefone"}
                 aria-label="Abrir WhatsApp"
                 disabled={!waLink}
-                onClick={() => waLink && window.open(waLink, "_blank", "noopener,noreferrer")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (waLink) window.open(waLink, "_blank", "noopener,noreferrer");
+                }}
               >
                 <Icon name="phone" size={13} />
               </button>
               <button
                 type="button"
                 className="pl-tbl-action"
-                title="Mais"
-                aria-label="Mais"
-                onClick={() => router.push(`/app/leads/${lead.id}`)}
+                title="Ver detalhes"
+                aria-label="Ver detalhes"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/app/leads/${lead.id}`);
+                }}
               >
                 <Icon name="more" size={13} />
               </button>
@@ -868,7 +925,7 @@ export function PipelineTable({
         enableSorting: false,
       },
     ],
-    [sel, visibleIds, headerCheckState, router],
+    [sel, visibleIds, headerCheckState, router, enrichingIds, handleEnrichSingle],
   );
 
   const table = useReactTable({
@@ -885,11 +942,17 @@ export function PipelineTable({
   // Virtualization
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const rows = table.getRowModel().rows;
+  // Estimated row height varies with density; the actual height is measured
+  // per row via measureElement so wrapping signal chips or 2-line names
+  // don't push neighbors out of alignment.
+  const estimatedRowHeight =
+    density === "compact" ? ROW_HEIGHT_COMPACT : ROW_HEIGHT_COMFORTABLE;
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: () => estimatedRowHeight,
     overscan: 8,
+    measureElement: (el) => el.getBoundingClientRect().height,
   });
 
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
@@ -903,7 +966,6 @@ export function PipelineTable({
     [router],
   );
 
-  // Row click -> /app/leads/[id], unless click started in checkbox cell.
   const handleRowClick = useCallback(
     (e: React.MouseEvent, leadId: number) => {
       const target = e.target as HTMLElement;
@@ -992,7 +1054,7 @@ export function PipelineTable({
                   <tr
                     key={`sk-${i}`}
                     className="border-b border-border/60 animate-pulse"
-                    style={{ height: ROW_HEIGHT }}
+                    style={{ height: estimatedRowHeight }}
                   >
                     {table.getAllColumns().map((col) => (
                       <td key={col.id} className="px-3">
@@ -1052,6 +1114,8 @@ export function PipelineTable({
                   return (
                     <tr
                       key={row.id}
+                      data-index={virtualRow.index}
+                      ref={rowVirtualizer.measureElement}
                       onClick={(e) => handleRowClick(e, lead.id)}
                       onKeyDown={(e) => {
                         if (
@@ -1068,7 +1132,6 @@ export function PipelineTable({
                         top: 0,
                         left: 0,
                         width: "100%",
-                        height: ROW_HEIGHT,
                         transform: `translateY(${virtualRow.start}px)`,
                         display: "table",
                         tableLayout: "fixed",

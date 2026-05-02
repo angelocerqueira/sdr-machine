@@ -873,15 +873,20 @@
   color: var(--text-muted);
   border-radius: var(--r-1);
   margin-left: 2px;
-  opacity: 0;
-  transition: all var(--dur-fast);
+  opacity: 0.35;
+  transition: opacity var(--dur-fast), color var(--dur-fast), background var(--dur-fast);
   background: transparent;
   border: 0;
   cursor: pointer;
 }
 .pl-tbl tbody tr:hover .pl-tbl-action,
 .pl-tbl tbody tr:focus-within .pl-tbl-action { opacity: 1; }
-.pl-tbl-action:hover { color: var(--text-strong); background: var(--surface); }
+.pl-tbl-action:hover { color: var(--text-strong); background: var(--surface-raised); }
+.pl-tbl-action:disabled { opacity: 0.2; cursor: not-allowed; }
+.pl-tbl-action:disabled:hover { background: transparent; color: var(--text-muted); }
+@media (hover: none) {
+  .pl-tbl-action { opacity: 1; }
+}
 
 .pl-tbl-foot {
   display: flex;
