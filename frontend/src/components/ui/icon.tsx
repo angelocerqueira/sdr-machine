@@ -5,7 +5,7 @@
 
 export type IconName =
   | "search" | "plus" | "check" | "x"
-  | "arrow-r" | "arrow-d" | "chevron-d" | "chevron-r"
+  | "arrow-r" | "arrow-d" | "arrow-u" | "chevron-d" | "chevron-r"
   | "filter" | "sort" | "more"
   | "home" | "board" | "list" | "lead" | "job"
   | "globe" | "phone" | "mail" | "pin" | "doc"
@@ -52,6 +52,8 @@ export function Icon({ name, size = 16, className = "", style }: IconProps) {
       return <svg {...common}><path d="M4 10h12M11 5l5 5-5 5"/></svg>;
     case "arrow-d":
       return <svg {...common}><path d="M10 4v12M5 11l5 5 5-5"/></svg>;
+    case "arrow-u":
+      return <svg {...common}><path d="M10 16V4M5 9l5-5 5 5"/></svg>;
     case "chevron-d":
       return <svg {...common}><path d="M5 8l5 5 5-5"/></svg>;
     case "chevron-r":

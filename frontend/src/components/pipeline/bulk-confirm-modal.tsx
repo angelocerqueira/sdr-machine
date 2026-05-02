@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "@/components/ui";
+import { useFocusTrap } from "@/components/ui/use-focus-trap";
 import type { PipelinePreviewResponse } from "@/lib/types";
 
 export type ConfirmVariant = "soft" | "hard";
@@ -40,6 +41,8 @@ export function BulkConfirmModal(props: Props) {
 
   const [typed, setTyped] = useState("");
   const [force, setForce] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, open);
 
   useEffect(() => {
     if (!open) return;
@@ -69,6 +72,7 @@ export function BulkConfirmModal(props: Props) {
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="bulk-confirm-title"

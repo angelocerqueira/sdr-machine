@@ -519,14 +519,21 @@ export function PipelineTable({
   const isFirst = page <= 1;
   const isLast = page >= totalPages;
 
+  const navigateToLead = useCallback(
+    (leadId: number) => {
+      router.push(`/app/leads/${leadId}`);
+    },
+    [router],
+  );
+
   // Row click -> /app/leads/[id], unless click started in checkbox cell.
   const handleRowClick = useCallback(
     (e: React.MouseEvent, leadId: number) => {
       const target = e.target as HTMLElement;
       if (target.closest('[data-cell="select"]')) return;
-      router.push(`/app/leads/${leadId}`);
+      navigateToLead(leadId);
     },
-    [router],
+    [navigateToLead],
   );
 
   return (
@@ -546,7 +553,7 @@ export function PipelineTable({
                     const sortDir = ariaSortFor(header.column.id, sorting);
                     const sortIcon =
                       sortDir === "ascending"
-                        ? "arrow-d"
+                        ? "arrow-u"
                         : sortDir === "descending"
                           ? "arrow-d"
                           : null;
@@ -574,11 +581,7 @@ export function PipelineTable({
                               header.getContext(),
                             )}
                             {sortIcon ? (
-                              <span
-                                className={`inline-flex transition-default ${
-                                  sortDir === "descending" ? "" : "rotate-180"
-                                }`}
-                              >
+                              <span className="inline-flex transition-default">
                                 <Icon name={sortIcon} size={12} />
                               </span>
                             ) : (
@@ -660,6 +663,18 @@ export function PipelineTable({
                     <tr
                       key={row.id}
                       onClick={(e) => handleRowClick(e, lead.id)}
+                      onKeyDown={(e) => {
+                        // Enter/Space activate the row, mirroring click. Don't activate if focus
+                        // is inside an interactive child (checkbox/button). The native button
+                        // children handle their own keys via stopPropagation.
+                        if (
+                          (e.key === "Enter" || e.key === " ") &&
+                          e.target === e.currentTarget
+                        ) {
+                          e.preventDefault();
+                          navigateToLead(lead.id);
+                        }
+                      }}
                       className="border-b border-border/60 hover:bg-surface-raised cursor-pointer transition-default"
                       style={{
                         position: "absolute",
