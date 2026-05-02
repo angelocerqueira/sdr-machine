@@ -1,4 +1,4 @@
-import type { LeadListResponse, Lead, Job, JobListResponse, DashboardStats, Settings, OutreachMessage, LandingPage, EnrichRequest, LeadProfile, NichoCanonico } from "./types";
+import type { LeadListResponse, Lead, Job, JobListResponse, DashboardStats, Settings, OutreachMessage, LandingPage, EnrichRequest, LeadProfile, NichoCanonico, BulkUpdateResult, BulkDeleteResult, LeadIdsResponse, PipelinePreviewRequest, PipelinePreviewResponse } from "./types";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -314,3 +314,28 @@ export async function getLeadsForReview(params?: {
   const query = qs.toString();
   return fetchAPI(`/api/leads/review${query ? `?${query}` : ""}`);
 }
+
+// === Bulk operations ===
+
+export const bulkUpdateLeads = (lead_ids: number[], data: Record<string, unknown>) =>
+  fetchAPI<BulkUpdateResult>("/api/leads/bulk", {
+    method: "PATCH",
+    body: JSON.stringify({ lead_ids, data }),
+  });
+
+export const bulkDeleteLeads = (lead_ids: number[]) =>
+  fetchAPI<BulkDeleteResult>("/api/leads/bulk", {
+    method: "DELETE",
+    body: JSON.stringify({ lead_ids }),
+  });
+
+export const getLeadIds = (params?: Record<string, string>) => {
+  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+  return fetchAPI<LeadIdsResponse>(`/api/leads/ids${qs}`);
+};
+
+export const previewPipeline = (payload: PipelinePreviewRequest) =>
+  fetchAPI<PipelinePreviewResponse>("/api/pipeline/preview", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
