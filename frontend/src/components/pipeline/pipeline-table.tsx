@@ -14,6 +14,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { getLeads } from "@/lib/api";
 import { LEAD_PROFILE_LABEL, NICHO_LABEL, type Lead } from "@/lib/types";
 import { Badge, Icon, StatusPill, Tag } from "@/components/ui";
+import type { useBulkSelection } from "./use-bulk-selection";
 
 const PER_PAGE = 50;
 const ROW_HEIGHT = 48;
@@ -124,7 +125,19 @@ function ariaSortFor(columnId: string, sorting: SortingState): "ascending" | "de
 
 // ----- component -----
 
-export function PipelineTable() {
+interface PipelineTableProps {
+  sel: ReturnType<typeof useBulkSelection>;
+  onVisibleIdsChange?: (ids: number[]) => void;
+  onTotalChange?: (total: number) => void;
+  refreshKey?: number;
+}
+
+export function PipelineTable({
+  sel,
+  onVisibleIdsChange,
+  onTotalChange,
+  refreshKey,
+}: PipelineTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -167,6 +180,25 @@ export function PipelineTable() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Bulk selection (sel passed from parent)
+  const visibleIds = useMemo(() => data.map((l) => l.id), [data]);
+
+  // Bubble visible ids and total up to parent so it can wire banner / action bar.
+  useEffect(() => {
+    onVisibleIdsChange?.(visibleIds);
+  }, [visibleIds, onVisibleIdsChange]);
+
+  useEffect(() => {
+    onTotalChange?.(total);
+  }, [total, onTotalChange]);
+  const headerCheckState: "checked" | "indeterminate" | "unchecked" = useMemo(() => {
+    if (visibleIds.length === 0) return "unchecked";
+    const allSelected = visibleIds.every((id) => sel.has(id));
+    if (allSelected) return "checked";
+    const someSelected = visibleIds.some((id) => sel.has(id));
+    return someSelected ? "indeterminate" : "unchecked";
+  }, [visibleIds, sel]);
 
   // Build URL helper
   const updateUrl = useCallback(
@@ -216,7 +248,27 @@ export function PipelineTable() {
     return () => {
       cancelled = true;
     };
-  }, [filters, sorting, page, orderByParam]);
+  }, [filters, sorting, page, orderByParam, refreshKey]);
+
+  // Keyboard shortcuts: Cmd/Ctrl+A selects current page, Esc clears selection
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "a") {
+        const inTable =
+          document.activeElement?.closest("table") !== null ||
+          document.activeElement === document.body;
+        if (inTable && visibleIds.length > 0) {
+          e.preventDefault();
+          sel.togglePage(visibleIds);
+        }
+      }
+      if (e.key === "Escape" && sel.size > 0) {
+        sel.clear();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [visibleIds, sel]);
 
   // Header click -> push order_by + reset page
   const handleSort = useCallback(
@@ -250,28 +302,71 @@ export function PipelineTable() {
         size: 40,
         header: () => (
           <div className="flex items-center justify-center px-2">
-            <input
-              type="checkbox"
-              disabled
-              aria-label="Selecionar todos (em breve)"
-              className="h-3.5 w-3.5 rounded-xs border-border accent-accent disabled:opacity-40 cursor-not-allowed"
-            />
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={
+                headerCheckState === "indeterminate"
+                  ? "mixed"
+                  : headerCheckState === "checked"
+              }
+              aria-label="Selecionar página"
+              onClick={() => sel.togglePage(visibleIds)}
+              className={`flex h-4 w-4 items-center justify-center rounded border transition-default focus:outline-none focus:ring-2 focus:ring-accent/50 ${
+                headerCheckState === "checked"
+                  ? "border-accent bg-accent text-surface"
+                  : "border-border bg-surface-raised hover:border-border-strong"
+              }`}
+            >
+              {headerCheckState === "checked" && (
+                <Icon name="check" size={12} />
+              )}
+              {headerCheckState === "indeterminate" && (
+                <span className="block h-0.5 w-2 bg-accent" />
+              )}
+            </button>
           </div>
         ),
-        cell: () => (
-          <div
-            className="flex items-center justify-center px-2"
-            data-cell="select"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <input
-              type="checkbox"
-              disabled
-              aria-label="Selecionar lead (em breve)"
-              className="h-3.5 w-3.5 rounded-xs border-border accent-accent disabled:opacity-40 cursor-not-allowed"
-            />
-          </div>
-        ),
+        cell: ({ row }) => {
+          const lead = row.original;
+          const checked = sel.has(lead.id);
+          return (
+            <div
+              className="flex items-center justify-center px-2"
+              data-cell="select"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={checked}
+                aria-label={`Selecionar lead ${lead.nome}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (e.shiftKey && sel.lastClickedId !== null) {
+                    sel.selectRange(sel.lastClickedId, lead.id, visibleIds);
+                  } else {
+                    sel.toggle(lead.id);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === " " || e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    sel.toggle(lead.id);
+                  }
+                }}
+                className={`flex h-4 w-4 items-center justify-center rounded border transition-default focus:outline-none focus:ring-2 focus:ring-accent/50 ${
+                  checked
+                    ? "border-accent bg-accent text-surface"
+                    : "border-border bg-surface-raised hover:border-border-strong"
+                }`}
+              >
+                {checked && <Icon name="check" size={12} />}
+              </button>
+            </div>
+          );
+        },
         enableSorting: false,
       },
       {
@@ -397,7 +492,7 @@ export function PipelineTable() {
         enableSorting: true,
       },
     ],
-    [],
+    [sel, visibleIds, headerCheckState],
   );
 
   const table = useReactTable({
@@ -621,7 +716,7 @@ export function PipelineTable() {
             className="inline-flex items-center gap-1 px-3 py-1.5 text-[13px] font-medium font-mono rounded-md border border-border bg-surface-raised text-text-secondary hover:text-text hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-default focus:outline-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
           >
             <Icon name="chevron-r" size={12} className="rotate-180" />
-            Prev
+            Anterior
           </button>
           <button
             type="button"
@@ -629,7 +724,7 @@ export function PipelineTable() {
             onClick={() => handlePage(page + 1)}
             className="inline-flex items-center gap-1 px-3 py-1.5 text-[13px] font-medium font-mono rounded-md border border-border bg-surface-raised text-text-secondary hover:text-text hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-default focus:outline-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
           >
-            Next
+            Próxima
             <Icon name="chevron-r" size={12} />
           </button>
         </div>
