@@ -24,11 +24,16 @@ export function usePipelineCounts(filters: Record<string, string>) {
       const data = await getLeadCounts(filtersRef.current);
       const total = Object.values(data).reduce((a, b) => a + b, 0);
       setState((prev) => {
-        const delta = markStale && prev.lastTotal > 0 ? total - prev.lastTotal : 0;
+        if (!markStale) {
+          // Filter change or explicit refresh: drop any pending stale signal —
+          // it referred to the previous filter snapshot and is meaningless now.
+          return { counts: data, lastTotal: total, staleDelta: null };
+        }
+        const delta = prev.lastTotal > 0 ? total - prev.lastTotal : 0;
         return {
           counts: data,
           lastTotal: total,
-          staleDelta: markStale && Math.abs(delta) >= 1 ? delta : prev.staleDelta,
+          staleDelta: Math.abs(delta) >= 1 ? delta : prev.staleDelta,
         };
       });
     } catch {

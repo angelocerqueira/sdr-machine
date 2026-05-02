@@ -19,8 +19,23 @@ export function PipelineFunnel({ counts }: Props) {
   const sp = useSearchParams();
   const activeStatus = sp.get("status") ?? "";
 
-  const total = FUNNEL_STEPS.reduce((sum, s) => sum + (counts[s.id] ?? 0), 0);
-  const respondedRate = total > 0 ? ((counts.responded ?? 0) / total) * 100 : 0;
+  // Pipeline conversion: of leads that ever entered the pipeline (scraped is
+  // the entry point), how many reached "respondeu". Counts are status
+  // snapshots — leads that progressed past `scraped` aren't in the scraped
+  // bucket anymore — so we approximate "ever entered" via the sum of every
+  // status downstream of (and including) `scraped`. Excludes `disqualified`
+  // and `failed` since those leads never had a real chance to convert.
+  const PROGRESS_STATUSES = [
+    "scraped", "enriched", "lp_generated", "outreach_ready",
+    "outreach_sent", "responded", "in_call", "closed", "delivered",
+  ];
+  const everEnteredPipeline = PROGRESS_STATUSES.reduce(
+    (sum, s) => sum + (counts[s] ?? 0),
+    0,
+  );
+  const responded = counts.responded ?? 0;
+  const respondedRate =
+    everEnteredPipeline > 0 ? (responded / everEnteredPipeline) * 100 : 0;
 
   const handleClick = (status: string) => {
     const next = new URLSearchParams(sp.toString());

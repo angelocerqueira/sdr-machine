@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   bulkDeleteLeads,
   bulkUpdateLeads,
+  getJob,
   getPipelineStatus,
   previewPipeline,
   runEnrich,
@@ -15,7 +16,6 @@ import type { Job, PipelineAction, PipelinePreviewResponse } from "@/lib/types";
 import type { useBulkSelection } from "./use-bulk-selection";
 import { BulkConfirmModal } from "./bulk-confirm-modal";
 import { BulkResultModal } from "./bulk-result-modal";
-import { useActiveJobs } from "../use-active-jobs";
 
 // NOTE: PR 3/5 intentionally omits the "Editar ▾" dropdown and "Exportar CSV"
 // from the action bar — those will land in PR 4/5 with their own confirm flows.
@@ -52,20 +52,38 @@ export function BulkActionBar({ sel, onChanged }: Props) {
   const moveMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Track the last bulk-dispatched job so we can surface a BulkResultModal
-  // when it completes. If a second action is dispatched before the first
-  // completes, pendingJobId is replaced (first modal won't show — acceptable).
-  const { recentlyCompleted } = useActiveJobs();
+  // when it completes. We poll getJob(id) directly so fast jobs that finish
+  // before the next global useActiveJobs tick are still detected. If a second
+  // action is dispatched before the first completes, pendingJobId is replaced
+  // (first modal won't show — acceptable).
   const [pendingJobId, setPendingJobId] = useState<number | null>(null);
   const [resultJob, setResultJob] = useState<Job | null>(null);
 
   useEffect(() => {
     if (pendingJobId == null) return;
-    const completed = recentlyCompleted.find((j) => j.id === pendingJobId);
-    if (completed) {
-      setResultJob(completed);
-      setPendingJobId(null);
-    }
-  }, [pendingJobId, recentlyCompleted]);
+    let cancelled = false;
+    const TERMINAL = new Set(["done", "done_with_errors", "failed"]);
+
+    const tick = async () => {
+      try {
+        const job = await getJob(pendingJobId);
+        if (cancelled) return;
+        if (TERMINAL.has(job.status)) {
+          setResultJob(job);
+          setPendingJobId(null);
+        }
+      } catch {
+        // ignore — next tick will retry
+      }
+    };
+    // Fast first poll so ms-scale jobs show their result modal immediately.
+    tick();
+    const id = setInterval(tick, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [pendingJobId]);
 
   // Poll pipeline status to disable buttons when a same-type job is already running
   useEffect(() => {
