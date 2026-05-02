@@ -11,9 +11,11 @@ import {
   runOutreach,
 } from "@/lib/api";
 import { KANBAN_COLUMNS } from "@/lib/types";
-import type { PipelineAction, PipelinePreviewResponse } from "@/lib/types";
+import type { Job, PipelineAction, PipelinePreviewResponse } from "@/lib/types";
 import type { useBulkSelection } from "./use-bulk-selection";
 import { BulkConfirmModal } from "./bulk-confirm-modal";
+import { BulkResultModal } from "./bulk-result-modal";
+import { useActiveJobs } from "../use-active-jobs";
 
 // NOTE: PR 3/5 intentionally omits the "Editar ▾" dropdown and "Exportar CSV"
 // from the action bar — those will land in PR 4/5 with their own confirm flows.
@@ -48,6 +50,22 @@ export function BulkActionBar({ sel, onChanged }: Props) {
   const [runningJobs, setRunningJobs] = useState<string[]>([]);
   const [moveMenuOpen, setMoveMenuOpen] = useState(false);
   const moveMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Track the last bulk-dispatched job so we can surface a BulkResultModal
+  // when it completes. If a second action is dispatched before the first
+  // completes, pendingJobId is replaced (first modal won't show — acceptable).
+  const { recentlyCompleted } = useActiveJobs();
+  const [pendingJobId, setPendingJobId] = useState<number | null>(null);
+  const [resultJob, setResultJob] = useState<Job | null>(null);
+
+  useEffect(() => {
+    if (pendingJobId == null) return;
+    const completed = recentlyCompleted.find((j) => j.id === pendingJobId);
+    if (completed) {
+      setResultJob(completed);
+      setPendingJobId(null);
+    }
+  }, [pendingJobId, recentlyCompleted]);
 
   // Poll pipeline status to disable buttons when a same-type job is already running
   useEffect(() => {
@@ -120,18 +138,20 @@ export function BulkActionBar({ sel, onChanged }: Props) {
       setBusy(true);
       try {
         const { action, pendingIds } = dialog;
+        let job: Job | null = null;
         if (action === "enrich") {
-          await runEnrich({
+          job = await runEnrich({
             lead_ids: pendingIds,
             force_providers: opts?.force
               ? ["website_crawler", "schema_extractor", "tech_stack"]
               : [],
           });
         } else if (action === "generate") {
-          await runGenerate({ lead_ids: pendingIds });
+          job = await runGenerate({ lead_ids: pendingIds });
         } else if (action === "outreach") {
-          await runOutreach({ lead_ids: pendingIds });
+          job = await runOutreach({ lead_ids: pendingIds });
         }
+        if (job?.id != null) setPendingJobId(job.id);
         sel.clear();
         setDialog({ kind: "none" });
         onChanged?.();
@@ -360,6 +380,8 @@ export function BulkActionBar({ sel, onChanged }: Props) {
           busy={busy}
         />
       )}
+
+      <BulkResultModal job={resultJob} onClose={() => setResultJob(null)} />
     </>
   );
 }
