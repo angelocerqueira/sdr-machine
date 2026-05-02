@@ -14,8 +14,11 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { getLeads } from "@/lib/api";
 import { LEAD_PROFILE_LABEL, NICHO_LABEL, type Lead } from "@/lib/types";
-import { Badge, Icon, StatusPill, Tag } from "@/components/ui";
+import { Badge, Icon, StatusPill } from "@/components/ui";
+import { buildWaLink } from "@/lib/format";
+import { deriveSignals } from "@/lib/pipeline-signals";
 import { ColumnVisibilityMenu } from "./column-visibility-menu";
+import type { PipelineDensity } from "./use-pipeline-density";
 import type { useBulkSelection } from "./use-bulk-selection";
 
 const PER_PAGE = 50;
@@ -25,13 +28,16 @@ const COLUMN_VISIBILITY_STORAGE_KEY = "sdr-table-columns";
 const DEFAULT_COLUMN_VISIBILITY: VisibilityState = {
   select: true,
   nome: true,
-  cidade: true,
   nicho: true,
+  cidade: true,
   opportunity_score: true,
-  perfil_lead: true,
+  signals: true,
+  contato: true,
   status: true,
   updated_at: true,
+  actions: true,
   // optional defaults to false
+  perfil_lead: false,
   telefone: false,
   email: false,
   cnpj: false,
@@ -46,12 +52,15 @@ const DEFAULT_COLUMN_VISIBILITY: VisibilityState = {
 const MOBILE_COLUMN_VISIBILITY: VisibilityState = {
   select: true,
   nome: true,
-  cidade: false,
   nicho: false,
+  cidade: false,
   opportunity_score: true,
-  perfil_lead: false,
+  signals: false,
+  contato: true,
   status: true,
   updated_at: false,
+  actions: true,
+  perfil_lead: false,
   telefone: false,
   email: false,
   cnpj: false,
@@ -65,12 +74,14 @@ const MOBILE_COLUMN_VISIBILITY: VisibilityState = {
 
 const COLUMN_DESCRIPTORS: Array<{ id: string; label: string }> = [
   { id: "nome", label: "Nome" },
-  { id: "cidade", label: "Cidade" },
   { id: "nicho", label: "Nicho" },
+  { id: "cidade", label: "Cidade" },
   { id: "opportunity_score", label: "Score" },
-  { id: "perfil_lead", label: "Perfil" },
+  { id: "signals", label: "Sinais" },
+  { id: "contato", label: "Contato" },
   { id: "status", label: "Status" },
   { id: "updated_at", label: "Atualizado" },
+  { id: "perfil_lead", label: "Perfil" },
   { id: "telefone", label: "Telefone" },
   { id: "email", label: "Email" },
   { id: "cnpj", label: "CNPJ" },
@@ -120,10 +131,10 @@ function formatRelativeTime(iso: string | null | undefined): string {
   });
 }
 
-function scoreClass(score: number): string {
-  if (score >= 80) return "score-high";
-  if (score >= 50) return "score-mid";
-  return "score-low";
+function scoreBucket(score: number): "high" | "mid" | "low" {
+  if (score >= 80) return "high";
+  if (score >= 50) return "mid";
+  return "low";
 }
 
 // Backend sort vocabulary: score_desc | score_asc | name_asc | updated_desc (no asc)
@@ -206,6 +217,7 @@ function ariaSortFor(columnId: string, sorting: SortingState): "ascending" | "de
 
 interface PipelineTableProps {
   sel: ReturnType<typeof useBulkSelection>;
+  density: PipelineDensity;
   onVisibleIdsChange?: (ids: number[]) => void;
   onTotalChange?: (total: number) => void;
   refreshKey?: number;
@@ -213,6 +225,7 @@ interface PipelineTableProps {
 
 export function PipelineTable({
   sel,
+  density,
   onVisibleIdsChange,
   onTotalChange,
   refreshKey,
@@ -489,31 +502,23 @@ export function PipelineTable({
         cell: ({ row }) => {
           const lead = row.original;
           return (
-            <div className="flex flex-col min-w-0 px-3">
-              <span className="text-text font-medium text-[13px] truncate">
-                {lead.nome}
-              </span>
-              {lead.telefone ? (
-                <span className="text-text-muted text-[11px] font-mono tabular-nums truncate">
-                  {lead.telefone}
-                </span>
-              ) : null}
+            <div className="pl-tbl-name">
+              <div className="pl-tbl-name-strong">{lead.nome}</div>
+              <div className="pl-tbl-name-sub">
+                {lead.rating != null && (
+                  <span className="pl-tbl-rating">
+                    <span className="pl-card-meta-star">★</span>
+                    <span>{lead.rating.toFixed(1).replace(".", ",")}</span>
+                  </span>
+                )}
+                {lead.reviews_count > 0 && (
+                  <span className="pl-tbl-reviews">· {lead.reviews_count} reviews</span>
+                )}
+              </div>
             </div>
           );
         },
         enableSorting: true,
-      },
-      {
-        id: "cidade",
-        accessorKey: "cidade",
-        size: 140,
-        header: () => <span>Cidade</span>,
-        cell: ({ row }) => (
-          <span className="text-text-secondary text-[13px] px-3 truncate block">
-            {row.original.cidade ?? "—"}
-          </span>
-        ),
-        enableSorting: false,
       },
       {
         id: "nicho",
@@ -528,33 +533,91 @@ export function PipelineTable({
           if (label === "—") {
             return <span className="text-text-muted text-[13px] px-3">—</span>;
           }
-          return (
-            <div className="px-3">
-              <Tag>{label}</Tag>
-            </div>
-          );
+          return <span className="pl-tbl-niche-chip">{label}</span>;
         },
+        enableSorting: false,
+      },
+      {
+        id: "cidade",
+        accessorKey: "cidade",
+        size: 140,
+        header: () => <span>Cidade</span>,
+        cell: ({ row }) => (
+          <span className="pl-tbl-city">{row.original.cidade ?? "—"}</span>
+        ),
         enableSorting: false,
       },
       {
         id: "opportunity_score",
         accessorKey: "opportunity_score",
-        size: 80,
+        size: 110,
         header: () => <span>Score</span>,
         cell: ({ row }) => {
           const s = row.original.opportunity_score;
           if (s == null) {
             return <span className="text-text-muted text-[13px] px-3">—</span>;
           }
+          const bucket = scoreBucket(s);
           return (
-            <span
-              className={`font-mono tabular-nums text-[13px] font-medium px-3 ${scoreClass(s)}`}
-            >
-              {s}
-            </span>
+            <div className={`pl-tbl-score-cell pl-tbl-score-${bucket}`}>
+              <span className="pl-tbl-score-num">{s}</span>
+              <span className="pl-tbl-score-bar" aria-hidden="true">
+                <span style={{ width: `${s}%` }} />
+              </span>
+            </div>
           );
         },
         enableSorting: true,
+      },
+      {
+        id: "signals",
+        size: 220,
+        header: () => <span>Sinais</span>,
+        cell: ({ row }) => {
+          const signals = deriveSignals(row.original.opportunity_reasons).slice(0, 3);
+          if (signals.length === 0) {
+            return <span className="text-text-muted text-[13px] px-3">—</span>;
+          }
+          return (
+            <div className="pl-tbl-signals-list">
+              {signals.map((s) => (
+                <span key={s.key} className={`pl-signal pl-signal-${s.tone}`}>
+                  {s.tone === "danger" && <span className="pl-signal-dot" />}
+                  {s.label}
+                </span>
+              ))}
+            </div>
+          );
+        },
+        enableSorting: false,
+      },
+      {
+        id: "contato",
+        size: 100,
+        header: () => <span>Contato</span>,
+        cell: ({ row }) => {
+          const lead = row.original;
+          return (
+            <div className="pl-tbl-contact-icons">
+              <span
+                className={lead.telefone ? "ok" : "off"}
+                title={lead.telefone || "sem telefone"}
+              >
+                <Icon name="phone" size={13} />
+              </span>
+              <span
+                className={lead.email ? "ok" : "off"}
+                title={lead.email || "sem email"}
+              >
+                <Icon name="mail" size={13} />
+              </span>
+              <span className="off" title="WhatsApp não validado">
+                <Icon name="wa" size={13} />
+              </span>
+            </div>
+          );
+        },
+        enableSorting: false,
       },
       {
         id: "perfil_lead",
@@ -598,11 +661,56 @@ export function PipelineTable({
         size: 120,
         header: () => <span>Atualizado</span>,
         cell: ({ row }) => (
-          <span className="text-text-muted text-[12px] font-mono tabular-nums px-3">
+          <span className="pl-tbl-when">
             {formatRelativeTime(row.original.updated_at)}
           </span>
         ),
         enableSorting: true,
+      },
+      {
+        id: "actions",
+        size: 96,
+        header: () => <span aria-label="Ações" />,
+        cell: ({ row }) => {
+          const lead = row.original;
+          const waLink = buildWaLink(lead.telefone);
+          return (
+            <div
+              className="pl-tbl-actions"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="pl-tbl-action"
+                title="Enriquecer"
+                aria-label={`Enriquecer ${lead.nome}`}
+                onClick={() => router.push(`/app/leads/${lead.id}`)}
+              >
+                <Icon name="sparkle" size={13} />
+              </button>
+              <button
+                type="button"
+                className="pl-tbl-action"
+                title={waLink ? "Abrir WhatsApp" : "Sem telefone"}
+                aria-label="Abrir WhatsApp"
+                disabled={!waLink}
+                onClick={() => waLink && window.open(waLink, "_blank", "noopener,noreferrer")}
+              >
+                <Icon name="phone" size={13} />
+              </button>
+              <button
+                type="button"
+                className="pl-tbl-action"
+                title="Mais"
+                aria-label="Mais"
+                onClick={() => router.push(`/app/leads/${lead.id}`)}
+              >
+                <Icon name="more" size={13} />
+              </button>
+            </div>
+          );
+        },
+        enableSorting: false,
       },
       {
         id: "telefone",
@@ -760,7 +868,7 @@ export function PipelineTable({
         enableSorting: false,
       },
     ],
-    [sel, visibleIds, headerCheckState],
+    [sel, visibleIds, headerCheckState, router],
   );
 
   const table = useReactTable({
@@ -814,14 +922,16 @@ export function PipelineTable({
           onChange={setColumnVisibility}
         />
       </div>
-      <div className="border border-border rounded-lg bg-surface overflow-hidden">
+      <div
+        className={`pl-tbl-wrap${density === "compact" ? " pl-tbl-compact" : ""}`}
+      >
         <div
           ref={scrollRef}
           className="overflow-auto"
           style={{ maxHeight: "calc(100vh - 320px)" }}
         >
-          <table className="w-full border-collapse text-left">
-            <thead className="sticky top-0 z-10 bg-surface-raised border-b border-border">
+          <table className="pl-tbl">
+            <thead className="sticky top-0 z-10">
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
@@ -844,35 +954,30 @@ export function PipelineTable({
                         scope="col"
                         aria-sort={canSort ? sortDir : undefined}
                         style={styleProp}
-                        className="t-eyebrow text-text-muted text-left h-9 align-middle whitespace-nowrap"
                       >
                         {canSort ? (
                           <button
                             type="button"
                             onClick={() => handleSort(header.column.id)}
-                            className="inline-flex items-center gap-1 px-3 h-full w-full text-left hover:text-text transition-default focus:outline-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
+                            className="pl-tbl-sort"
                           >
                             {flexRender(
                               header.column.columnDef.header,
                               header.getContext(),
                             )}
                             {sortIcon ? (
-                              <span className="inline-flex transition-default">
-                                <Icon name={sortIcon} size={12} />
-                              </span>
+                              <Icon name={sortIcon} size={11} />
                             ) : (
-                              <span className="opacity-30">
-                                <Icon name="sort" size={12} />
+                              <span style={{ opacity: 0.35 }}>
+                                <Icon name="sort" size={11} />
                               </span>
                             )}
                           </button>
                         ) : (
-                          <div className="px-3 h-full flex items-center">
-                            {flexRender(
-                              header.column.columnDef.header,
-                              header.getContext(),
-                            )}
-                          </div>
+                          flexRender(
+                            header.column.columnDef.header,
+                            header.getContext(),
+                          )
                         )}
                       </th>
                     );
@@ -935,14 +1040,20 @@ export function PipelineTable({
                   const row = rows[virtualRow.index];
                   if (!row) return null;
                   const lead = row.original;
+                  const isHot = (lead.opportunity_score ?? 0) >= 80;
+                  const isSelected = sel.has(lead.id);
+                  const rowClass = [
+                    "cursor-pointer",
+                    isSelected ? "pl-tbl-row-selected" : "",
+                    isHot && !isSelected ? "pl-tbl-row-hot" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
                   return (
                     <tr
                       key={row.id}
                       onClick={(e) => handleRowClick(e, lead.id)}
                       onKeyDown={(e) => {
-                        // Enter/Space activate the row, mirroring click. Don't activate if focus
-                        // is inside an interactive child (checkbox/button). The native button
-                        // children handle their own keys via stopPropagation.
                         if (
                           (e.key === "Enter" || e.key === " ") &&
                           e.target === e.currentTarget
@@ -951,7 +1062,7 @@ export function PipelineTable({
                           navigateToLead(lead.id);
                         }
                       }}
-                      className="border-b border-border/60 hover:bg-surface-raised cursor-pointer transition-default"
+                      className={rowClass}
                       style={{
                         position: "absolute",
                         top: 0,
@@ -990,34 +1101,44 @@ export function PipelineTable({
             )}
           </table>
         </div>
-      </div>
-
-      {/* Pagination footer */}
-      <div className="flex items-center justify-between text-[13px]">
-        <div className="text-text-muted font-mono tabular-nums">
-          {total > 0
-            ? `página ${page} de ${totalPages} · ${total} leads`
-            : "—"}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={isFirst || loading}
-            onClick={() => handlePage(page - 1)}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-[13px] font-medium font-mono rounded-md border border-border bg-surface-raised text-text-secondary hover:text-text hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-default focus:outline-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
-          >
-            <Icon name="chevron-r" size={12} className="rotate-180" />
-            Anterior
-          </button>
-          <button
-            type="button"
-            disabled={isLast || loading}
-            onClick={() => handlePage(page + 1)}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-[13px] font-medium font-mono rounded-md border border-border bg-surface-raised text-text-secondary hover:text-text hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-default focus:outline-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
-          >
-            Próxima
-            <Icon name="chevron-r" size={12} />
-          </button>
+        <div className="pl-tbl-foot">
+          <div className="pl-tbl-foot-l">
+            <span>Mostrando</span>
+            <span className="pl-tbl-foot-strong">{data.length}</span>
+            <span>de</span>
+            <span className="pl-tbl-foot-strong">{total}</span>
+            <span>leads</span>
+            {totalPages > 1 && (
+              <>
+                <span className="pl-tbl-foot-sep">·</span>
+                <span>
+                  página{" "}
+                  <span className="pl-tbl-foot-strong">{page}</span> de{" "}
+                  <span className="pl-tbl-foot-strong">{totalPages}</span>
+                </span>
+              </>
+            )}
+          </div>
+          <div className="pl-tbl-foot-r">
+            <button
+              type="button"
+              disabled={isFirst || loading}
+              onClick={() => handlePage(page - 1)}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-[12px] font-mono rounded-md border border-border-strong bg-surface text-text-strong hover:bg-surface-raised disabled:opacity-40 disabled:cursor-not-allowed transition-default focus:outline-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
+            >
+              <Icon name="chevron-r" size={11} className="rotate-180" />
+              Anterior
+            </button>
+            <button
+              type="button"
+              disabled={isLast || loading}
+              onClick={() => handlePage(page + 1)}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-[12px] font-mono rounded-md border border-border-strong bg-surface text-text-strong hover:bg-surface-raised disabled:opacity-40 disabled:cursor-not-allowed transition-default focus:outline-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
+            >
+              Próxima
+              <Icon name="chevron-r" size={11} />
+            </button>
+          </div>
         </div>
       </div>
     </div>
