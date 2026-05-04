@@ -48,7 +48,8 @@ export function useCountUp(target: number, duration = 800) {
     if (!started) return;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) {
-      Promise.resolve().then(() => setValue(target));
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setValue(target);
       return;
     }
     const start = performance.now();
