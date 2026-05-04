@@ -5,7 +5,7 @@ import { useCountUp, useFadeUpOnView, lpDuration, lpEase } from "./lp-motion";
 
 const CARDS = [
   { value: 8, suffix: "h", label: "ABAS · FERRAMENTAS", text: "40 abas, 12 ferramentas, 0 contexto." },
-  { value: 1.2, suffix: "%", label: "RESPOSTA EM MENSAGEM GENÉRICA", text: '"Olá, vi que você é dono de..." - copy que ninguém lê.' },
+  { value: 1.2, suffix: "%", label: "RESPOSTA EM MENSAGEM GENÉRICA", text: '"Olá, vi que você é dono de…" — copy que ninguém lê.' },
   { value: 0, suffix: "%", label: "CONTEXTO ANTES DA CONVERSA", text: "Seu SDR fala antes de saber o que dói. O cliente sente." },
 ];
 
