@@ -1,4 +1,5 @@
 import { MarketingNavbar } from "@/components/marketing/marketing-navbar";
+import { MotionConfigWrapper } from "@/components/marketing/motion-config-wrapper";
 
 export const metadata = {
   title: "SDR Machine — Instrumento de prospecção B2B",
@@ -8,9 +9,11 @@ export const metadata = {
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="theme-marketing-dark min-h-screen">
-      <MarketingNavbar />
-      {children}
-    </div>
+    <MotionConfigWrapper>
+      <div className="theme-marketing-dark min-h-screen">
+        <MarketingNavbar />
+        {children}
+      </div>
+    </MotionConfigWrapper>
   );
 }

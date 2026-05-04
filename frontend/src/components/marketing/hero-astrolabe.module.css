@@ -12,8 +12,8 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 60% 80% at 80% 30%, oklch(0.66 0.16 256 / 0.08), transparent 70%),
-    radial-gradient(ellipse 50% 60% at 20% 70%, oklch(0.76 0.13 70 / 0.06), transparent 70%);
+    radial-gradient(ellipse 60% 80% at 80% 30%, color-mix(in oklch, var(--accent) 8%, transparent), transparent 70%),
+    radial-gradient(ellipse 50% 60% at 20% 70%, color-mix(in oklch, var(--warn) 6%, transparent), transparent 70%);
   pointer-events: none;
   z-index: 0;
 }
@@ -99,7 +99,7 @@
   border-radius: 6px;
   font-weight: 500;
   font-size: 13px;
-  box-shadow: 0 8px 24px oklch(0.66 0.16 256 / 0.25);
+  box-shadow: 0 8px 24px color-mix(in oklch, var(--accent) 25%, transparent);
   transition: filter 0.2s;
 }
 
@@ -135,13 +135,13 @@
 }
 
 @media (min-width: 1024px) {
-  .astrolabeWrap { margin-inline: 0 auto 0 0; justify-self: end; }
+  .astrolabeWrap { margin-inline: 0; justify-self: end; }
 }
 
 .astrolabeWrap svg {
   width: 100%;
   height: 100%;
-  filter: drop-shadow(0 0 40px oklch(0.66 0.16 256 / 0.08));
+  filter: drop-shadow(0 0 40px color-mix(in oklch, var(--accent) 8%, transparent));
 }
 
 .ringRotate {
@@ -187,7 +187,7 @@
   letter-spacing: -0.03em;
   color: var(--danger);
   margin-top: 4px;
-  text-shadow: 0 0 30px oklch(0.66 0.16 25 / 0.4);
+  text-shadow: 0 0 30px color-mix(in oklch, var(--danger) 40%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

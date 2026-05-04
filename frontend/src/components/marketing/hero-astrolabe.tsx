@@ -11,7 +11,7 @@ const fadeUp = {
 
 export function HeroAstrolabe() {
   return (
-    <section className={styles.heroRoot} aria-label="Hero">
+    <section className={styles.heroRoot} aria-label="Apresentação — Pare de pagar SDR pra abrir LinkedIn">
       <div className={styles.grain} aria-hidden />
       <div className={styles.body}>
         <motion.div
