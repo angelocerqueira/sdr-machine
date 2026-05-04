@@ -116,7 +116,7 @@ export default function DashboardPage() {
             {Object.entries(stats.leads_by_status).map(([status, count]) => (
               <button
                 key={status}
-                onClick={() => router.push(`/kanban?status=${status}`)}
+                onClick={() => router.push(`/app/kanban?status=${status}`)}
                 className="rounded-lg border border-border-subtle bg-surface-raised p-4 text-center card-glow transition-default hover:border-accent/40 hover:bg-surface-overlay cursor-pointer"
               >
                 <p className="text-[10px] uppercase tracking-widest text-text-muted font-[family-name:var(--font-mono)] mb-2">
