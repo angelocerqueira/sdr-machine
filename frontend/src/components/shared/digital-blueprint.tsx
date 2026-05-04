@@ -87,8 +87,8 @@ function RadarChart({ scores, maturityScore, animate }: RadarChartProps) {
   return (
     <div className="flex flex-col items-center gap-4">
       <svg
-        viewBox="0 0 200 200"
-        className="w-full max-w-[260px]"
+        viewBox="-40 -10 280 220"
+        className="w-full max-w-[280px]"
         aria-label="Radar de maturidade digital"
       >
         {/* Grid rings */}

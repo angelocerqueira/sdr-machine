@@ -1,0 +1,195 @@
+.heroRoot {
+  position: relative;
+  min-height: 92vh;
+  background: var(--paper-0);
+  color: var(--ink-0);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.heroRoot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 80% at 80% 30%, color-mix(in oklch, var(--accent) 8%, transparent), transparent 70%),
+    radial-gradient(ellipse 50% 60% at 20% 70%, color-mix(in oklch, var(--warn) 6%, transparent), transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.grain {
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, transparent 1px, transparent 2px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.012) 0px, transparent 1px, transparent 2px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.body {
+  position: relative;
+  z-index: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 72px 24px 96px;
+  display: grid;
+  gap: 48px;
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .body {
+    grid-template-columns: 1.15fr 1fr;
+    padding: 96px 32px;
+    gap: 64px;
+  }
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--warn);
+  text-transform: uppercase;
+  margin-bottom: 22px;
+}
+
+.eyebrow::before {
+  content: "";
+  width: 18px;
+  height: 1px;
+  background: var(--warn);
+}
+
+.h1 {
+  font-family: var(--font-sans);
+  font-weight: 480;
+  font-size: clamp(36px, 6vw, 56px);
+  letter-spacing: -0.028em;
+  line-height: 1;
+  margin: 0 0 22px;
+  color: var(--ink-0);
+  max-width: 580px;
+}
+
+.sub {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  margin-bottom: 30px;
+  max-width: 480px;
+}
+
+.ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.btnPri {
+  background: var(--accent);
+  color: var(--paper-0);
+  padding: 13px 22px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
+  box-shadow: 0 8px 24px color-mix(in oklch, var(--accent) 25%, transparent);
+  transition: filter 0.2s;
+}
+
+.btnPri:hover { filter: brightness(1.08); }
+
+.btnSec {
+  border: 1px solid var(--line-2);
+  padding: 13px 22px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--ink-0);
+  transition: background 0.2s;
+}
+
+.btnSec:hover { background: var(--paper-1); }
+
+.micro {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.05em;
+}
+
+.astrolabeWrap {
+  display: grid;
+  place-items: center;
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  margin-inline: auto;
+  aspect-ratio: 1;
+}
+
+@media (min-width: 1024px) {
+  .astrolabeWrap { margin-inline: 0; justify-self: end; }
+}
+
+.astrolabeWrap svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 40px color-mix(in oklch, var(--accent) 8%, transparent));
+}
+
+.ringRotate {
+  transform-origin: 190px 190px;
+  animation: spinSlow 60s linear infinite;
+}
+
+@keyframes spinSlow {
+  to { transform: rotate(360deg); }
+}
+
+.dotPulse { animation: pulse 2s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+@keyframes pulse {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+.haloBreath { animation: breath 3s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+@keyframes breath {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.75; }
+}
+
+.centerLabel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.centerLabel b {
+  display: block;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 32px;
+  letter-spacing: -0.03em;
+  color: var(--danger);
+  margin-top: 4px;
+  text-shadow: 0 0 30px color-mix(in oklch, var(--danger) 40%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ringRotate, .dotPulse, .haloBreath { animation: none; }
+}

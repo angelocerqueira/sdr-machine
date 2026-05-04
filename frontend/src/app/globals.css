@@ -136,6 +136,46 @@
   --shadow-4: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
+/* ---- Scoped dark theme — used ONLY by marketing LP ---- */
+/* Synced with [data-theme="dark"] above — keep manual if changed */
+.theme-marketing-dark {
+  --paper-0: #0E0E0D;
+  --paper-1: #161614;
+  --paper-2: #1D1D1B;
+  --paper-3: #252523;
+  --ink-0: #F5F3EC;
+  --ink-1: #E5E3DA;
+  --ink-2: #C4C2B6;
+  --ink-3: #8F8E83;
+  --ink-4: #6B6A62;
+  --ink-5: #3E3D39;
+  --line-1: #242421;
+  --line-2: #302F2C;
+  --line-3: #4A4945;
+  --accent: oklch(0.66 0.16 var(--accent-h));
+  --accent-hover: oklch(0.72 0.16 var(--accent-h));
+  --accent-soft: oklch(0.22 0.08 var(--accent-h));
+  --accent-line: oklch(0.32 0.12 var(--accent-h));
+  --accent-ink: oklch(0.82 0.14 var(--accent-h));
+  --ok: oklch(0.70 0.13 155);
+  --ok-soft: oklch(0.22 0.05 155);
+  --warn: oklch(0.76 0.13 70);
+  --warn-soft: oklch(0.22 0.06 70);
+  --danger: oklch(0.66 0.16 25);
+  --danger-soft: oklch(0.22 0.06 25);
+  --score-high: oklch(0.68 0.17 25);
+  --score-mid: oklch(0.76 0.13 70);
+  --score-low: oklch(0.70 0.13 155);
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-3: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-4: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
+
+  background: var(--paper-0);
+  color: var(--ink-0);
+  color-scheme: dark;
+}
+
 /* ---- Tailwind v4 theme mapping ---- */
 @theme inline {
   /* Colors — semantic (theme-responsive via CSS vars) */

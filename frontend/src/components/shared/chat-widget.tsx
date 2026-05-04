@@ -142,11 +142,9 @@ export function ChatWidget({ data }: { data: AgentChatData }) {
                 </button>
               </div>
 
-              {/* Body — AgentChat fills remaining space */}
-              <div className="flex-1 overflow-hidden">
-                <div className="h-full overflow-y-auto">
-                  <AgentChat data={data} active />
-                </div>
+              {/* Body — AgentChat fills remaining space (embedded: no own header/container) */}
+              <div className="flex-1 min-h-0 flex flex-col">
+                <AgentChat data={data} active embedded skipInitialProcessing />
               </div>
             </motion.div>
           ) : (
