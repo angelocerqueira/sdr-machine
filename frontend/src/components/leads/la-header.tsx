@@ -20,10 +20,19 @@ export function LaHeader({ lead }: LaHeaderProps) {
             <span>{lead.cidade}</span>
             <span className="sep">·</span>
             <span>{lead.telefone}</span>
-            <span className="sep">·</span>
-            <a href="#" style={{ color: "var(--accent)" }}>
-              {lead.website}
-            </a>
+            {lead.website && (
+              <>
+                <span className="sep">·</span>
+                <a
+                  href={/^https?:\/\//.test(lead.website) ? lead.website : `https://${lead.website}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "var(--accent)" }}
+                >
+                  {lead.website}
+                </a>
+              </>
+            )}
           </div>
         </div>
       </div>

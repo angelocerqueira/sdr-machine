@@ -7,7 +7,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     <ToastProvider>
       <div className="min-h-screen">
         <AppSidebar />
-        <main className="pt-12 md:pt-0 md:pl-16 min-h-screen min-w-0">
+        <main className="pt-12 md:pt-0 md:pl-[72px] min-h-screen min-w-0">
           {children}
         </main>
       </div>
