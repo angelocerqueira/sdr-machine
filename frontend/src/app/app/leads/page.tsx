@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { Icon } from "@/components/ui";
 import { LaMaster } from "@/components/leads/la-master";
 import { useLeadApp } from "@/components/leads/use-lead-app";
@@ -7,6 +8,14 @@ import { useRouter } from "next/navigation";
 
 export default function LeadsEmptyPage() {
   const router = useRouter();
+
+  // Redirect to last viewed lead, if any
+  useEffect(() => {
+    try {
+      const lastId = localStorage.getItem("sdr-leads-active-id");
+      if (lastId && /^\d+$/.test(lastId)) router.replace(`/app/leads/${lastId}`);
+    } catch {}
+  }, [router]);
   const {
     leads,
     leadsLoading,
