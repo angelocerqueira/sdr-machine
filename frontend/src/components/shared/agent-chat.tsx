@@ -118,7 +118,17 @@ type DisplayEntry =
 const TYPEWRITER_DELAY_MS = 30;
 const PROCESSING_DURATION_MS = 1500;
 
-export function AgentChat({ data, active = true }: { data: AgentChatData; active?: boolean }) {
+export function AgentChat({
+  data,
+  active = true,
+  embedded = false,
+  skipInitialProcessing = false,
+}: {
+  data: AgentChatData;
+  active?: boolean;
+  embedded?: boolean;
+  skipInitialProcessing?: boolean;
+}) {
   const [entries, setEntries] = useState<DisplayEntry[]>([]);
   const [typingText, setTypingText] = useState("");
   const [actionsVisible, setActionsVisible] = useState(false);
@@ -185,14 +195,15 @@ export function AgentChat({ data, active = true }: { data: AgentChatData; active
 
   // Play a sequence of ChatMessage[]
   const playSequence = useCallback(
-    async (messages: ChatMessage[]) => {
+    async (messages: ChatMessage[], opts?: { skipProcessing?: boolean }) => {
       setIsAnimating(true);
-
       for (const msg of messages) {
         if (!mountedRef.current) break;
 
         if (msg.role === "bot") {
-          await showProcessing();
+          if (!opts?.skipProcessing) {
+            await showProcessing();
+          }
           if (!mountedRef.current) break;
 
           // Start typewriting — add a temporary in-progress bot entry
@@ -238,7 +249,7 @@ export function AgentChat({ data, active = true }: { data: AgentChatData; active
     let cancelled = false;
 
     async function run() {
-      await playSequence(data.messages);
+      await playSequence(data.messages, { skipProcessing: skipInitialProcessing });
       if (!cancelled && mountedRef.current) {
         setActionsVisible(true);
       }
@@ -277,23 +288,91 @@ export function AgentChat({ data, active = true }: { data: AgentChatData; active
   const isLastEntryIncomplete =
     lastEntry?.kind === "message" && !lastEntry.complete;
 
+  const messagesList = (
+    <div
+      ref={scrollRef}
+      className={
+        embedded
+          ? "flex flex-col gap-3 px-4 py-4 flex-1 overflow-y-auto"
+          : "flex flex-col gap-3 px-4 py-4 overflow-y-auto"
+      }
+      style={embedded ? undefined : { maxHeight: 380, minHeight: 200 }}
+    >
+      {entries.map((entry, idx) => {
+        if (entry.kind === "processing") {
+          return <ProcessingIndicator key={`proc-${idx}`} />;
+        }
+
+        const isCurrentlyTyping = idx === entries.length - 1 && isLastEntryIncomplete;
+
+        return (
+          <MessageBubble
+            key={idx}
+            message={entry.message}
+            displayText={isCurrentlyTyping ? typingText : undefined}
+            showMeta={entry.complete && entry.message.role === "bot"}
+          />
+        );
+      })}
+    </div>
+  );
+
+  const quickActionsBar = actionsVisible && data.quickActions.length > 0 && (
+    <div className="flex flex-wrap gap-2 px-4 pb-4 pt-3 border-t border-[rgba(255,255,255,0.06)] shrink-0">
+      {data.quickActions.map((action) => {
+        const used = usedActions.has(action);
+        return (
+          <button
+            key={action}
+            onClick={() => handleAction(action)}
+            disabled={used || isAnimating}
+            className={[
+              "px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all duration-150",
+              "font-[family-name:var(--font-mono)] uppercase tracking-wide",
+              used || isAnimating
+                ? "border-border-subtle text-text-muted opacity-40 cursor-not-allowed"
+                : "border-accent/30 text-accent bg-accent-subtle hover:bg-[rgba(52,211,153,0.12)] hover:border-accent/50 cursor-pointer",
+            ].join(" ")}
+          >
+            {action}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const sharedStyles = (
+    <style>{`
+      @keyframes waveform-bar {
+        from { transform: scaleY(0.4); opacity: 0.5; }
+        to   { transform: scaleY(1);   opacity: 1;   }
+      }
+      @keyframes pulse-ring {
+        0%   { transform: scale(1);   opacity: 0.6; }
+        100% { transform: scale(1.6); opacity: 0;   }
+      }
+      @keyframes online-pulse {
+        0%, 100% { opacity: 1; }
+        50%       { opacity: 0.4; }
+      }
+    `}</style>
+  );
+
+  if (embedded) {
+    return (
+      <>
+        {sharedStyles}
+        <div className="flex flex-col h-full min-h-0">
+          {messagesList}
+          {quickActionsBar}
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
-      {/* Waveform keyframe — injected once inline */}
-      <style>{`
-        @keyframes waveform-bar {
-          from { transform: scaleY(0.4); opacity: 0.5; }
-          to   { transform: scaleY(1);   opacity: 1;   }
-        }
-        @keyframes pulse-ring {
-          0%   { transform: scale(1);   opacity: 0.6; }
-          100% { transform: scale(1.6); opacity: 0;   }
-        }
-        @keyframes online-pulse {
-          0%, 100% { opacity: 1; }
-          50%       { opacity: 0.4; }
-        }
-      `}</style>
+      {sharedStyles}
 
       <div className="flex flex-col items-center gap-4 w-full">
         {/* Chat container */}
@@ -324,7 +403,7 @@ export function AgentChat({ data, active = true }: { data: AgentChatData; active
             </div>
             {/* Three-dot controls — purely decorative */}
             <div className="flex items-center gap-1.5">
-              {[0, 0.08, 0.16].map((d, i) => (
+              {[0, 0.08, 0.16].map((_, i) => (
                 <span
                   key={i}
                   className="w-1.5 h-1.5 rounded-full bg-border"
@@ -334,54 +413,8 @@ export function AgentChat({ data, active = true }: { data: AgentChatData; active
             </div>
           </div>
 
-          {/* Messages */}
-          <div
-            ref={scrollRef}
-            className="flex flex-col gap-3 px-4 py-4 overflow-y-auto"
-            style={{ maxHeight: 380, minHeight: 200 }}
-          >
-            {entries.map((entry, idx) => {
-              if (entry.kind === "processing") {
-                return <ProcessingIndicator key={`proc-${idx}`} />;
-              }
-
-              const isCurrentlyTyping = idx === entries.length - 1 && isLastEntryIncomplete;
-
-              return (
-                <MessageBubble
-                  key={idx}
-                  message={entry.message}
-                  displayText={isCurrentlyTyping ? typingText : undefined}
-                  showMeta={entry.complete && entry.message.role === "bot"}
-                />
-              );
-            })}
-          </div>
-
-          {/* Quick actions */}
-          {actionsVisible && data.quickActions.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-4 pb-4 pt-1 border-t border-[rgba(255,255,255,0.06)]">
-              {data.quickActions.map((action) => {
-                const used = usedActions.has(action);
-                return (
-                  <button
-                    key={action}
-                    onClick={() => handleAction(action)}
-                    disabled={used || isAnimating}
-                    className={[
-                      "px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all duration-150",
-                      "font-[family-name:var(--font-mono)] uppercase tracking-wide",
-                      used || isAnimating
-                        ? "border-border-subtle text-text-muted opacity-40 cursor-not-allowed"
-                        : "border-accent/30 text-accent bg-accent-subtle hover:bg-[rgba(52,211,153,0.12)] hover:border-accent/50 cursor-pointer",
-                    ].join(" ")}
-                  >
-                    {action}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {messagesList}
+          {quickActionsBar}
         </div>
 
         {/* Badge */}
