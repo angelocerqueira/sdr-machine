@@ -27,6 +27,10 @@ async def _settings_enc_key_missing_handler(request: Request, exc: SettingsEncKe
 cors_origins = ["http://localhost:3000", "http://localhost:4000"]
 if app_settings.frontend_url and app_settings.frontend_url not in cors_origins:
     cors_origins.append(app_settings.frontend_url)
+for extra in app_settings.cors_extra_origins.split(","):
+    extra = extra.strip()
+    if extra and extra not in cors_origins:
+        cors_origins.append(extra)
 
 app.add_middleware(
     CORSMiddleware,

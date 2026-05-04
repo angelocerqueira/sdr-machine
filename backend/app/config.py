@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     hunter_api_key: str = ""
     apollo_api_key: str = ""
     frontend_url: str = "http://localhost:3000"
+    # Lista CSV de origens adicionais permitidas pelo CORS. frontend_url já entra
+    # automaticamente — use isto para domínios extras (custom domain + Vercel preview).
+    cors_extra_origins: str = ""
     # Fernet master key. Default "" pra container subir mesmo sem secret;
     # crypto.py faz lazy init e levanta erro claro só quando alguém tenta
     # cifrar/decifrar. Integrações via env fallback continuam funcionando.
