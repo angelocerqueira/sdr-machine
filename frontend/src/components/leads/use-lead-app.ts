@@ -172,14 +172,25 @@ export function useLeadApp(activeId: number | null) {
   const [lead, setLead] = useState<Lead | null>(null);
   const [leadLoading, setLeadLoading] = useState(false);
   const [leadError, setLeadError] = useState<string | null>(null);
+  const latestLeadReqRef = useRef<number>(0);
 
   const fetchLead = useCallback((id: number) => {
-    setLead(null);
+    // Stale-while-revalidate: keep previous lead visible during fetch.
+    // Track latest request to ignore out-of-order responses on fast J/K nav.
+    latestLeadReqRef.current = id;
     setLeadLoading(true);
     setLeadError(null);
     getLead(id)
-      .then((data) => { setLead(data); setLeadLoading(false); })
-      .catch((e) => { setLeadError(e.message); setLeadLoading(false); });
+      .then((data) => {
+        if (latestLeadReqRef.current !== id) return;
+        setLead(data);
+        setLeadLoading(false);
+      })
+      .catch((e) => {
+        if (latestLeadReqRef.current !== id) return;
+        setLeadError(e.message);
+        setLeadLoading(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -193,9 +204,13 @@ export function useLeadApp(activeId: number | null) {
 
   // ---- Messages ----
   const [messages, setMessages] = useState<OutreachMessage[]>([]);
+  const latestMsgReqRef = useRef<number>(0);
 
   const fetchMessages = useCallback((id: number) => {
-    getLeadMessages(id).then(setMessages).catch(() => setMessages([]));
+    latestMsgReqRef.current = id;
+    getLeadMessages(id)
+      .then((data) => { if (latestMsgReqRef.current === id) setMessages(data); })
+      .catch(() => { if (latestMsgReqRef.current === id) setMessages([]); });
   }, []);
 
   useEffect(() => {

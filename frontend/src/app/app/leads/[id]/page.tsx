@@ -225,13 +225,22 @@ export default function LeadPage() {
         onNichoCanonFilter={handleNichoCanonFilter}
       />
 
-      <div className="la-work">
-        {leadLoading ? (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, gap: 8, color: "var(--text-muted)", fontSize: 13 }}>
-            <span className="spin" />
-            Carregando lead...
+      <div className="la-work" data-stale={lead && leadLoading && lead.id !== activeId ? "1" : undefined}>
+        {!lead && leadLoading ? (
+          <div className="la-work-skeleton" aria-busy="true" aria-label="Carregando lead">
+            <div className="skeleton" style={{ height: 28, width: "60%", borderRadius: "var(--r-2)" }} />
+            <div className="skeleton" style={{ height: 16, width: "40%", borderRadius: "var(--r-2)", marginTop: 12 }} />
+            <div style={{ display: "flex", gap: 8, marginTop: 24 }}>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="skeleton" style={{ height: 72, flex: 1, borderRadius: "var(--r-3)" }} />
+              ))}
+            </div>
+            <div className="skeleton" style={{ height: 18, width: "30%", borderRadius: "var(--r-2)", marginTop: 32 }} />
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="skeleton" style={{ height: 48, borderRadius: "var(--r-2)", marginTop: 12 }} />
+            ))}
           </div>
-        ) : leadError ? (
+        ) : leadError && !lead ? (
           <div className="state" style={{ margin: "auto" }}>
             <div className="state-icon" style={{ color: "var(--danger)" }}>
               <Icon name="error" size={20} />
