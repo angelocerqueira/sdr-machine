@@ -43,27 +43,49 @@ export function groupLeads(list: LeadListItem[]) {
   })).filter((g) => g.items.length > 0);
 }
 
+const LS_KEYS = {
+  tab: "sdr-lead-tab",
+  search: "sdr-leads-search",
+  status: "sdr-leads-status-filter",
+  perfil: "sdr-leads-perfil-filter",
+  nichoCanon: "sdr-leads-nicho-canon-filter",
+  activeId: "sdr-leads-active-id",
+} as const;
+
+function readLS(key: string, fallback = ""): string {
+  if (typeof window === "undefined") return fallback;
+  try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
+}
+
+function writeLS(key: string, value: string) {
+  if (typeof window === "undefined") return;
+  try {
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
+  } catch {}
+}
+
 export function useLeadApp(activeId: number | null) {
   const router = useRouter();
 
   // Tab state (persisted)
-  const [activeTab, setActiveTabState] = useState(() => {
-    if (typeof window !== "undefined") {
-      try { return localStorage.getItem("sdr-lead-tab") || "diag"; } catch {}
-    }
-    return "diag";
-  });
+  const [activeTab, setActiveTabState] = useState(() => readLS(LS_KEYS.tab, "diag") || "diag");
   const setActiveTab = useCallback((tab: string) => {
     setActiveTabState(tab);
-    try { localStorage.setItem("sdr-lead-tab", tab); } catch {}
+    writeLS(LS_KEYS.tab, tab);
   }, []);
 
-  // ---- Search + filter ----
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [perfilFilter, setPerfilFilter] = useState<LeadProfile | "">("");
-  const [nichoCanonFilter, setNichoCanonFilter] = useState<NichoCanonico | "">("");
+  // ---- Search + filter (persisted) ----
+  const [search, setSearch] = useState(() => readLS(LS_KEYS.search));
+  const [statusFilter, setStatusFilter] = useState(() => readLS(LS_KEYS.status, "all") || "all");
+  const [perfilFilter, setPerfilFilter] = useState<LeadProfile | "">(() => readLS(LS_KEYS.perfil) as LeadProfile | "");
+  const [nichoCanonFilter, setNichoCanonFilter] = useState<NichoCanonico | "">(() => readLS(LS_KEYS.nichoCanon) as NichoCanonico | "");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Persist active lead id when it changes
+  useEffect(() => {
+    if (activeId && activeId > 0) writeLS(LS_KEYS.activeId, String(activeId));
+  }, [activeId]);
 
   // ---- Leads list (from API) ----
   const PER_PAGE = 30;
@@ -110,27 +132,31 @@ export function useLeadApp(activeId: number | null) {
       });
   }, []);
 
-  // Initial fetch
-  useEffect(() => { fetchLeads("", "all", 1, false, "", ""); }, [fetchLeads]); // eslint-disable-line react-hooks/set-state-in-effect -- intentional: fetch on mount
+  // Initial fetch (uses restored filters)
+  useEffect(() => { fetchLeads(search, statusFilter, 1, false, perfilFilter, nichoCanonFilter); }, [fetchLeads]); // eslint-disable-line react-hooks/exhaustive-deps,react-hooks/set-state-in-effect -- intentional: fetch once on mount with restored filters
 
   const handleSearch = useCallback((q: string) => {
     setSearch(q);
+    writeLS(LS_KEYS.search, q);
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => fetchLeads(q, statusFilter, 1, false, perfilFilter, nichoCanonFilter), 300);
   }, [fetchLeads, statusFilter, perfilFilter, nichoCanonFilter]);
 
   const handleFilter = useCallback((f: string) => {
     setStatusFilter(f);
+    writeLS(LS_KEYS.status, f);
     fetchLeads(search, f, 1, false, perfilFilter, nichoCanonFilter);
   }, [fetchLeads, search, perfilFilter, nichoCanonFilter]);
 
   const handlePerfilFilter = useCallback((p: LeadProfile | "") => {
     setPerfilFilter(p);
+    writeLS(LS_KEYS.perfil, p);
     fetchLeads(search, statusFilter, 1, false, p, nichoCanonFilter);
   }, [fetchLeads, search, statusFilter, nichoCanonFilter]);
 
   const handleNichoCanonFilter = useCallback((n: NichoCanonico | "") => {
     setNichoCanonFilter(n);
+    writeLS(LS_KEYS.nichoCanon, n);
     fetchLeads(search, statusFilter, 1, false, perfilFilter, n);
   }, [fetchLeads, search, statusFilter, perfilFilter]);
 
