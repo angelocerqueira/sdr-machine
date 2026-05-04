@@ -33,27 +33,7 @@ function ReviewNavCount() {
     };
   }, []);
   if (!count) return null;
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minWidth: "18px",
-        height: "18px",
-        padding: "0 4px",
-        borderRadius: "9px",
-        background: "var(--accent)",
-        color: "#fff",
-        fontSize: "10px",
-        fontWeight: 700,
-        lineHeight: 1,
-        fontFamily: "var(--font-mono)",
-      }}
-    >
-      {count > 99 ? "99+" : count}
-    </span>
-  );
+  return <span className="app-sidebar-btn-badge">{count > 99 ? "99+" : count}</span>;
 }
 
 function JobBadge() {
@@ -75,27 +55,7 @@ function JobBadge() {
 
   if (runningCount === 0) return null;
 
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minWidth: "18px",
-        height: "18px",
-        padding: "0 4px",
-        borderRadius: "9px",
-        background: "var(--accent)",
-        color: "#fff",
-        fontSize: "10px",
-        fontWeight: 700,
-        lineHeight: 1,
-        fontFamily: "var(--font-mono)",
-      }}
-    >
-      {runningCount > 99 ? "99+" : runningCount}
-    </span>
-  );
+  return <span className="app-sidebar-btn-badge">{runningCount > 99 ? "99+" : runningCount}</span>;
 }
 
 export function AppSidebar() {
@@ -196,16 +156,10 @@ export function AppSidebar() {
               router.push(it.href);
               setMobileOpen(false);
             }}
+            aria-label={it.label}
           >
-            <Icon name={it.icon} size={18} />
-            {it.key === "job" ? (
-              <span className="app-sidebar-label" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                {it.label}
-                <JobBadge />
-              </span>
-            ) : (
-              <span className="app-sidebar-label">{it.label}</span>
-            )}
+            <Icon name={it.icon} size={20} />
+            {it.key === "job" && <JobBadge />}
             <span className="app-sidebar-tip">{it.label}</span>
           </button>
         ))}
@@ -215,33 +169,19 @@ export function AppSidebar() {
             router.push("/app/leads/review");
             setMobileOpen(false);
           }}
+          aria-label="Revisão"
         >
-          <Icon name="lead" size={18} />
-          <span className="app-sidebar-label" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            Revisão
-            <ReviewNavCount />
-          </span>
+          <Icon name="lead" size={20} />
+          <ReviewNavCount />
           <span className="app-sidebar-tip">Revisão</span>
-        </button>
-        <div className="app-sidebar-sep" />
-        <button
-          className={`app-sidebar-btn ${pathname.startsWith("/app/settings") ? "active" : ""}`}
-          onClick={() => {
-            router.push("/app/settings");
-            setMobileOpen(false);
-          }}
-        >
-          <Icon name="settings" size={18} />
-          <span className="app-sidebar-label">Configurações</span>
-          <span className="app-sidebar-tip">Configurações</span>
         </button>
         <div className="app-sidebar-sep" />
         <button
           className="app-sidebar-btn"
           onClick={() => setSearchOpen(true)}
+          aria-label="Buscar"
         >
-          <Icon name="search" size={18} />
-          <span className="app-sidebar-label">Buscar</span>
+          <Icon name="search" size={20} />
           <span className="app-sidebar-tip">Buscar</span>
         </button>
         <div ref={avatarRef} className="app-sidebar-avatar-wrap">
