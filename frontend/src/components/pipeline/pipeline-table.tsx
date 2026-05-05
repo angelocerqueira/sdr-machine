@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   flexRender,
@@ -1228,22 +1229,62 @@ function RowActionsMenu({
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement | null>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  // Calcula posição do menu a partir do rect do trigger.
+  // Menu vai flipar pra cima se não couber abaixo na viewport.
+  const updateCoords = useCallback(() => {
+    const btn = triggerRef.current;
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const menuHeight = 80; // 2 items × ~36px + borders
+    const menuWidth = 176; // w-44 = 11rem = 176px
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow >= menuHeight + 8
+      ? rect.bottom + 4
+      : rect.top - menuHeight - 4;
+    const left = Math.max(8, rect.right - menuWidth);
+    setCoords({ top, left });
+  }, []);
 
   useEffect(() => {
     if (!open) return;
+    updateCoords();
+
     function handleDocClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const target = e.target as Node;
+      if (menuRef.current && menuRef.current.contains(target)) return;
+      if (triggerRef.current && triggerRef.current.contains(target)) return;
+      setOpen(false);
     }
+    function handleScrollOrResize() {
+      // Reposiciona durante scroll do container/window pra menu acompanhar.
+      // Em alguns casos (ex: scroll dentro do .pl-tbl-wrap virtualizado),
+      // simplesmente fechar é mais previsível pro user.
+      setOpen(false);
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+
     document.addEventListener("mousedown", handleDocClick);
-    return () => document.removeEventListener("mousedown", handleDocClick);
-  }, [open]);
+    window.addEventListener("scroll", handleScrollOrResize, true);
+    window.addEventListener("resize", handleScrollOrResize);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleDocClick);
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open, updateCoords]);
 
   return (
-    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+    <>
       <button
+        ref={triggerRef}
         type="button"
         className="pl-tbl-action"
         title="Mais ações"
@@ -1256,35 +1297,41 @@ function RowActionsMenu({
       >
         <Icon name="more" size={13} />
       </button>
-      {open && (
-        <div
-          className="absolute right-0 top-full mt-1 z-20 w-44 rounded-md border border-border bg-surface shadow-lg overflow-hidden"
-          role="menu"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              onDetails();
-            }}
-            className="block w-full px-3 py-2 text-left text-[13px] text-text-secondary hover:bg-surface-raised hover:text-text transition-default cursor-pointer"
-          >
-            Ver detalhes
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              onDelete();
-            }}
-            className="block w-full px-3 py-2 text-left text-[13px] text-danger hover:bg-danger-soft transition-default cursor-pointer"
-          >
-            Excluir
-          </button>
-        </div>
-      )}
-    </div>
+      {open && coords && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="menu"
+              style={{ position: "fixed", top: coords.top, left: coords.left, zIndex: 50 }}
+              className="w-44 rounded-md border border-border bg-surface shadow-lg overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  onDetails();
+                }}
+                className="block w-full px-3 py-2 text-left text-[13px] text-text-secondary hover:bg-surface-raised hover:text-text transition-default cursor-pointer"
+              >
+                Ver detalhes
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  onDelete();
+                }}
+                className="block w-full px-3 py-2 text-left text-[13px] text-danger hover:bg-danger-soft transition-default cursor-pointer"
+              >
+                Excluir
+              </button>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
