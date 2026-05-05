@@ -5,6 +5,7 @@ Persona: SDR sênior B2B. Mensagens que abrem conversa, não fecham venda.
 Cadência D+0 (initial) → D+2 (bump) → D+5 (insight) → D+9 (angle) → D+14 (breakup).
 """
 
+import logging
 import re
 import time
 import urllib.parse
@@ -12,6 +13,8 @@ import urllib.parse
 import requests
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -353,7 +356,8 @@ Retorne APENAS o texto da mensagem pronta pra copiar e colar."""
         if text.startswith('"') and text.endswith('"'):
             text = text[1:-1]
         return text
-    except Exception:
+    except Exception as exc:
+        logger.warning("LLM outreach failed (type=%s): %s", msg_type, exc)
         return None
 
 
@@ -455,11 +459,14 @@ def generate_messages(public_id: str, lead_data: dict, has_lp: bool = False) -> 
     has_diag = bool(ctx["resumo_executivo"] or ctx["prioridades_top3"] or ctx["nivel_recomendado"])
 
     messages: list[dict] = []
-    for msg_type in CADENCE_ORDER:
+    last_idx = len(CADENCE_ORDER) - 1
+    for i, msg_type in enumerate(CADENCE_ORDER):
         text: str | None = None
         if has_diag:
             text = _generate_ai_message(ctx, msg_type)
-            time.sleep(1)  # rate limit entre chamadas LLM
+            # Rate limit só ENTRE chamadas LLM, não na última.
+            if i < last_idx:
+                time.sleep(1)
         if not text:
             text = _fallback(ctx, msg_type)
 
