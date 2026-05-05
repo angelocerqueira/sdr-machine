@@ -154,8 +154,16 @@ Você é {settings.your_name}, SDR sênior B2B em outreach FRIO via WhatsApp pel
 Cadência total: 5 toques (D+0, D+2, D+5, D+9, D+14). Esta é uma das mensagens dessa cadência.
 Seu trabalho é ABRIR conversa, não fechar venda. O sucesso é uma resposta — qualquer resposta.
 
+# REGRAS DURAS — NÃO PODE QUEBRAR (priorizam acima de qualquer outra)
+- Use APENAS dados de # DADOS DO LEAD e # DIAGNÓSTICO + ESTRATÉGIA. Nada além.
+- NUNCA invente: clima, dia da semana, fim de semana, estatística, percentual, número, nome próprio de pessoa, evento.
+- NÃO comente sobre o tempo (gelado, quente, chuva, sol). NÃO diga "tudo bem com você?", "tá frio aí?", "segunda chegou".
+- O nome do lead é NOME DA EMPRESA, não pessoa. Não dirija pessoa pelo nome da empresa.
+- Se um dado específico não existe acima, ignore — NÃO preencha com palpite.
+- Não cite "30-45 dias", "3x mais leads", "aumenta X%" — sem números inventados.
+
 # PRINCÍPIOS DE COLD OUTREACH B2B
-1. Especificidade > pitch. Mencione 1 detalhe único do lead que prove que você leu — sem isso, não escreva.
+1. Especificidade > pitch. Mencione 1 detalhe ÚNICO e VERIFICÁVEL do lead que prove que você leu — sem isso, não escreva.
 2. Brevidade brutal. WhatsApp é íntimo, mensagem longa é spam. Conta linhas.
 3. Permission-based. Não assume disponibilidade nem urgência.
 4. Problem-first. Lidera com observação/diagnóstico, não com produto.
@@ -168,6 +176,29 @@ Seu trabalho é ABRIR conversa, não fechar venda. O sucesso é uma resposta —
    - consideracao → comparação, evidência
    - acao → CTA mais direto, mas ainda calibrado
    - apologia → relacionamento, parceria"""
+
+
+def _hook_calibration_block(ctx: dict) -> str:
+    """Bloco específico pra mensagem INITIAL — força calibração do hook por nivel_recomendado."""
+    return f"""# CALIBRAÇÃO DO HOOK (obrigatória nesta mensagem)
+Use o `nivel_recomendado` da ESTRATÉGIA pra escolher o ÂNGULO do hook:
+- nivel "lp" → hook sobre site/presença digital (PageSpeed, mobile, CTA, captação online)
+- nivel "automacao_basica" → hook sobre operação (atendimento manual, triagem perdida, follow-up de cliente, tempo em tarefa repetitiva)
+- nivel "mapa_automacoes" → hook sobre pipeline/ferramentas desconectadas
+- nivel "vertical_os" → hook sobre sistema legado do nicho (processo crítico não-digitalizado)
+
+Estratégia recomendada AGORA: {ctx['nivel_label'] or '(não definida — use o sinal mais forte do diagnóstico)'}.
+Se o nível não é "lp", NÃO foque em site lento ou PageSpeed — esse não é o vetor.
+
+FONTES DE HOOK (em ordem de preferência, use a 1ª disponível):
+1. Ações sugeridas pro momento de funil atual (funil_acoes acima) — convertendo em insight
+2. Sinais que justificam a estratégia recomendada (nivel_sinais acima)
+3. Tech stack defasada (jQuery, Wix antigo, Flash, etc) — se existir
+4. Idade da empresa vs estado digital atual — se idade > 5 anos e site fraco
+5. Top 3 prioridades do diagnóstico de marketing — se relevante
+6. Reviews recentes mencionarem dor recorrente — se review_destaque indica isso
+
+NÃO invente alavanca. Se nada disso bate, use uma observação mais sóbria (rating + ausência de algo concreto)."""
 
 
 # ---------------------------------------------------------------------------
@@ -226,6 +257,63 @@ def _format_diag_block(ctx: dict) -> str:
 
 
 # Specs por tipo de mensagem da cadência
+# ---------------------------------------------------------------------------
+# Validação pós-LLM — rejeita texto curto, sem frase, ou com hallucination
+# ---------------------------------------------------------------------------
+
+# Comprimento mínimo (chars) por tipo — abaixo disso é texto truncado/só assinatura
+_MIN_LENGTHS = {
+    "initial": 180,
+    "bump_d2": 25,
+    "insight_d5": 100,
+    "angle_d9": 90,
+    "breakup_d14": 80,
+}
+
+# Padrões proibidos — rapport falso, corporativês, hallucination de clima/dia
+_FORBIDDEN_PATTERNS = [
+    re.compile(r"\b(?:t[aá]|est[aá])\s+(?:gelado|quente|frio|chovendo|ensolarado|nublado)\b", re.IGNORECASE),
+    re.compile(r"\bclima\s+(?:d[ae]|aí|por\s+aí|em)\b", re.IGNORECASE),
+    re.compile(r"\btempo\s+(?:aí|por\s+aí|t[aá]\b)", re.IGNORECASE),
+    re.compile(r"\btudo\s+bem\s+com\s+(?:voc[eê]|tu)\b", re.IGNORECASE),
+    re.compile(r"\bvenho\s+por\s+meio", re.IGNORECASE),
+    re.compile(r"\bespero\s+que\s+esta", re.IGNORECASE),
+    re.compile(r"\bprezad[oa]\b", re.IGNORECASE),
+    re.compile(r"\b(?:sexta|segunda|terça|quarta|quinta|sábado|domingo)\s+(?:linda|chegou|abençoada|tranquila)\b", re.IGNORECASE),
+    re.compile(r"\bbom\s+dia.*sexta", re.IGNORECASE),
+    re.compile(r"\b\d+\s*[-–]\s*\d+\s+dias\b", re.IGNORECASE),  # ranges tipo "30-45 dias"
+    re.compile(r"\b(?:aumenta|aumentou|cresce|cresceu)\s+\d+\s*%", re.IGNORECASE),  # % inventado
+    re.compile(r"\b\d+\s*x\s+(?:mais|menos)\b", re.IGNORECASE),  # "3x mais leads"
+]
+
+
+def _validate_llm_output(text: str | None, msg_type: str) -> str | None:
+    """
+    Valida output do LLM. Retorna None se não passar (caller cai pro fallback).
+    """
+    if not text:
+        return None
+
+    text_clean = text.strip()
+    min_len = _MIN_LENGTHS.get(msg_type, 60)
+
+    if len(text_clean) < min_len:
+        logger.warning("LLM output too short (type=%s, len=%d, min=%d)", msg_type, len(text_clean), min_len)
+        return None
+
+    if not re.search(r"[.?!]", text_clean):
+        logger.warning("LLM output has no sentence punctuation (type=%s)", msg_type)
+        return None
+
+    for pat in _FORBIDDEN_PATTERNS:
+        m = pat.search(text_clean)
+        if m:
+            logger.warning("LLM output hit forbidden pattern (type=%s, match=%r)", msg_type, m.group(0))
+            return None
+
+    return text_clean
+
+
 CADENCE_SPECS = {
     "initial": {
         "day": "D+0",
@@ -233,6 +321,7 @@ CADENCE_SPECS = {
         "purpose": "abrir conversa com observação específica + soft ask",
         "extra_rules": [
             "Comece com pattern interrupt (NÃO 'Oi tudo bem'). Pode ser uma pergunta, observação, ou referência direta.",
+            "OBRIGATÓRIO: calibre o ângulo do hook pelo `nivel_recomendado` da estratégia (ver bloco CALIBRAÇÃO DO HOOK).",
             "Mencione UM detalhe específico do diagnóstico ou dos sinais — não fale em 'oportunidades de marketing' genérico.",
             "Termine com pergunta aberta ou 'faz sentido a gente trocar 10 min?'.",
         ],
@@ -242,28 +331,33 @@ CADENCE_SPECS = {
         "max_lines": "2-3",
         "purpose": "top of mind sem repetir pitch — mensagem ULTRA curta",
         "extra_rules": [
-            "Não repete contexto. Mensagem leve, quase casual.",
-            "Pode ser literalmente 'só dando ping aqui — chegou a ver?' ou similar.",
-            "ZERO pitch. ZERO detalhe novo. É um bump.",
+            "Permitido APENAS: 'só dando ping', 'chegou a ver?', 'tomei a liberdade de ressuscitar o tópico', 'top of mind', 'só pra não perder o tópico'.",
+            "PROIBIDO: comentar clima/tempo, dia da semana, fim de semana, 'tudo bem com você', qualquer assunto não-trabalho.",
+            "PROIBIDO: introduzir qualquer informação nova sobre o lead, sobre o produto, ou sobre o mercado.",
+            "Estrutura: 1 linha de bump + assinatura. Apenas isso.",
         ],
     },
     "insight_d5": {
         "day": "D+5",
         "max_lines": "4-6",
-        "purpose": "value drop — compartilhar 1 dado/observação NOVA, sem pedir nada",
+        "purpose": "value drop — compartilhar 1 observação fina sobre o lead, sem pedir nada",
         "extra_rules": [
-            "Adicione UMA informação útil que não estava na mensagem inicial. Pode ser benchmark, dado de mercado, ou observação fina sobre o lead.",
-            "NÃO peça resposta. Termine com observação aberta tipo 'achei que valeria compartilhar'.",
+            "Adicione UMA observação fina sobre o lead que não estava na mensagem inicial — usando dados específicos de # DADOS DO LEAD ou # DIAGNÓSTICO + ESTRATÉGIA.",
+            "PROIBIDO: estatística inventada, percentual sem fonte, número de dias sem base, 'estudos mostram', 'dados apontam'.",
+            "Pode reforçar com 1 dos sinais reais (tech stack, idade, review específica, oportunidade do diagnóstico).",
+            "NÃO peça resposta. Termine com algo aberto tipo 'achei que valeria compartilhar'.",
             "Aqui você está construindo crédito, não vendendo.",
         ],
     },
     "angle_d9": {
         "day": "D+9",
         "max_lines": "4-5",
-        "purpose": "trocar ângulo — pivot pra outro vetor (ROI, peer comparison, pacote diferente)",
+        "purpose": "trocar ângulo — pivot pra outro vetor",
         "extra_rules": [
-            "Use ângulo DIFERENTE do das mensagens anteriores. Se até agora foi sobre presença digital, fale de operação. Se foi de operação, fale de receita.",
-            "Pode mencionar que 'concorrentes seu nicho na cidade já fazem X' (sem inventar empresas).",
+            "Use ângulo DIFERENTE do das mensagens anteriores. Se até agora foi sobre presença digital, fale de operação. Se foi de operação, fale de receita ou conversão.",
+            "PROIBIDO inventar empresas, concorrentes, casos. PROIBIDO 'concorrentes seus já fazem X' a menos que você tenha o dado.",
+            "Apoie no `nivel_recomendado` ou nos `nivel_oportunidades` — esses são os vetores válidos pra pivot.",
+            "Mensagem inteira tem que ter substância. NÃO termine com só assinatura.",
             "CTA leve.",
         ],
     },
@@ -302,6 +396,11 @@ def _generate_ai_message(ctx: dict, msg_type: str) -> str | None:
 
     rules_block = "\n".join(f"- {r}" for r in spec["extra_rules"])
 
+    # Bloco de calibração de hook só aparece pra mensagem INITIAL
+    hook_block = ""
+    if msg_type == "initial":
+        hook_block = "\n\n" + _hook_calibration_block(ctx)
+
     prompt = f"""{_persona_block()}
 
 # DADOS DO LEAD
@@ -309,7 +408,7 @@ def _generate_ai_message(ctx: dict, msg_type: str) -> str | None:
 
 # DIAGNÓSTICO + ESTRATÉGIA (use o que existir, ignore o resto)
 {diag}
-{lp_instruction}
+{lp_instruction}{hook_block}
 
 # TIPO DESTA MENSAGEM
 - Tipo: {msg_type} ({spec["day"]} da cadência de 5 toques)
@@ -323,7 +422,8 @@ def _generate_ai_message(ctx: dict, msg_type: str) -> str | None:
 - NÃO use markdown (sem **, sem #, sem listas com bullet).
 - NÃO use aspas ao redor da mensagem.
 - Assinatura: nome do remetente em linha separada (sem cargo nem empresa em todas as mensagens — varia conforme momento).
-- Se você não tiver UM detalhe específico real do lead pra mencionar, use observação sobre nicho/cidade/rating em vez de inventar.
+- Se você não tiver UM detalhe específico real do lead pra mencionar, use observação sóbria sobre nicho/cidade/rating em vez de inventar.
+- A mensagem precisa ter SUBSTÂNCIA — corpo + assinatura. NÃO entregue só assinatura ou frase truncada.
 
 Retorne APENAS o texto da mensagem pronta pra copiar e colar."""
 
@@ -355,7 +455,7 @@ Retorne APENAS o texto da mensagem pronta pra copiar e colar."""
             return None
         if text.startswith('"') and text.endswith('"'):
             text = text[1:-1]
-        return text
+        return _validate_llm_output(text, msg_type)
     except Exception as exc:
         logger.warning("LLM outreach failed (type=%s): %s", msg_type, exc)
         return None
@@ -414,11 +514,12 @@ Chegou a olhar?
     if msg_type == "insight_d5":
         if has_lp:
             return f"""Oi! Sem pressa em responder — só queria deixar uma observação.
-Negócios do nicho de {ctx['nicho']} que ajustam captação digital costumam ver lead novo entrar em 30-45 dias. A demo que mandei segue no ar: {lp_url}
-Achei que valeria compartilhar.
+A demo que montei pra {nome} segue no ar caso queira mostrar pra alguém da equipe ou comparar com o site atual: {lp_url}
+Achei que valeria deixar à mão.
 {sender}"""
-        return f"""Oi! Sem pressa em responder — só dropping uma observação.
-Pra {ctx['nicho']}, o sinal mais forte que separa quem captura lead online de quem não captura é ter UM ponto digital próprio (site simples ou LP). Vocês hoje não têm isso, e dá pra resolver em poucos dias.
+        return f"""Oi! Sem pressa em responder — só queria deixar uma observação.
+A maior alavanca digital pro seu nicho costuma ser a primeira impressão que o lead tem antes de qualquer contato — site, LP ou perfil bem feito. Pelo que olhei, tem espaço pra fechar isso melhor.
+Tô por aqui se quiser conversar.
 {sender}"""
 
     if msg_type == "angle_d9":
