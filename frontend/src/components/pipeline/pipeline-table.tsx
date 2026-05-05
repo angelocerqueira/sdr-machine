@@ -12,7 +12,7 @@ import {
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
-import { getLeads, runEnrich } from "@/lib/api";
+import { deleteLead, getLeads, runEnrich } from "@/lib/api";
 import { LEAD_PROFILE_LABEL, NICHO_LABEL, type Lead } from "@/lib/types";
 import { Badge, Icon, StatusPill } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
@@ -449,6 +449,22 @@ export function PipelineTable({
     [toast],
   );
 
+  const handleDeleteLead = useCallback(
+    async (leadId: number, leadName: string) => {
+      // Confirm via native (mantém leve; refinar com modal próprio em PR futuro)
+      if (!window.confirm(`Excluir lead "${leadName}"? Não dá pra desfazer.`)) return;
+      try {
+        await deleteLead(leadId);
+        setData((prev) => prev.filter((l) => l.id !== leadId));
+        setTotal((t) => Math.max(0, t - 1));
+        toast(`Lead "${leadName}" excluído`, { variant: "success" });
+      } catch (err) {
+        toast(`Erro ao excluir: ${err instanceof Error ? err.message : "desconhecido"}`, { variant: "error" });
+      }
+    },
+    [toast],
+  );
+
   // Columns
   const columns = useMemo<ColumnDef<Lead>[]>(
     () => [
@@ -753,18 +769,11 @@ export function PipelineTable({
               >
                 <Icon name="phone" size={13} />
               </button>
-              <button
-                type="button"
-                className="pl-tbl-action"
-                title="Ver detalhes"
-                aria-label="Ver detalhes"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  router.push(`/app/leads/${lead.id}`);
-                }}
-              >
-                <Icon name="more" size={13} />
-              </button>
+              <RowActionsMenu
+                lead={lead}
+                onDetails={() => router.push(`/app/leads/${lead.id}`)}
+                onDelete={() => handleDeleteLead(lead.id, lead.nome)}
+              />
             </div>
           );
         },
@@ -926,7 +935,7 @@ export function PipelineTable({
         enableSorting: false,
       },
     ],
-    [sel, visibleIds, headerCheckState, router, enrichingIds, handleEnrichSingle],
+    [sel, visibleIds, headerCheckState, router, enrichingIds, handleEnrichSingle, handleDeleteLead],
   );
 
   const table = useReactTable({
@@ -1205,6 +1214,77 @@ export function PipelineTable({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function RowActionsMenu({
+  lead,
+  onDetails,
+  onDelete,
+}: {
+  lead: Lead;
+  onDetails: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleDocClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleDocClick);
+    return () => document.removeEventListener("mousedown", handleDocClick);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        className="pl-tbl-action"
+        title="Mais ações"
+        aria-label={`Mais ações para ${lead.nome}`}
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+      >
+        <Icon name="more" size={13} />
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 top-full mt-1 z-20 w-44 rounded-md border border-border bg-surface shadow-lg overflow-hidden"
+          role="menu"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onDetails();
+            }}
+            className="block w-full px-3 py-2 text-left text-[13px] text-text-secondary hover:bg-surface-raised hover:text-text transition-default cursor-pointer"
+          >
+            Ver detalhes
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onDelete();
+            }}
+            className="block w-full px-3 py-2 text-left text-[13px] text-danger hover:bg-danger-soft transition-default cursor-pointer"
+          >
+            Excluir
+          </button>
+        </div>
+      )}
     </div>
   );
 }

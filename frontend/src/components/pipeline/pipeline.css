@@ -785,11 +785,12 @@
 .pl-tbl-row-selected:hover { background: var(--accent-soft) !important; }
 
 /* Primeira coluna (select/checkbox) precisa de padding mínimo pra o botão 16x16 caber. */
-/* Sem isto, o padding default 16px×14px do td esmaga o botão e ele aparece como "|". */
+/* Sem isto, o padding default do td (16×14, ou 10×12 no compact) esmaga o botão. */
+/* !important justificado: precisa vencer .pl-tbl-compact .pl-tbl tbody td (linha ~950). */
 .pl-tbl thead th:first-child,
 .pl-tbl tbody td:first-child {
-  padding-left: 4px;
-  padding-right: 4px;
+  padding-left: 4px !important;
+  padding-right: 4px !important;
 }
 
 .pl-tbl-name {
