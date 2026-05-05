@@ -320,12 +320,31 @@ def _run_outreach(job_id: int, params: dict):
                     "nome": lead.nome,
                     "telefone": lead.telefone,
                     "website": lead.website,
+                    "endereco": lead.endereco,
+                    "cidade": lead.cidade,
+                    "nicho": lead.nicho,
+                    "categoria": lead.categoria,
                     "rating": float(lead.rating) if lead.rating else None,
                     "reviews_count": lead.reviews_count,
+                    "top_reviews": lead.top_reviews or [],
                     "opportunity_reasons": lead.opportunity_reasons or [],
                     "site_analysis": lead.site_analysis or {},
+                    "email": lead.email,
+                    "cnpj": lead.cnpj,
+                    "razao_social": lead.razao_social,
+                    "porte": lead.porte,
+                    "cnae": lead.cnae,
+                    "data_fundacao": lead.data_fundacao.isoformat() if lead.data_fundacao else None,
+                    "tech_stack": lead.tech_stack or [],
                 }
-                messages = generate_messages(lead.public_id, lead_data)
+                has_lp = any(lp.is_active for lp in (lead.landing_pages or []))
+                messages = generate_messages(lead.public_id, lead_data, has_lp=has_lp)
+                if not messages:
+                    # Lead desqualificado pelo diagnóstico — não gera cadência.
+                    lead.status = "disqualified"
+                    db.commit()
+                    _emit(job_id, {"type": "progress", "current": idx + 1, "total": len(leads)})
+                    continue
                 for msg in messages:
                     om = OutreachMessage(
                         lead_id=lead.id,

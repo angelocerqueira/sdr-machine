@@ -1,6 +1,8 @@
 """
-Módulo 4: Outreach via WhatsApp
-Gera mensagens personalizadas para cada lead usando o diagnóstico de marketing.
+Módulo 4: Outreach via WhatsApp — cadência fria B2B (5 toques).
+
+Persona: SDR sênior B2B. Mensagens que abrem conversa, não fecham venda.
+Cadência D+0 (initial) → D+2 (bump) → D+5 (insight) → D+9 (angle) → D+14 (breakup).
 """
 
 import re
@@ -10,6 +12,11 @@ import urllib.parse
 import requests
 
 from app.config import settings
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _clean_phone(phone: str) -> str:
@@ -30,110 +37,298 @@ def _get_diagnostic(lead_data: dict) -> dict | None:
     return lead_data.get("site_analysis", {}).get("diagnostico_marketing")
 
 
-def _generate_ai_message(lead_data: dict, lp_url: str, msg_type: str) -> str | None:
+def _empresa_idade_anos(data_fundacao) -> int | None:
+    """Calcula idade da empresa em anos a partir de data_fundacao (str ISO ou date)."""
+    if not data_fundacao:
+        return None
+    try:
+        from datetime import date, datetime as dt
+        if isinstance(data_fundacao, str):
+            d = dt.strptime(data_fundacao[:10], "%Y-%m-%d").date()
+        else:
+            d = data_fundacao
+        return max(0, date.today().year - d.year)
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Context builder — extrai TODOS os sinais ricos do lead pra alimentar prompt
+# ---------------------------------------------------------------------------
+
+NIVEL_LABELS = {
+    "lp": "landing page",
+    "automacao_basica": "automação básica de atendimento",
+    "mapa_automacoes": "mapa de automações",
+    "vertical_os": "OS vertical",
+}
+
+MOMENTO_LABELS = {
+    "descoberta": "descoberta — ainda não conhecem o problema",
+    "atracao": "atração — sabem do problema mas não te conhecem",
+    "consideracao": "consideração — comparando soluções",
+    "acao": "ação — prontos pra contratar",
+    "apologia": "apologia — clientes que defendem a marca",
+}
+
+
+def _build_context(lead_data: dict, has_lp: bool, lp_url: str | None) -> dict:
     """
-    Gera mensagem via Claude API baseada no diagnóstico.
-    Retorna None se a API falhar (fallback pra template).
+    Consolida todos os sinais ricos do lead num único dict pro prompt.
+    Tudo opcional — o prompt instrui a usar só o que existe.
+    """
+    sa = lead_data.get("site_analysis") or {}
+    diag = sa.get("diagnostico_marketing") or {}
+
+    nivel_rec = sa.get("nivel_recomendado")
+    nivel_block = sa.get(nivel_rec) if nivel_rec else None
+    nivel_oportunidades = (nivel_block or {}).get("oportunidades", []) if isinstance(nivel_block, dict) else []
+    nivel_sinais = (nivel_block or {}).get("sinais", []) if isinstance(nivel_block, dict) else []
+
+    momento = diag.get("momento_funil") or ""
+    funil_atual = (diag.get("funil") or {}).get(momento) or {}
+    acoes_top2 = funil_atual.get("acoes_top2") or []
+
+    top_reviews = lead_data.get("top_reviews") or []
+    review_destaque = ""
+    if top_reviews:
+        first = top_reviews[0]
+        if isinstance(first, dict):
+            review_destaque = (first.get("text") or first.get("comment") or "")[:140]
+        elif isinstance(first, str):
+            review_destaque = first[:140]
+
+    tech = lead_data.get("tech_stack") or []
+    tech_names = []
+    for t in tech[:5]:
+        if isinstance(t, dict):
+            n = t.get("name") or t.get("technology")
+            if n:
+                tech_names.append(n)
+        elif isinstance(t, str):
+            tech_names.append(t)
+
+    return {
+        "nome": lead_data.get("nome", ""),
+        "nicho": lead_data.get("nicho") or lead_data.get("categoria") or "",
+        "cidade": lead_data.get("cidade", ""),
+        "rating": lead_data.get("rating", ""),
+        "reviews_count": lead_data.get("reviews_count", ""),
+        "website": lead_data.get("website") or "",
+        "has_site": bool(lead_data.get("website")),
+        "has_lp": has_lp,
+        "lp_url": lp_url if has_lp else "",
+        "razao_social": lead_data.get("razao_social", ""),
+        "porte": lead_data.get("porte", ""),
+        "idade_anos": _empresa_idade_anos(lead_data.get("data_fundacao")),
+        "tech_stack_names": tech_names,
+        "review_destaque": review_destaque,
+        "opportunity_reasons": (lead_data.get("opportunity_reasons") or [])[:3],
+        # Diagnóstico
+        "qualificado": sa.get("qualificado", True),
+        "resumo_executivo": diag.get("resumo_executivo") or sa.get("resumo_executivo") or "",
+        "momento_funil": momento,
+        "momento_label": MOMENTO_LABELS.get(momento, momento),
+        "prioridades_top3": diag.get("prioridades_top3") or [],
+        "ia_oportunidades": (diag.get("potencial_ia_automacao") or {}).get("oportunidades", []),
+        "funil_acoes": [a.get("acao", "") for a in acoes_top2 if isinstance(a, dict)],
+        # Estratégia (Service Level Analysis)
+        "nivel_recomendado": nivel_rec or "",
+        "nivel_label": NIVEL_LABELS.get(nivel_rec or "", ""),
+        "nivel_oportunidades": nivel_oportunidades[:3],
+        "nivel_sinais": nivel_sinais[:3],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Persona + princípios B2B (compartilhados em todos os prompts)
+# ---------------------------------------------------------------------------
+
+
+def _persona_block() -> str:
+    return f"""# PERSONA
+Você é {settings.your_name}, SDR sênior B2B em outreach FRIO via WhatsApp pela {settings.business_name}.
+Cadência total: 5 toques (D+0, D+2, D+5, D+9, D+14). Esta é uma das mensagens dessa cadência.
+Seu trabalho é ABRIR conversa, não fechar venda. O sucesso é uma resposta — qualquer resposta.
+
+# PRINCÍPIOS DE COLD OUTREACH B2B
+1. Especificidade > pitch. Mencione 1 detalhe único do lead que prove que você leu — sem isso, não escreva.
+2. Brevidade brutal. WhatsApp é íntimo, mensagem longa é spam. Conta linhas.
+3. Permission-based. Não assume disponibilidade nem urgência.
+4. Problem-first. Lidera com observação/diagnóstico, não com produto.
+5. CTA mole. Pergunta aberta ou "faz sentido conversar 10 min?" — nunca "agenda agora", "aproveita hoje".
+6. Sem corporativês. Nada de "venho por meio desta", "prezado", "espero que esta o encontre bem".
+7. Sem emoji-spam. Máximo 1 emoji, e só se servir o tom.
+8. Calibração por momento de funil:
+   - descoberta → educativa, abre o problema, sem oferta
+   - atracao → diferenciação, mostra ângulo único
+   - consideracao → comparação, evidência
+   - acao → CTA mais direto, mas ainda calibrado
+   - apologia → relacionamento, parceria"""
+
+
+# ---------------------------------------------------------------------------
+# AI message generation (per type)
+# ---------------------------------------------------------------------------
+
+
+def _format_ctx_facts(ctx: dict) -> str:
+    """Bloco de fatos do lead pro prompt — só o que existe, sem placeholders vazios."""
+    lines = [f"- Nome: {ctx['nome']}"]
+    if ctx['nicho']:
+        lines.append(f"- Nicho: {ctx['nicho']}")
+    if ctx['cidade']:
+        lines.append(f"- Cidade: {ctx['cidade']}")
+    if ctx['rating']:
+        rev = f" ({ctx['reviews_count']} avaliações)" if ctx['reviews_count'] else ""
+        lines.append(f"- Google: {ctx['rating']} estrelas{rev}")
+    if ctx['has_site']:
+        lines.append(f"- Site: {ctx['website']}")
+    else:
+        lines.append("- Site: NÃO TEM site próprio")
+    if ctx['razao_social']:
+        lines.append(f"- Razão social: {ctx['razao_social']}")
+    if ctx['idade_anos'] is not None:
+        lines.append(f"- Idade da empresa: {ctx['idade_anos']} anos")
+    if ctx['porte']:
+        lines.append(f"- Porte: {ctx['porte']}")
+    if ctx['tech_stack_names']:
+        lines.append(f"- Stack detectada: {', '.join(ctx['tech_stack_names'])}")
+    if ctx['review_destaque']:
+        lines.append(f"- Review em destaque: \"{ctx['review_destaque']}\"")
+    return "\n".join(lines)
+
+
+def _format_diag_block(ctx: dict) -> str:
+    parts = []
+    if ctx['resumo_executivo']:
+        parts.append(f"- Resumo do diagnóstico: {ctx['resumo_executivo']}")
+    if ctx['momento_label']:
+        parts.append(f"- Momento de funil: {ctx['momento_label']}")
+    if ctx['prioridades_top3']:
+        parts.append(f"- Top 3 prioridades de marketing: {' / '.join(ctx['prioridades_top3'])}")
+    if ctx['ia_oportunidades']:
+        parts.append(f"- Oportunidades de IA/automação: {' / '.join(ctx['ia_oportunidades'][:2])}")
+    if ctx['funil_acoes']:
+        parts.append(f"- Ações sugeridas pra esse momento de funil: {' / '.join(ctx['funil_acoes'])}")
+    if ctx['nivel_label']:
+        parts.append(f"- Estratégia recomendada: {ctx['nivel_label']}")
+        if ctx['nivel_oportunidades']:
+            parts.append(f"- O que essa estratégia entrega: {' / '.join(ctx['nivel_oportunidades'])}")
+        if ctx['nivel_sinais']:
+            parts.append(f"- Sinais que justificam: {' / '.join(ctx['nivel_sinais'])}")
+    if ctx['opportunity_reasons']:
+        parts.append(f"- Pontos fracos detectados no site: {' / '.join(ctx['opportunity_reasons'])}")
+    return "\n".join(parts) if parts else "(diagnóstico ainda não disponível)"
+
+
+# Specs por tipo de mensagem da cadência
+CADENCE_SPECS = {
+    "initial": {
+        "day": "D+0",
+        "max_lines": "6-8",
+        "purpose": "abrir conversa com observação específica + soft ask",
+        "extra_rules": [
+            "Comece com pattern interrupt (NÃO 'Oi tudo bem'). Pode ser uma pergunta, observação, ou referência direta.",
+            "Mencione UM detalhe específico do diagnóstico ou dos sinais — não fale em 'oportunidades de marketing' genérico.",
+            "Termine com pergunta aberta ou 'faz sentido a gente trocar 10 min?'.",
+        ],
+    },
+    "bump_d2": {
+        "day": "D+2",
+        "max_lines": "2-3",
+        "purpose": "top of mind sem repetir pitch — mensagem ULTRA curta",
+        "extra_rules": [
+            "Não repete contexto. Mensagem leve, quase casual.",
+            "Pode ser literalmente 'só dando ping aqui — chegou a ver?' ou similar.",
+            "ZERO pitch. ZERO detalhe novo. É um bump.",
+        ],
+    },
+    "insight_d5": {
+        "day": "D+5",
+        "max_lines": "4-6",
+        "purpose": "value drop — compartilhar 1 dado/observação NOVA, sem pedir nada",
+        "extra_rules": [
+            "Adicione UMA informação útil que não estava na mensagem inicial. Pode ser benchmark, dado de mercado, ou observação fina sobre o lead.",
+            "NÃO peça resposta. Termine com observação aberta tipo 'achei que valeria compartilhar'.",
+            "Aqui você está construindo crédito, não vendendo.",
+        ],
+    },
+    "angle_d9": {
+        "day": "D+9",
+        "max_lines": "4-5",
+        "purpose": "trocar ângulo — pivot pra outro vetor (ROI, peer comparison, pacote diferente)",
+        "extra_rules": [
+            "Use ângulo DIFERENTE do das mensagens anteriores. Se até agora foi sobre presença digital, fale de operação. Se foi de operação, fale de receita.",
+            "Pode mencionar que 'concorrentes seu nicho na cidade já fazem X' (sem inventar empresas).",
+            "CTA leve.",
+        ],
+    },
+    "breakup_d14": {
+        "day": "D+14",
+        "max_lines": "3-4",
+        "purpose": "última mensagem — libera o lead, mantém porta aberta",
+        "extra_rules": [
+            "Deixe explícito que é a última mensagem dessa sequência.",
+            "Sem culpa, sem peso. 'Sem problema', 'sem pressão', 'fica em aberto'.",
+            "Assine com nome + site/contato.",
+        ],
+    },
+}
+
+
+def _generate_ai_message(ctx: dict, msg_type: str) -> str | None:
+    """
+    Gera mensagem via LLM seguindo persona B2B + cadência fria.
+    Retorna None se API falhar ou não houver chave configurada.
     """
     if not settings.llm_api_key:
         return None
 
-    diag = _get_diagnostic(lead_data)
-    if not diag:
+    spec = CADENCE_SPECS.get(msg_type)
+    if not spec:
         return None
 
-    nome = lead_data.get("nome", "")
-    rating = lead_data.get("rating", "")
-    reviews = lead_data.get("reviews_count", "")
-    nicho = lead_data.get("nicho", lead_data.get("categoria", ""))
-    momento = diag.get("momento_funil", "")
-    resumo = diag.get("resumo_executivo", "")
-    prioridades = diag.get("prioridades_top3", [])
-    ia_opps = diag.get("potencial_ia_automacao", {}).get("oportunidades", [])
+    facts = _format_ctx_facts(ctx)
+    diag = _format_diag_block(ctx)
 
-    if msg_type == "initial":
-        prompt = f"""Gere uma mensagem de WhatsApp para prospecção de um negócio local brasileiro.
-
-CONTEXTO:
-- Você é {settings.your_name}, da {settings.business_name}
-- Você trabalha com criação de sites, automações e IA para negócios locais
-- Você encontrou o negócio no Google Maps e já criou uma landing page de demonstração
-
-DADOS DO NEGÓCIO:
-- Nome: {nome}
-- Nicho: {nicho}
-- Nota Google: {rating} estrelas ({reviews} avaliações)
-- Site atual: {lead_data.get('website', 'NÃO TEM')}
-
-DIAGNÓSTICO DO NEGÓCIO:
-- Resumo: {resumo}
-- Momento no funil de marketing: {momento}
-- Top 3 prioridades: {', '.join(prioridades)}
-- Oportunidades de IA/automação: {', '.join(ia_opps) if ia_opps else 'automação geral de processos'}
-
-LINK DA LP DE DEMONSTRAÇÃO: {lp_url}
-
-REGRAS DA MENSAGEM:
-1. Tom casual e amigável, como se estivesse mandando um WhatsApp normal
-2. Máximo 6-8 linhas (WhatsApp é curto!)
-3. Mencione algo ESPECÍFICO do diagnóstico que vai chamar atenção do dono (não genérico)
-4. Se identificou oportunidade de IA/automação, mencione de forma natural (ex: "vi que vocês poderiam automatizar o agendamento")
-5. Inclua o link da LP como demonstração gratuita
-6. Feche com algo leve, sem pressão
-7. NÃO use emojis excessivos (máx 2)
-8. NÃO use linguagem corporativa ("venho por meio desta", "prezado")
-9. Assine com o nome e empresa
-
-Retorne APENAS o texto da mensagem, sem aspas, sem explicação."""
-
-    elif msg_type == "followup_48h":
-        prompt = f"""Gere uma mensagem de follow-up de WhatsApp (48h após a primeira mensagem).
-
-CONTEXTO:
-- Você é {settings.your_name}, da {settings.business_name}
-- Já mandou uma mensagem inicial pra {nome} com uma LP de demonstração
-- Quer saber se viram a LP e gerar interesse
-
-DIAGNÓSTICO DO NEGÓCIO:
-- Top 3 prioridades: {', '.join(prioridades)}
-- Oportunidade de IA mais relevante: {ia_opps[0] if ia_opps else 'automação de processos'}
-
-LINK DA LP: {lp_url}
-
-REGRAS:
-1. Máximo 4-5 linhas
-2. Casual e leve, sem pressão
-3. Mencione UMA coisa específica que poderia melhorar rapidamente pro negócio
-4. Inclua o link de novo
-5. Sem emojis excessivos
-6. Assine com o nome
-
-Retorne APENAS o texto da mensagem."""
-
-    elif msg_type == "followup_final":
-        prompt = f"""Gere a última mensagem de follow-up de WhatsApp para {nome}.
-
-CONTEXTO:
-- Você é {settings.your_name} | {settings.your_website}
-- Já mandou 2 mensagens anteriores sem resposta
-- Última chance, quer deixar porta aberta
-
-REGRAS:
-1. Máximo 3-4 linhas
-2. Respeitoso, sem pressão nenhuma
-3. Deixe claro que é a última mensagem
-4. Deixe porta aberta pro futuro
-5. Assine com nome e site
-
-Retorne APENAS o texto da mensagem."""
+    if ctx["has_lp"]:
+        lp_instruction = f"\n# LANDING PAGE DE DEMONSTRAÇÃO\nVocê pode (não obrigatório) referenciar a LP de demonstração: {ctx['lp_url']}\nUse APENAS se fizer sentido pro tipo de mensagem (initial/insight). Em bump/breakup, não use."
     else:
-        return None
+        lp_instruction = "\n# SEM LANDING PAGE\nVocê NÃO criou nenhum material de demonstração pra esse lead. NÃO mencione, NÃO prometa, NÃO inclua link. Pivot pra observação ou diagnóstico."
 
-    model = settings.diagnostic_model or settings.llm_model
+    rules_block = "\n".join(f"- {r}" for r in spec["extra_rules"])
+
+    prompt = f"""{_persona_block()}
+
+# DADOS DO LEAD
+{facts}
+
+# DIAGNÓSTICO + ESTRATÉGIA (use o que existir, ignore o resto)
+{diag}
+{lp_instruction}
+
+# TIPO DESTA MENSAGEM
+- Tipo: {msg_type} ({spec["day"]} da cadência de 5 toques)
+- Objetivo: {spec["purpose"]}
+- Tamanho máximo: {spec["max_lines"]} linhas
+- Regras específicas:
+{rules_block}
+
+# REGRAS GLOBAIS DE FORMATO
+- Saída em português do Brasil natural, conversacional.
+- NÃO use markdown (sem **, sem #, sem listas com bullet).
+- NÃO use aspas ao redor da mensagem.
+- Assinatura: nome do remetente em linha separada (sem cargo nem empresa em todas as mensagens — varia conforme momento).
+- Se você não tiver UM detalhe específico real do lead pra mencionar, use observação sobre nicho/cidade/rating em vez de inventar.
+
+Retorne APENAS o texto da mensagem pronta pra copiar e colar."""
+
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {settings.llm_api_key}",
     }
+    model = settings.diagnostic_model or settings.llm_model
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
@@ -152,11 +347,9 @@ Retorne APENAS o texto da mensagem."""
         if not choices:
             return None
         text = (choices[0].get("message", {}).get("content", "") or "").strip()
-        # Strip thinking blocks (MiniMax, DeepSeek, etc.)
         text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
         if not text:
             return None
-        # Remove aspas se a resposta vier envolvida
         if text.startswith('"') and text.endswith('"'):
             text = text[1:-1]
         return text
@@ -165,131 +358,119 @@ Retorne APENAS o texto da mensagem."""
 
 
 # ---------------------------------------------------------------------------
-# Fallback templates (usados quando não há diagnóstico ou API falha)
+# Fallback templates (sem LLM ou diagnóstico — mais sóbrios, sem pitch)
 # ---------------------------------------------------------------------------
 
 
-def _fallback_initial_com_site(lead_data: dict, lp_url: str) -> str:
-    """Mensagem fallback pra quem TEM site mas é ruim."""
-    nome = lead_data.get("nome", "")
-    gaps = lead_data.get("opportunity_reasons", [])[:2]
-    gaps_text = ""
-    if gaps:
-        gaps_text = f" Vi que o site atual tem algumas oportunidades de melhoria ({', '.join(g.lower() for g in gaps)})."
-
-    return f"""Oi! Tudo bem?
-
-Me chamo {settings.your_name}, trabalho com criação de sites e automações pra negócios locais.
-
-Encontrei a {nome} no Google Maps e curti demais a avaliação de vocês ({lead_data.get('rating', '')} estrelas).{gaps_text}
-
-Fiz uma versão moderna do site de vocês como demonstração — totalmente gratuita, sem compromisso:
-
-{lp_url}
-
-Se curtir, a gente conversa sobre implementar. Se não curtir, tá tudo certo também!
-
-Abraço!
-{settings.your_name}
-{settings.business_name}"""
-
-
-def _fallback_initial_sem_site(lead_data: dict, lp_url: str) -> str:
-    """Mensagem fallback pra quem NÃO tem site."""
-    nome = lead_data.get("nome", "")
-
-    return f"""Oi! Tudo bem?
-
-Me chamo {settings.your_name}, trabalho com criação de sites pra negócios locais.
-
-Encontrei a {nome} no Google Maps — nota {lead_data.get('rating', '')} estrelas com {lead_data.get('reviews_count', '')} avaliações, vocês mandam muito bem!
-
-Notei que vocês ainda não têm um site. Criei uma versão profissional como demonstração gratuita:
-
-{lp_url}
-
-Ficou com a cara de vocês! Se quiser implementar, me avisa. Sem compromisso nenhum.
-
-Abraço!
-{settings.your_name}
-{settings.business_name}"""
-
-
-def _fallback_followup_48h(lead_data: dict, lp_url: str) -> str:
-    nome = lead_data.get("nome", "")
-    return f"""Oi! Só passando pra saber se conseguiu ver a prévia que fiz pra {nome}?
-
-{lp_url}
-
-Caso tenha interesse, essa semana ainda consigo implementar com condição especial. Me avisa!
-
-{settings.your_name}"""
-
-
-def _fallback_followup_final(lead_data: dict) -> str:
-    nome = lead_data.get("nome", "")
-    return f"""Oi! Última mensagem sobre aquela prévia do site da {nome}.
-
-Se não for o momento, sem problemas! Mas se quiser conversar sobre presença digital no futuro, é só me chamar.
-
-Bom trabalho pra vocês!
-{settings.your_name} | {settings.your_website}"""
-
-
-# ---------------------------------------------------------------------------
-# Função principal
-# ---------------------------------------------------------------------------
-
-
-def generate_messages(public_id: str, lead_data: dict) -> list[dict]:
+def _fallback(ctx: dict, msg_type: str) -> str:
     """
-    Gera lista de 3 mensagens (initial, followup_48h, followup_final).
-    Usa IA quando diagnóstico disponível, senão usa templates fallback.
+    Fallback determinístico sem LLM. Sóbrio, sem pitch agressivo.
+    Adapta a presença/ausência de LP automaticamente.
     """
-    lp = _lp_url(public_id)
+    nome = ctx["nome"]
+    rating = ctx["rating"]
+    reviews = ctx["reviews_count"]
+    has_lp = ctx["has_lp"]
+    lp_url = ctx["lp_url"]
+    has_site = ctx["has_site"]
+
+    sender = settings.your_name
+    site = settings.your_website
+
+    if msg_type == "initial":
+        if has_site and has_lp:
+            return f"""Oi! Tudo certo?
+Aqui é o {sender}. Vi a {nome} no Google ({rating}★, {reviews} avaliações) — deu pra perceber que vocês têm tração no offline, mas o site atual deixa um gap claro.
+Montei uma versão alternativa só pra você visualizar a ideia (sem compromisso): {lp_url}
+Faz sentido a gente trocar 10 min essa semana pra eu te mostrar o que tem por trás?
+{sender}"""
+        if not has_site and has_lp:
+            return f"""Oi! Aqui é o {sender}.
+Vi a {nome} no Google ({rating}★, {reviews} avaliações) e notei que vocês não têm site — isso tá custando lead pra concorrente.
+Criei uma demo rápida pra mostrar como ficaria: {lp_url}
+Faz sentido a gente trocar 10 min sobre isso?
+{sender}"""
+        # sem LP
+        if has_site:
+            return f"""Oi! Aqui é o {sender}.
+Olhei o site da {nome} e vi alguns ajustes específicos que valeriam testar (especialmente em mobile e captação de lead).
+Não tô vendendo nada agora — quero saber se vocês estão olhando esse vetor de marketing digital. Faz sentido trocarmos 10 min?
+{sender}"""
+        return f"""Oi! Aqui é o {sender}.
+Vi a {nome} no Google ({rating}★, {reviews} avaliações) — vocês mandam bem no atendimento, mas sem site próprio o lead novo bate em concorrente.
+Tô falando com alguns negócios do nicho de {ctx['nicho']} pra entender se site + automação simples faz sentido pra vocês.
+Topa 10 min pra eu te mostrar como funciona?
+{sender}"""
+
+    if msg_type == "bump_d2":
+        return f"""Oi {nome.split()[0] if nome else ''} — só dando ping aqui pra não perder o tópico.
+Chegou a olhar?
+{sender}"""
+
+    if msg_type == "insight_d5":
+        if has_lp:
+            return f"""Oi! Sem pressa em responder — só queria deixar uma observação.
+Negócios do nicho de {ctx['nicho']} que ajustam captação digital costumam ver lead novo entrar em 30-45 dias. A demo que mandei segue no ar: {lp_url}
+Achei que valeria compartilhar.
+{sender}"""
+        return f"""Oi! Sem pressa em responder — só dropping uma observação.
+Pra {ctx['nicho']}, o sinal mais forte que separa quem captura lead online de quem não captura é ter UM ponto digital próprio (site simples ou LP). Vocês hoje não têm isso, e dá pra resolver em poucos dias.
+{sender}"""
+
+    if msg_type == "angle_d9":
+        return f"""Oi! Última tentativa de pegar você nesse vetor — depois sumo.
+Se faz mais sentido conversar sobre operação (atendimento, agendamento, automação) em vez de presença digital, também rola. Esse é meu outro vetor.
+Me dá um sinal e eu mudo o ângulo.
+{sender}"""
+
+    # breakup_d14
+    return f"""Oi! Última mensagem dessa sequência.
+Sem problema se não for o momento. Fica em aberto — qualquer coisa, é só me chamar.
+Bom trabalho pra {nome}!
+{sender} | {site}"""
+
+
+# ---------------------------------------------------------------------------
+# Public entry point
+# ---------------------------------------------------------------------------
+
+
+CADENCE_ORDER = ["initial", "bump_d2", "insight_d5", "angle_d9", "breakup_d14"]
+
+
+def generate_messages(public_id: str, lead_data: dict, has_lp: bool = False) -> list[dict]:
+    """
+    Gera lista de 5 mensagens da cadência fria B2B.
+    Usa LLM quando há diagnóstico + chave configurada; fallback determinístico caso contrário.
+    has_lp: se True, mensagens podem referenciar a LP de demonstração.
+    """
+    lp = _lp_url(public_id) if has_lp else None
+    ctx = _build_context(lead_data, has_lp=has_lp, lp_url=lp)
+
+    # Lead desqualificado → não gera cadência (volta lista vazia, caller decide o que fazer)
+    if ctx["qualificado"] is False:
+        return []
+
     phone = _clean_phone(lead_data.get("telefone", ""))
-    has_site = lead_data.get("website") and lead_data.get("site_analysis", {}).get("status") == "ok"
-    has_diagnostic = _get_diagnostic(lead_data) is not None
+    has_diag = bool(ctx["resumo_executivo"] or ctx["prioridades_top3"] or ctx["nivel_recomendado"])
 
-    # Tentar IA primeiro, fallback pra template
-    if has_diagnostic:
-        initial_text = _generate_ai_message(lead_data, lp, "initial")
-        time.sleep(1)  # Rate limit between Claude API calls
-        followup_48h_text = _generate_ai_message(lead_data, lp, "followup_48h")
-        time.sleep(1)
-        followup_final_text = _generate_ai_message(lead_data, lp, "followup_final")
-    else:
-        initial_text = None
-        followup_48h_text = None
-        followup_final_text = None
+    messages: list[dict] = []
+    for msg_type in CADENCE_ORDER:
+        text: str | None = None
+        if has_diag:
+            text = _generate_ai_message(ctx, msg_type)
+            time.sleep(1)  # rate limit entre chamadas LLM
+        if not text:
+            text = _fallback(ctx, msg_type)
 
-    # Fallback pra templates se IA falhou
-    if not initial_text:
-        initial_text = _fallback_initial_com_site(lead_data, lp) if has_site else _fallback_initial_sem_site(lead_data, lp)
-    if not followup_48h_text:
-        followup_48h_text = _fallback_followup_48h(lead_data, lp)
-    if not followup_final_text:
-        followup_final_text = _fallback_followup_final(lead_data)
+        whatsapp_link = ""
+        if phone and text:
+            whatsapp_link = f"https://wa.me/{phone}?text={urllib.parse.quote(text)}"
 
-    def _whatsapp_link(text: str) -> str:
-        if not phone:
-            return ""
-        return f"https://wa.me/{phone}?text={urllib.parse.quote(text)}"
+        messages.append({
+            "type": msg_type,
+            "message_text": text,
+            "whatsapp_link": whatsapp_link,
+        })
 
-    return [
-        {
-            "type": "initial",
-            "message_text": initial_text,
-            "whatsapp_link": _whatsapp_link(initial_text),
-        },
-        {
-            "type": "followup_48h",
-            "message_text": followup_48h_text,
-            "whatsapp_link": _whatsapp_link(followup_48h_text),
-        },
-        {
-            "type": "followup_final",
-            "message_text": followup_final_text,
-            "whatsapp_link": _whatsapp_link(followup_final_text),
-        },
-    ]
+    return messages
