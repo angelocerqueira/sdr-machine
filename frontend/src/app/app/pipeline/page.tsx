@@ -3,7 +3,6 @@
 import "@/components/pipeline/pipeline.css";
 import { Suspense, useCallback, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PipelineControls } from "@/components/pipeline-controls";
 import { PipelineKanban } from "@/components/pipeline/pipeline-kanban";
 import { PipelineTable } from "@/components/pipeline/pipeline-table";
 import { PipelineToolbar } from "@/components/pipeline/pipeline-toolbar";
@@ -15,7 +14,12 @@ import { PipelineFunnel } from "@/components/pipeline/pipeline-funnel";
 import { PipelinePageHeader } from "@/components/pipeline/pipeline-page-header";
 import { usePipelineCounts } from "@/components/pipeline/use-pipeline-counts";
 import { usePipelineDensity } from "@/components/pipeline/use-pipeline-density";
-import { getLeads } from "@/lib/api";
+import { ScrapeModal } from "@/components/scrape-modal";
+import { CsvImportModal } from "@/components/csv-import-modal";
+import { ClassifyModal } from "@/components/pipeline/classify-modal";
+import { JobProgress } from "@/components/job-progress";
+import { getLeads, runScrape, importCSV } from "@/lib/api";
+import type { Job } from "@/lib/types";
 import { exportLeadsCSV } from "@/lib/csv-export";
 import { useToast } from "@/components/ui/toast";
 
@@ -90,6 +94,10 @@ function PipelineInner() {
   const [visibleIds, setVisibleIds] = useState<number[]>([]);
   const [pageTotal, setPageTotal] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [scrapeOpen, setScrapeOpen] = useState(false);
+  const [csvOpen, setCsvOpen] = useState(false);
+  const [classifyOpen, setClassifyOpen] = useState(false);
+  const [activeJob, setActiveJob] = useState<Job | null>(null);
 
   const filters = useMemo(() => {
     const out: Record<string, string> = {};
@@ -168,6 +176,66 @@ function PipelineInner() {
     );
   }, [counts.scraped, filters, sel, toast]);
 
+  const handleGenerateLPs = useCallback(() => {
+    const count = counts.enriched ?? 0;
+    if (count === 0) return;
+    sel.selectAllFilter({ ...filters, status: "enriched" }, count);
+    toast(
+      `${count} leads selecionados — confirme em "Gerar LPs" abaixo.`,
+      { variant: "default", duration: 6000 },
+    );
+  }, [counts.enriched, filters, sel, toast]);
+
+  const handleOutreachReady = useCallback(() => {
+    const count = counts.lp_generated ?? 0;
+    if (count === 0) return;
+    sel.selectAllFilter({ ...filters, status: "lp_generated" }, count);
+    toast(
+      `${count} leads selecionados — confirme em "Outreach" abaixo.`,
+      { variant: "default", duration: 6000 },
+    );
+  }, [counts.lp_generated, filters, sel, toast]);
+
+  const handleScrapeConfirm = useCallback(
+    async (params: { nichos: string[]; cidades: string[]; max_results: number; fontes: string[] }) => {
+      setScrapeOpen(false);
+      try {
+        const job = await runScrape(params);
+        setActiveJob(job);
+      } catch (err) {
+        toast(`Erro ao iniciar scrape: ${err instanceof Error ? err.message : "desconhecido"}`, {
+          variant: "error",
+        });
+      }
+    },
+    [toast],
+  );
+
+  const handleCsvImport = useCallback(
+    async (file: File, nicho: string, cidade: string) => {
+      setCsvOpen(false);
+      try {
+        const job = await importCSV(file, nicho, cidade);
+        setActiveJob(job);
+      } catch (err) {
+        toast(`Erro ao importar CSV: ${err instanceof Error ? err.message : "desconhecido"}`, {
+          variant: "error",
+        });
+      }
+    },
+    [toast],
+  );
+
+  const handleClassifyStarted = useCallback((jobId: number) => {
+    setClassifyOpen(false);
+    setActiveJob({ id: jobId } as Job);
+  }, []);
+
+  const handleJobDone = useCallback(() => {
+    setActiveJob(null);
+    window.location.reload();
+  }, []);
+
   return (
     <div
       className={`pl-page p-5 md:p-6 pb-24${density === "compact" ? " pl-density-compact" : ""}`}
@@ -179,9 +247,14 @@ function PipelineInner() {
         onExport={handleExport}
         onToggleAdvancedFilters={handleToggleAdvanced}
         advancedOpen={advancedOpen}
+        onScrape={() => setScrapeOpen(true)}
+        onCsvImport={() => setCsvOpen(true)}
         onEnrichScraped={handleEnrichScraped}
+        onGenerateLPs={handleGenerateLPs}
+        onOutreachReady={handleOutreachReady}
+        onClassify={() => setClassifyOpen(true)}
       />
-      <PipelineControls onJobDone={() => window.location.reload()} />
+      {activeJob && <JobProgress jobId={activeJob.id} onDone={handleJobDone} />}
       <PipelineToolbar view={view} density={density} onToggleDensity={toggleDensity} />
       <FiltrosAtivosBanner />
       <PipelineFunnel counts={counts} />
@@ -214,6 +287,22 @@ function PipelineInner() {
         <PipelineKanban />
       )}
       <BulkActionBar sel={sel} onChanged={handleChanged} />
+
+      <ScrapeModal
+        open={scrapeOpen}
+        onConfirm={handleScrapeConfirm}
+        onCancel={() => setScrapeOpen(false)}
+      />
+      <CsvImportModal
+        open={csvOpen}
+        onConfirm={handleCsvImport}
+        onCancel={() => setCsvOpen(false)}
+      />
+      <ClassifyModal
+        open={classifyOpen}
+        onStarted={handleClassifyStarted}
+        onCancel={() => setClassifyOpen(false)}
+      />
     </div>
   );
 }

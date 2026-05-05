@@ -53,6 +53,13 @@
   gap: 8px;
   flex-shrink: 0;
   flex-wrap: wrap;
+  align-items: center;
+}
+.pl-header-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+  flex-shrink: 0;
 }
 
 /* Funnel ---------------------------------------------------------------- */
@@ -777,7 +784,13 @@
 .pl-tbl-row-selected { background: var(--accent-soft) !important; }
 .pl-tbl-row-selected:hover { background: var(--accent-soft) !important; }
 
-.pl-tbl-check { width: 36px; padding-right: 0 !important; }
+/* Primeira coluna (select/checkbox) precisa de padding mínimo pra o botão 16x16 caber. */
+/* Sem isto, o padding default 16px×14px do td esmaga o botão e ele aparece como "|". */
+.pl-tbl thead th:first-child,
+.pl-tbl tbody td:first-child {
+  padding-left: 4px;
+  padding-right: 4px;
+}
 
 .pl-tbl-name {
   min-width: 0;
