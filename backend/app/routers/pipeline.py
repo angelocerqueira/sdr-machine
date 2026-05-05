@@ -6,7 +6,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, UploadFile, File, Form
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sse_starlette.sse import EventSourceResponse
 
 from app.database import get_db, SessionLocal
@@ -304,13 +304,14 @@ def _run_outreach(job_id: int, params: dict):
         _emit(job_id, {"type": "started", "job_id": job_id})
 
         lead_ids = params.get("lead_ids", [])
+        base_query = db.query(Lead).options(selectinload(Lead.landing_pages))
         if lead_ids:
-            leads = db.query(Lead).filter(
+            leads = base_query.filter(
                 Lead.id.in_(lead_ids),
                 Lead.status != "disqualified",
             ).all()
         else:
-            leads = db.query(Lead).filter(Lead.status == "lp_generated").all()
+            leads = base_query.filter(Lead.status == "lp_generated").all()
 
         messaged = 0
         errors: list[str] = []
@@ -345,6 +346,9 @@ def _run_outreach(job_id: int, params: dict):
                     db.commit()
                     _emit(job_id, {"type": "progress", "current": idx + 1, "total": len(leads)})
                     continue
+                # Idempotência: re-rodar outreach substitui as mensagens antigas
+                # (não acumula 5 + 5 + 5 a cada execução).
+                db.query(OutreachMessage).filter(OutreachMessage.lead_id == lead.id).delete()
                 for msg in messages:
                     om = OutreachMessage(
                         lead_id=lead.id,
