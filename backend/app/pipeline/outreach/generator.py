@@ -9,10 +9,12 @@ import logging
 import re
 import time
 import urllib.parse
+from dataclasses import dataclass, field
 
 import requests
 
 from app.config import settings
+from app.pipeline.outreach.config import ctas_for, load_angulos
 from app.pipeline.outreach.validators import (
     fix_capitalization,
     fix_punctuation_spacing,
@@ -20,6 +22,28 @@ from app.pipeline.outreach.validators import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Generation result (PR2.3 — replaces the old tuple[str | None, list[str]])
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class GenerationResult:
+    """Result of a single LLM generation attempt.
+
+    ``text`` is None on any failure (infrastructure or validation). ``errors``
+    is empty on infrastructure failures, populated on validation failures.
+    ``angulo`` / ``cta`` are set only when generation succeeded (validation
+    included). For exhausted-pool scenarios where the LLM returned ``none``,
+    they stay None and are recorded as such on the OutreachMessage row.
+    """
+
+    text: str | None = None
+    errors: list[str] = field(default_factory=list)
+    angulo: str | None = None
+    cta: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -328,32 +352,86 @@ CADENCE_SPECS = {
 }
 
 
-def _generate_ai_message(ctx: dict, msg_type: str) -> tuple[str | None, list[str]]:
+def _parse_llm_response(raw: str) -> tuple[str | None, str | None, str, bool, bool]:
+    """Parse the structured LLM response with ÂNGULO/CTA/TEXTO headers.
+
+    Returns ``(angulo, cta, text, angulo_header_present, cta_header_present)``.
+
+    - ``angulo`` / ``cta``: chosen key, or None if missing entirely OR explicitly "none".
+    - ``text``: message body. Falls back to ``raw`` if no ``TEXTO:`` header was found.
+    - ``*_header_present``: True if the header line was found in ``raw`` (used to
+      distinguish "missing" from "explicit none" for validation purposes).
+    """
+    angulo_match = re.search(r"^ÂNGULO:\s*(\S+)\s*$", raw, re.MULTILINE)
+    cta_match = re.search(r"^CTA:\s*(\S+)\s*$", raw, re.MULTILINE)
+    text_match = re.search(r"^TEXTO:\s*\n(.*)$", raw, re.MULTILINE | re.DOTALL)
+    angulo = angulo_match.group(1) if angulo_match else None
+    cta = cta_match.group(1) if cta_match else None
+    text = text_match.group(1).strip() if text_match else raw
+    if angulo == "none":
+        angulo = None
+    if cta == "none":
+        cta = None
+    return angulo, cta, text, angulo_match is not None, cta_match is not None
+
+
+def _generate_ai_message(
+    ctx: dict,
+    msg_type: str,
+    angulos_usados: set[str],
+    ctas_usados: set[str],
+) -> GenerationResult:
     """
     Gera mensagem via LLM seguindo persona B2B + cadência fria.
 
     Returns
     -------
-    tuple[str | None, list[str]]
-        - ``(text, [])``  → LLM call succeeded AND validated. ``text`` is
-          already passed through the deterministic fixers.
-        - ``(None, [])``  → infrastructure failure (no API key, no choices,
-          empty text, transport error). Caller falls back silently —
-          these are NOT validation failures.
-        - ``(None, errors)`` → LLM call succeeded but ``validate_hard``
-          rejected the output. ``errors`` is the list of error codes from
-          the validator. Caller falls back and persists the errors on the
-          ``OutreachMessage`` row (``status="erro_geracao"``).
+    GenerationResult
+        - ``text`` populated + ``errors=[]`` + ``angulo``/``cta`` set → success.
+        - ``text=None`` + ``errors=[]`` → infrastructure failure (no API key, no
+          choices, empty text, transport exception). Caller falls back silently.
+        - ``text=None`` + ``errors=[...]`` → LLM call succeeded but the response
+          failed taxonomy parsing or ``validate_hard``. Caller falls back AND
+          persists the errors with ``status="erro_geracao"``.
     """
     if not settings.llm_api_key:
-        return None, []
+        return GenerationResult()
 
     spec = CADENCE_SPECS.get(msg_type)
     if not spec:
-        return None, []
+        return GenerationResult()
 
     facts = _format_ctx_facts(ctx)
     diag = _format_diag_block(ctx)
+
+    # ------------------------------------------------------------------
+    # Taxonomy pools — what the LLM may choose for THIS toque
+    # ------------------------------------------------------------------
+    all_angulos = load_angulos()
+    available_angulos = {k: v for k, v in all_angulos.items() if k not in angulos_usados}
+    available_ctas = [c for c in ctas_for(msg_type) if c not in ctas_usados]
+
+    def _render_dict_lines(d: dict[str, str]) -> str:
+        return "\n".join(f"- {k}: {v}" for k, v in d.items()) if d else "(nenhum)"
+
+    def _render_set_lines(items) -> str:
+        items = list(items)
+        return "\n".join(f"- {k}" for k in items) if items else "(nenhum)"
+
+    def _render_list_lines(items: list[str]) -> str:
+        return "\n".join(f"- {k}" for k in items) if items else "(nenhum)"
+
+    taxonomy_block = (
+        "# TAXONOMIA (obrigatório retornar nos campos da resposta)\n"
+        "Ângulos disponíveis pra esse toque (escolha 1):\n"
+        f"{_render_dict_lines(available_angulos)}\n\n"
+        "Ângulos JÁ usados nesta cadência (NÃO repita):\n"
+        f"{_render_set_lines(angulos_usados)}\n\n"
+        "CTAs disponíveis pra esse toque (escolha 1):\n"
+        f"{_render_list_lines(available_ctas)}\n\n"
+        "CTAs JÁ usados (NÃO repita):\n"
+        f"{_render_set_lines(ctas_usados)}"
+    )
 
     if ctx["has_lp"]:
         lp_instruction = f"\n# LANDING PAGE DE DEMONSTRAÇÃO\nVocê pode (não obrigatório) referenciar a LP de demonstração: {ctx['lp_url']}\nUse APENAS se fizer sentido pro tipo de mensagem (initial/insight). Em bump/breakup, não use."
@@ -383,6 +461,8 @@ def _generate_ai_message(ctx: dict, msg_type: str) -> tuple[str | None, list[str
 - Regras específicas:
 {rules_block}
 
+{taxonomy_block}
+
 # REGRAS GLOBAIS DE FORMATO
 - Saída em português do Brasil natural, conversacional.
 - NÃO use markdown (sem **, sem #, sem listas com bullet).
@@ -391,7 +471,15 @@ def _generate_ai_message(ctx: dict, msg_type: str) -> tuple[str | None, list[str
 - Se você não tiver UM detalhe específico real do lead pra mencionar, use observação sóbria sobre nicho/cidade/rating em vez de inventar.
 - A mensagem precisa ter SUBSTÂNCIA — corpo + assinatura. NÃO entregue só assinatura ou frase truncada.
 
-Retorne APENAS o texto da mensagem pronta pra copiar e colar."""
+# FORMATO DE RESPOSTA (obrigatório)
+Retorne EXATAMENTE neste formato, sem variações:
+
+ÂNGULO: <chave do ângulo escolhido>
+CTA: <chave do CTA escolhido>
+TEXTO:
+<corpo da mensagem pronto pra copiar e colar>
+
+Nenhuma das chaves pode ser inventada — usar SOMENTE valores listados em "disponíveis". Se o pool estiver vazio (nenhum disponível), retorne a chave especial "none" — o sistema vai tratar."""
 
     headers = {
         "Content-Type": "application/json",
@@ -414,31 +502,61 @@ Retorne APENAS o texto da mensagem pronta pra copiar e colar."""
         data = resp.json()
         choices = data.get("choices") or []
         if not choices:
-            return None, []
-        text = (choices[0].get("message", {}).get("content", "") or "").strip()
-        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
-        if not text:
-            return None, []
-        if text.startswith('"') and text.endswith('"'):
-            text = text[1:-1].strip()
-        if not text:
-            return None, []
+            return GenerationResult()
+        raw = (choices[0].get("message", {}).get("content", "") or "").strip()
+        raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+        if not raw:
+            return GenerationResult()
+        if raw.startswith('"') and raw.endswith('"'):
+            raw = raw[1:-1].strip()
+        if not raw:
+            return GenerationResult()
 
-        result = validate_hard(text, msg_type)
-        if not result.passed:
+        # ------------------------------------------------------------------
+        # Parse structured output (ÂNGULO / CTA / TEXTO)
+        # ------------------------------------------------------------------
+        angulo, cta, text, angulo_present, cta_present = _parse_llm_response(raw)
+
+        errors: list[str] = []
+
+        # Taxonomy validation — header presence
+        if not angulo_present:
+            errors.append("taxonomy:angulo_ausente")
+        if not cta_present:
+            errors.append("taxonomy:cta_ausente")
+
+        # Taxonomy validation — value membership
+        valid_cta_pool = ctas_for(msg_type)
+        if angulo is not None and angulo not in all_angulos:
+            errors.append(f"taxonomy:angulo_invalido:{angulo}")
+        if cta is not None and cta not in valid_cta_pool:
+            errors.append(f"taxonomy:cta_invalido:{cta}")
+
+        # Taxonomy validation — no repeat within cadence
+        if angulo is not None and angulo in angulos_usados:
+            errors.append(f"taxonomy:angulo_repetido:{angulo}")
+        if cta is not None and cta in ctas_usados:
+            errors.append(f"taxonomy:cta_repetido:{cta}")
+
+        # Body validation
+        body_result = validate_hard(text, msg_type)
+        if not body_result.passed:
+            errors.extend(body_result.errors)
+
+        if errors:
             logger.warning(
-                "LLM outreach failed hard validation (type=%s, errors=%s)",
+                "LLM outreach failed validation (type=%s, errors=%s)",
                 msg_type,
-                result.errors,
+                errors,
             )
-            return None, result.errors
+            return GenerationResult(text=None, errors=errors, angulo=None, cta=None)
 
         # Apply deterministic fixers in order: spacing first, then capitalization.
         text = fix_capitalization(fix_punctuation_spacing(text))
-        return text, []
+        return GenerationResult(text=text, errors=[], angulo=angulo, cta=cta)
     except Exception as exc:
         logger.warning("LLM outreach failed (type=%s): %s", msg_type, exc)
-        return None, []
+        return GenerationResult()
 
 
 # ---------------------------------------------------------------------------
@@ -541,22 +659,31 @@ def generate_messages(public_id: str, lead_data: dict, has_lp: bool = False) -> 
 
     messages: list[dict] = []
     last_idx = len(CADENCE_ORDER) - 1
+    # Per-cadence taxonomy bookkeeping (isolated to this call — never leaks).
+    angulos_usados: set[str] = set()
+    ctas_usados: set[str] = set()
+
     for i, msg_type in enumerate(CADENCE_ORDER):
-        text: str | None = None
-        validation_errors: list[str] = []
+        result = GenerationResult()
         if has_diag:
-            text, validation_errors = _generate_ai_message(ctx, msg_type)
+            result = _generate_ai_message(ctx, msg_type, angulos_usados, ctas_usados)
             # Rate limit só ENTRE chamadas LLM, não na última.
             if i < last_idx:
                 time.sleep(1)
-        if not text:
+
+        if result.text:
+            text = result.text
+            status = "pronta"
+            if result.angulo:
+                angulos_usados.add(result.angulo)
+            if result.cta:
+                ctas_usados.add(result.cta)
+        else:
             text = _fallback(ctx, msg_type)
             # Erro só quando o LLM rodou e a validação reprovou; falhas de
             # infraestrutura (sem chave, sem diag, sem choices) caem em
             # fallback silencioso com status="pronta".
-            status = "erro_geracao" if validation_errors else "pronta"
-        else:
-            status = "pronta"
+            status = "erro_geracao" if result.errors else "pronta"
 
         whatsapp_link = ""
         if phone and text:
@@ -567,7 +694,9 @@ def generate_messages(public_id: str, lead_data: dict, has_lp: bool = False) -> 
             "message_text": text,
             "whatsapp_link": whatsapp_link,
             "status": status,
-            "validation_errors": validation_errors or None,
+            "validation_errors": result.errors or None,
+            "angulo_usado": result.angulo,
+            "cta_usado": result.cta,
         })
 
     return messages

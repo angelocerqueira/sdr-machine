@@ -357,6 +357,8 @@ def _run_outreach(job_id: int, params: dict):
                         whatsapp_link=msg.get("whatsapp_link", ""),
                         status=msg.get("status", "pronta"),
                         validation_errors=msg.get("validation_errors"),
+                        angulo_usado=msg.get("angulo_usado"),
+                        cta_usado=msg.get("cta_usado"),
                     )
                     db.add(om)
                 lead.status = "outreach_ready"

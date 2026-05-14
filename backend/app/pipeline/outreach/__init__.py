@@ -10,6 +10,7 @@ modules (validators, cadence_specs, prompts, …) without touching this surface.
 
 from app.pipeline.outreach.generator import (
     CADENCE_ORDER,
+    GenerationResult,
     _build_context,
     _clean_phone,
     _empresa_idade_anos,
@@ -20,6 +21,7 @@ from app.pipeline.outreach.generator import (
     _get_diagnostic,
     _hook_calibration_block,
     _lp_url,
+    _parse_llm_response,
     _persona_block,
     generate_messages,
     logger,
@@ -29,5 +31,6 @@ from app.pipeline.outreach.generator import (
 
 __all__ = [
     "CADENCE_ORDER",
+    "GenerationResult",
     "generate_messages",
 ]
