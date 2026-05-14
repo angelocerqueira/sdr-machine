@@ -124,6 +124,23 @@ class TestFixPunctuationSpacing:
         # Period at the very end (no following char) should not break
         assert fix_punctuation_spacing("final.") == "final."
 
+    def test_wa_me_url_unchanged(self):
+        # wa.me is the primary URL emitted by the outreach module — must NOT
+        # be split by punctuation glue ('manda no wa. me/5551999' would break
+        # the link).
+        assert (
+            fix_punctuation_spacing("manda no wa.me/5551999")
+            == "manda no wa.me/5551999"
+        )
+
+    def test_wa_me_after_space_unchanged(self):
+        # Full https://wa.me/... URL surrounded by spaces, with a trailing
+        # sentence-final period (period followed by nothing — also untouched).
+        assert (
+            fix_punctuation_spacing("acesse https://wa.me/123 hoje.")
+            == "acesse https://wa.me/123 hoje."
+        )
+
 
 # ---------------------------------------------------------------------------
 # validate_hard

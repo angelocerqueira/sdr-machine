@@ -155,12 +155,21 @@ def detect_placeholders(text: str) -> list[str]:
 # Fixers (deterministic, pure)
 # ---------------------------------------------------------------------------
 
-# Period followed by a lowercase letter (incl. accented) → likely missing space.
-# We deliberately do NOT touch periods followed by digits ("R$1.500") or
-# uppercase letters in unspaced contexts that look like URLs. The pattern below
-# matches BOTH lowercase (the common LLM bug) AND uppercase (e.g. ".Achei") —
-# decimals are safe because we only match alphabetic chars after the period.
-_PUNCT_GLUE_RE = re.compile(r"\.([a-záéíóúâêôãõçA-Záéíóúâêôãõç])")
+# Period followed by an alphabetic letter (lowercase or uppercase, incl. accented)
+# → likely missing space (the '.achei' / '.Achei' LLM bug).
+#
+# URL-preservation: the negative lookahead `(?![a-záéíóúâêôãõçA-Záéíóúâêôãõç]+/)`
+# ensures we DO NOT split inside domain-like fragments such as `wa.me/...`,
+# where the alphabetic chars after the period are followed by `/` (with no
+# intervening whitespace). This is critical because `wa.me/...` is the primary
+# URL emitted by the outreach generator.
+#
+# Decimals ("R$1.500") are already safe because we only match alphabetic chars
+# after the period — digits don't fire the rule.
+_PUNCT_GLUE_RE = re.compile(
+    r"\.(?=[a-záéíóúâêôãõçA-Záéíóúâêôãõç])"
+    r"(?![a-záéíóúâêôãõçA-Záéíóúâêôãõç]+/)"
+)
 
 # Lowercase letter (possibly accented) at the start of a sentence after period+space.
 # We look for ". x" or ".\nx" / multiple spaces, and uppercase the first char.
@@ -173,17 +182,20 @@ def fix_punctuation_spacing(text: str) -> str:
     letter (covers the '.achei' / '.Achei' bug LLMs produce when merging
     sentences without spacing).
 
-    Caveats / simplifications (documented):
+    Caveats / behaviour:
       - We only match alphabetic letters after the period; digits ("R$1.500")
         and other punctuation are left untouched, so decimals are safe.
-      - URLs are NOT specifically protected. In our prompts URLs are short and
-        appear either fenced (sent to wa.me?text=…) or at end-of-sentence, so
-        the risk of corrupting one inside running prose is very low. If this
-        becomes a problem, add a negative-lookbehind for `https?://[^\\s]*`.
+      - URLs of the `wa.me/...` shape (and any other `<letters>.<letters>/`
+        domain fragment) are preserved via a negative lookahead in
+        `_PUNCT_GLUE_RE`. This is required because `wa.me/...` is THE
+        primary URL emitted by the outreach module.
+      - Trade-off: a hypothetical sentence-internal `.End/` would also be
+        skipped (treated as URL-ish). Acceptable — real prose never produces
+        that pattern.
     """
     if not text:
         return text
-    return _PUNCT_GLUE_RE.sub(r". \1", text)
+    return _PUNCT_GLUE_RE.sub(". ", text)
 
 
 def _upper_first_alpha(s: str) -> str:
