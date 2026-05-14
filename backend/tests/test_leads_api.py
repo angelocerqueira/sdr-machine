@@ -217,3 +217,132 @@ class TestMarkMessageReviewed:
             f"/api/leads/{sample_lead.id}/messages/{msg.id}/mark-reviewed"
         )
         assert resp.status_code == 404
+
+
+class TestTelemetryEndpoints:
+    """PR5.2 — copy/click/rate telemetry on outreach messages."""
+
+    def _make_msg(self, db, lead_id, **overrides):
+        from app.models import OutreachMessage
+
+        defaults = dict(
+            lead_id=lead_id,
+            type="initial",
+            message_text="Mensagem de teste.",
+            whatsapp_link="https://wa.me/55...",
+            status="pronta",
+        )
+        defaults.update(overrides)
+        msg = OutreachMessage(**defaults)
+        db.add(msg)
+        db.commit()
+        db.refresh(msg)
+        return msg
+
+    def test_copy_increments_counter(self, client, db, sample_lead):
+        msg = self._make_msg(db, sample_lead.id)
+        last_body = None
+        for _ in range(3):
+            resp = client.post(
+                f"/api/leads/{sample_lead.id}/messages/{msg.id}/copy"
+            )
+            assert resp.status_code == 200
+            last_body = resp.json()
+
+        assert last_body["id"] == msg.id
+        assert last_body["copy_count"] == 3
+
+        db.refresh(msg)
+        assert msg.copy_count == 3
+
+    def test_click_increments_counter(self, client, db, sample_lead):
+        msg = self._make_msg(db, sample_lead.id)
+        last_body = None
+        for _ in range(3):
+            resp = client.post(
+                f"/api/leads/{sample_lead.id}/messages/{msg.id}/click"
+            )
+            assert resp.status_code == 200
+            last_body = resp.json()
+
+        assert last_body["id"] == msg.id
+        assert last_body["click_count"] == 3
+
+        db.refresh(msg)
+        assert msg.click_count == 3
+
+    def test_rate_sets_positive(self, client, db, sample_lead):
+        msg = self._make_msg(db, sample_lead.id)
+        resp = client.post(
+            f"/api/leads/{sample_lead.id}/messages/{msg.id}/rate",
+            json={"rating": 1},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["id"] == msg.id
+        assert body["manual_rating"] == 1
+
+        db.refresh(msg)
+        assert msg.manual_rating == 1
+
+    def test_rate_sets_negative(self, client, db, sample_lead):
+        msg = self._make_msg(db, sample_lead.id)
+        resp = client.post(
+            f"/api/leads/{sample_lead.id}/messages/{msg.id}/rate",
+            json={"rating": -1},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["manual_rating"] == -1
+
+        db.refresh(msg)
+        assert msg.manual_rating == -1
+
+    def test_rate_zero_clears(self, client, db, sample_lead):
+        msg = self._make_msg(db, sample_lead.id)
+        # First set a positive rating.
+        resp = client.post(
+            f"/api/leads/{sample_lead.id}/messages/{msg.id}/rate",
+            json={"rating": 1},
+        )
+        assert resp.status_code == 200
+        # Then clear it with 0.
+        resp = client.post(
+            f"/api/leads/{sample_lead.id}/messages/{msg.id}/rate",
+            json={"rating": 0},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["manual_rating"] is None
+
+        db.refresh(msg)
+        assert msg.manual_rating is None
+
+    def test_rate_invalid_value_422(self, client, db, sample_lead):
+        msg = self._make_msg(db, sample_lead.id)
+        resp = client.post(
+            f"/api/leads/{sample_lead.id}/messages/{msg.id}/rate",
+            json={"rating": 5},
+        )
+        assert resp.status_code == 422
+
+    def test_copy_404_on_unknown_message(self, client, sample_lead):
+        resp = client.post(
+            f"/api/leads/{sample_lead.id}/messages/99999/copy"
+        )
+        assert resp.status_code == 404
+
+    def test_copy_404_on_lead_mismatch(self, client, db, sample_lead):
+        from app.models import Lead
+
+        other = Lead(nome="Other", telefone="55555")
+        db.add(other)
+        db.commit()
+        db.refresh(other)
+
+        # Message belongs to `other`, but we hit it under sample_lead's path.
+        msg = self._make_msg(db, other.id)
+        resp = client.post(
+            f"/api/leads/{sample_lead.id}/messages/{msg.id}/copy"
+        )
+        assert resp.status_code == 404

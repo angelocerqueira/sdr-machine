@@ -2,6 +2,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
+from pydantic import BaseModel, Field
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -357,6 +358,68 @@ def mark_message_reviewed(lead_id: int, message_id: int, db: Session = Depends(g
     msg.needs_review = False
     db.commit()
     return {"id": msg.id, "needs_review": False}
+
+
+class RateMessageRequest(BaseModel):
+    rating: int = Field(ge=-1, le=1)
+
+
+@router.post("/{lead_id}/messages/{message_id}/copy")
+def track_message_copy(lead_id: int, message_id: int, db: Session = Depends(get_db)):
+    """PR5.2 — Increment copy_count for an outreach message.
+
+    Telemetry endpoint fired by the frontend whenever the SDR copies a message
+    to the clipboard. Used to feed quality signals back into prompt tuning.
+    """
+    msg = db.query(OutreachMessage).filter(
+        OutreachMessage.id == message_id,
+        OutreachMessage.lead_id == lead_id,
+    ).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    msg.copy_count = (msg.copy_count or 0) + 1
+    db.commit()
+    return {"id": msg.id, "copy_count": msg.copy_count}
+
+
+@router.post("/{lead_id}/messages/{message_id}/click")
+def track_message_click(lead_id: int, message_id: int, db: Session = Depends(get_db)):
+    """PR5.2 — Increment click_count for an outreach message.
+
+    Telemetry endpoint fired when the SDR clicks the WhatsApp deep-link.
+    """
+    msg = db.query(OutreachMessage).filter(
+        OutreachMessage.id == message_id,
+        OutreachMessage.lead_id == lead_id,
+    ).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    msg.click_count = (msg.click_count or 0) + 1
+    db.commit()
+    return {"id": msg.id, "click_count": msg.click_count}
+
+
+@router.post("/{lead_id}/messages/{message_id}/rate")
+def rate_message(
+    lead_id: int,
+    message_id: int,
+    body: RateMessageRequest,
+    db: Session = Depends(get_db),
+):
+    """PR5.2 — Set manual rating (-1, 0, +1) on an outreach message.
+
+    `rating == 0` clears the rating (sets `manual_rating = None`). Pydantic
+    rejects values outside [-1, 1] with HTTP 422.
+    """
+    msg = db.query(OutreachMessage).filter(
+        OutreachMessage.id == message_id,
+        OutreachMessage.lead_id == lead_id,
+    ).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    msg.manual_rating = None if body.rating == 0 else body.rating
+    db.commit()
+    return {"id": msg.id, "manual_rating": msg.manual_rating}
 
 
 @router.get("/{lead_id}/jobs", response_model=list[JobOut])
