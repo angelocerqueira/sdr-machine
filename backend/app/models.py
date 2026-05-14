@@ -3,7 +3,7 @@ import string
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, Column, Integer, String, Text, Numeric, Float,
+    Boolean, Column, Integer, SmallInteger, String, Text, Numeric, Float,
     DateTime, Date, ForeignKey, Index, JSON, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
@@ -81,6 +81,7 @@ class Lead(Base):
     parent_lead_id = Column(Integer, ForeignKey("leads.id", ondelete="SET NULL"), nullable=True)
     nome_limpo = Column(String(255), nullable=True)
     place_id = Column(String(100), nullable=True)
+    tratamento_formal = Column(String(10), nullable=True)
     lp_html = Column(Text)
     job_id = Column(Integer, ForeignKey("jobs.id", ondelete="SET NULL"))
     created_at = Column(DateTime, default=func.now())
@@ -103,6 +104,7 @@ class Lead(Base):
         Index("idx_leads_prioridade", "prioridade"),
         Index("idx_leads_parent_lead_id", "parent_lead_id"),
         Index("idx_leads_place_id", "place_id"),
+        Index("idx_leads_tratamento_formal", "tratamento_formal"),
     )
 
 
@@ -135,6 +137,15 @@ class OutreachMessage(Base):
     whatsapp_link = Column(Text)
     sent_at = Column(DateTime)
     response_received_at = Column(DateTime)
+    status = Column(String(20), nullable=False, server_default="pronta")
+    validation_errors = Column(JSON, nullable=True)
+    cta_usado = Column(String(40), nullable=True)
+    angulo_usado = Column(String(40), nullable=True)
+    needs_review = Column(Boolean, nullable=False, default=False, server_default="false")
+    copy_count = Column(Integer, nullable=False, default=0, server_default="0")
+    click_count = Column(Integer, nullable=False, default=0, server_default="0")
+    manual_rating = Column(SmallInteger, nullable=True)
+    variant_label = Column(String(8), nullable=True)
     created_at = Column(DateTime, default=func.now())
 
     lead = relationship("Lead", back_populates="outreach_messages")

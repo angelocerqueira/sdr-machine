@@ -993,6 +993,18 @@
   font-size: 11px;
   color: var(--text-muted);
 }
+.la-msg-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: var(--r-1, 4px);
+  margin-left: 8px;
+  letter-spacing: 0.02em;
+}
+.la-msg-badge-review {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
 .la-msg-actions {
   margin-left: auto;
   display: flex;
@@ -1032,7 +1044,41 @@
 }
 .la-msg-foot-sep { color: var(--text-subtle); }
 .la-msg-foot-send {
+  margin-left: 8px;
+}
+
+.la-msg-rate {
+  display: inline-flex;
+  gap: 4px;
   margin-left: auto;
+}
+.la-msg-rate-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.6;
+  font-size: 12px;
+  line-height: 1;
+  transition: opacity 0.15s, background 0.15s, color 0.15s, border-color 0.15s;
+}
+.la-msg-rate-btn:hover {
+  opacity: 1;
+  background: var(--surface);
+  border-color: var(--border);
+}
+.la-msg-rate-btn.is-active {
+  opacity: 1;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-color: var(--accent-line);
 }
 
 /* Composer card at top */

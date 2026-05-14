@@ -165,7 +165,7 @@ class EnrichmentOrchestrator:
         # Snapshot existing lead fields so we never overwrite them.
         _PROTECTED_KEYS = (
             "email", "cnpj", "razao_social", "porte", "cnae",
-            "data_fundacao", "website",
+            "data_fundacao", "website", "tratamento_formal",
         )
         existing_flat = {
             key: getattr(lead, key, None)

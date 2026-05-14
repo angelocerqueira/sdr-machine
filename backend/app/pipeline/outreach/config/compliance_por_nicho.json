@@ -1,0 +1,92 @@
+{
+  "advocacia": {
+    "regulacao": "OAB Provimento 205/2021",
+    "bloqueantes": [
+      "captação de clientes",
+      "captar clientes",
+      "trazer mais clientes",
+      "atrair clientes",
+      "publicidade ativa",
+      "mercantilização"
+    ],
+    "preferir": [
+      "visibilidade institucional",
+      "encontrabilidade",
+      "presença digital",
+      "autoridade técnica"
+    ]
+  },
+  "medicina": {
+    "regulacao": "CFM Resolução 1.974/2011",
+    "bloqueantes": [
+      "garantia de resultado",
+      "antes e depois",
+      "promoção",
+      "oferta",
+      "desconto",
+      "milagre",
+      "captação de pacientes",
+      "publicidade enganosa"
+    ],
+    "preferir": [
+      "atendimento estruturado",
+      "abordagem clínica",
+      "presença institucional"
+    ]
+  },
+  "odontologia": {
+    "regulacao": "CFO Código de Ética Odontológica",
+    "bloqueantes": [
+      "antes e depois",
+      "promoção",
+      "oferta",
+      "garantia de resultado",
+      "milagre",
+      "captação de pacientes",
+      "publicidade comparativa"
+    ],
+    "preferir": [
+      "abordagem clínica",
+      "atendimento estruturado",
+      "presença institucional"
+    ]
+  },
+  "contabilidade": {
+    "regulacao": "CFC Resolução 803/96 (Código de Ética)",
+    "bloqueantes": [
+      "garantia de economia tributária",
+      "redução fiscal garantida",
+      "promoção",
+      "oferta agressiva"
+    ],
+    "preferir": [
+      "consultoria estruturada",
+      "abordagem técnica",
+      "diferencial técnico"
+    ]
+  },
+  "arquitetura": {
+    "regulacao": "CAU Código de Ética e Disciplina",
+    "bloqueantes": [
+      "captação ativa",
+      "publicidade comparativa",
+      "promoção agressiva"
+    ],
+    "preferir": [
+      "presença autoral",
+      "portfólio institucional"
+    ]
+  },
+  "engenharia": {
+    "regulacao": "CREA Código de Ética Profissional",
+    "bloqueantes": [
+      "captação ativa",
+      "publicidade comparativa",
+      "promoção agressiva"
+    ],
+    "preferir": [
+      "presença técnica",
+      "portfólio institucional"
+    ]
+  }
+}

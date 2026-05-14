@@ -1,0 +1,61 @@
+{
+  "advocacia": {
+    "evitar": {
+      "captação de clientes": "presença institucional",
+      "captar clientes": "atrair clientes através de visibilidade",
+      "chatbot": "canal de atendimento automatizado",
+      "ping": "retomando o contato",
+      "tópico": "assunto",
+      "lead": "potencial cliente",
+      "conversão": "engajamento",
+      "funnel": "jornada do cliente"
+    }
+  },
+  "medicina": {
+    "evitar": {
+      "garantia": "expectativa baseada em",
+      "antes e depois": "evolução documentada",
+      "promoção": "atendimento estruturado",
+      "oferta": "abordagem dedicada",
+      "desconto": "condição diferenciada",
+      "milagre": "resultado clínico",
+      "resultado garantido": "abordagem comprovada",
+      "captação de pacientes": "presença institucional"
+    }
+  },
+  "odontologia": {
+    "evitar": {
+      "antes e depois": "evolução documentada",
+      "promoção": "atendimento estruturado",
+      "garantia de resultado": "expectativa baseada em casos",
+      "oferta": "abordagem dedicada",
+      "milagre": "resultado clínico",
+      "captação de pacientes": "presença institucional"
+    }
+  },
+  "contabilidade": {
+    "evitar": {
+      "ROI garantido": "retorno esperado",
+      "oferta": "condição comercial",
+      "promoção": "diferencial",
+      "milagre": "resultado",
+      "captar clientes": "atrair clientes via conteúdo"
+    }
+  },
+  "arquitetura": {
+    "evitar": {
+      "captação de clientes": "presença autoral",
+      "lead": "potencial cliente",
+      "promoção": "destaque",
+      "oferta": "condição"
+    }
+  },
+  "engenharia": {
+    "evitar": {
+      "captação de clientes": "visibilidade institucional",
+      "lead": "potencial cliente",
+      "promoção": "destaque",
+      "oferta": "condição"
+    }
+  }
+}

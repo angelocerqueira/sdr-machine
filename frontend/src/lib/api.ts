@@ -156,6 +156,34 @@ export const getLeadLpUrlByPublicId = (publicId: string) =>
 export const getLeadMessages = (leadId: number) =>
   fetchAPI<OutreachMessage[]>(`/api/leads/${leadId}/messages`);
 
+export async function markMessageReviewed(leadId: number, messageId: number) {
+  return fetchAPI<{ id: number; needs_review: boolean }>(
+    `/api/leads/${leadId}/messages/${messageId}/mark-reviewed`,
+    { method: "POST" }
+  );
+}
+
+export async function trackMessageCopy(leadId: number, messageId: number) {
+  return fetchAPI<{ id: number; copy_count: number }>(
+    `/api/leads/${leadId}/messages/${messageId}/copy`,
+    { method: "POST" }
+  );
+}
+
+export async function trackMessageClick(leadId: number, messageId: number) {
+  return fetchAPI<{ id: number; click_count: number }>(
+    `/api/leads/${leadId}/messages/${messageId}/click`,
+    { method: "POST" }
+  );
+}
+
+export async function rateMessage(leadId: number, messageId: number, rating: number) {
+  return fetchAPI<{ id: number; manual_rating: number | null }>(
+    `/api/leads/${leadId}/messages/${messageId}/rate`,
+    { method: "POST", body: JSON.stringify({ rating }) }
+  );
+}
+
 // Landing Pages
 export const getLeadLandingPages = (leadId: number) =>
   fetchAPI<LandingPage[]>(`/api/leads/${leadId}/landing-pages`);

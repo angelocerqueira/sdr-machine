@@ -24,6 +24,7 @@ class LeadBase(BaseModel):
     cnae: str | None = None
     data_fundacao: date | None = None
     socios: list = []
+    tratamento_formal: str | None = None
 
 
 class LeadOut(LeadBase):
@@ -206,7 +207,16 @@ class OutreachMessageOut(BaseModel):
     whatsapp_link: str | None = None
     sent_at: datetime | None = None
     response_received_at: datetime | None = None
+    status: str
+    validation_errors: list[str] | None = None
+    cta_usado: str | None = None
+    angulo_usado: str | None = None
+    needs_review: bool = False
     created_at: datetime
+    copy_count: int = 0
+    click_count: int = 0
+    manual_rating: int | None = None
+    variant_label: str | None = None
 
     model_config = {"from_attributes": True}
 

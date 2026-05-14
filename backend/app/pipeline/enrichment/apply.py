@@ -51,6 +51,9 @@ def apply_enrichment_result(lead, result: dict) -> None:
         lead.socios = result["socios"]
     if result.get("website") and not lead.website:
         lead.website = result["website"]
+    # Tratamento formal (PR3.2) — preserve manual override if already set.
+    if result.get("tratamento_formal") and not getattr(lead, "tratamento_formal", None):
+        lead.tratamento_formal = result["tratamento_formal"]
 
     for attr in (
         "perfil_lead",

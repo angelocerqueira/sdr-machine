@@ -9,12 +9,46 @@ import logging
 import re
 import time
 import urllib.parse
+from dataclasses import dataclass, field
 
 import requests
 
 from app.config import settings
+from app.pipeline.outreach.config import ctas_for, load_angulos
+from app.pipeline.outreach.validators import (
+    check_compliance,
+    check_glossario,
+    detect_ai_cliches,
+    fix_capitalization,
+    fix_punctuation_spacing,
+    is_review_negative,
+    validate_hard,
+    wrap_negative_review,
+)
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Generation result (PR2.3 — replaces the old tuple[str | None, list[str]])
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class GenerationResult:
+    """Result of a single LLM generation attempt.
+
+    ``text`` is None on any failure (infrastructure or validation). ``errors``
+    is empty on infrastructure failures, populated on validation failures.
+    ``angulo`` / ``cta`` are set only when generation succeeded (validation
+    included). For exhausted-pool scenarios where the LLM returned ``none``,
+    they stay None and are recorded as such on the OutreachMessage row.
+    """
+
+    text: str | None = None
+    errors: list[str] = field(default_factory=list)
+    angulo: str | None = None
+    cta: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -101,6 +135,12 @@ def _build_context(lead_data: dict, has_lp: bool, lp_url: str | None) -> dict:
         elif isinstance(first, str):
             review_destaque = first[:140]
 
+    # PR4.2 salvaguarda: detect negative reviews and swap for a neutral framing
+    # BEFORE the text enters the prompt. The LLM never sees the raw negative
+    # words, so it can't paraphrase them or quote them back into the message.
+    review_negative = is_review_negative(review_destaque)
+    review_destaque = wrap_negative_review(review_destaque)
+
     tech = lead_data.get("tech_stack") or []
     tech_names = []
     for t in tech[:5]:
@@ -114,7 +154,9 @@ def _build_context(lead_data: dict, has_lp: bool, lp_url: str | None) -> dict:
     return {
         "nome": lead_data.get("nome", ""),
         "nicho": lead_data.get("nicho") or lead_data.get("categoria") or "",
+        "nicho_canonico": lead_data.get("nicho_canonico"),  # PR4.2 — preferred key for per-nicho config lookups
         "cidade": lead_data.get("cidade", ""),
+        "tratamento_formal": lead_data.get("tratamento_formal"),  # populated in PR3
         "rating": lead_data.get("rating", ""),
         "reviews_count": lead_data.get("reviews_count", ""),
         "website": lead_data.get("website") or "",
@@ -125,7 +167,8 @@ def _build_context(lead_data: dict, has_lp: bool, lp_url: str | None) -> dict:
         "porte": lead_data.get("porte", ""),
         "idade_anos": _empresa_idade_anos(lead_data.get("data_fundacao")),
         "tech_stack_names": tech_names,
-        "review_destaque": review_destaque,
+        "review_destaque": review_destaque,        # wrapped if negative (PR4.2)
+        "review_negative": review_negative,         # PR4.2 — flag for prompt warning
         "opportunity_reasons": (lead_data.get("opportunity_reasons") or [])[:3],
         # Diagnóstico
         "qualificado": sa.get("qualificado", True),
@@ -175,7 +218,28 @@ Seu trabalho é ABRIR conversa, não fechar venda. O sucesso é uma resposta —
    - atracao → diferenciação, mostra ângulo único
    - consideracao → comparação, evidência
    - acao → CTA mais direto, mas ainda calibrado
-   - apologia → relacionamento, parceria"""
+   - apologia → relacionamento, parceria
+
+# TRATAMENTO PESSOAL
+- Use "você" (singular) quando o lead tem sócio identificável (campo `tratamento_formal` preenchido) — sinaliza relação pessoal.
+- Caso contrário, use "vocês" (plural) — fala com o negócio/time.
+- Mantenha consistência: não misture os dois dentro da mesma mensagem.
+
+# TEMPLATES HIPOTÉTICOS (use quando apresentar uma observação)
+Linguagem segura — use uma destas estruturas para qualquer observação não verificada:
+- "parece que..."
+- "pelo que vi do site..."
+- "posso estar enganado, mas..."
+- "pode ser proposital, mas notei..."
+
+Hipóteses tratadas como fatos = motivo nº 1 de queimar lead. Sempre enquadre como observação.
+
+# QUANTIFICAÇÃO PERMITIDA
+Só liberadas observações que usem APENAS dados reais já no contexto:
+- ✅ "vi {{reviews_count}} avaliações no Google" — OK (dado real)
+- ✅ "rating {{rating}}★" — OK (dado real)
+- ❌ "se 10% dos seus leads fechassem..." — PROIBIDO (cálculo hipotético, regex bloqueia)
+- ❌ "você poderia faturar X mais" — PROIBIDO (número inventado)"""
 
 
 def _hook_calibration_block(ctx: dict) -> str:
@@ -199,6 +263,59 @@ FONTES DE HOOK (em ordem de preferência, use a 1ª disponível):
 6. Reviews recentes mencionarem dor recorrente — se review_destaque indica isso
 
 NÃO invente alavanca. Se nada disso bate, use uma observação mais sóbria (rating + ausência de algo concreto)."""
+
+
+def _nicho_compliance_block(nicho: str) -> str:
+    """Compliance + glossário + cases injection per nicho. Empty string if nicho has no config."""
+    from app.pipeline.outreach.config import cases_for, compliance_for, glossario_for
+    comp = compliance_for(nicho)
+    gloss = glossario_for(nicho)
+    cases = cases_for(nicho)
+    if not (comp or gloss or cases):
+        return ""
+
+    parts = []
+
+    if comp:
+        regulacao = comp.get("regulacao", "")
+        bloqueantes = comp.get("bloqueantes", [])
+        preferir = comp.get("preferir", [])
+        parts.append(f"# COMPLIANCE DO NICHO ({regulacao})")
+        if bloqueantes:
+            parts.append("BLOQUEADOS — NUNCA escreva, mesmo parafraseando:")
+            parts.extend(f"- {t}" for t in bloqueantes)
+        if preferir:
+            parts.append("PREFERIR estes termos institucionais:")
+            parts.extend(f"- {t}" for t in preferir)
+
+    if gloss:
+        parts.append("\n# GLOSSÁRIO DO NICHO (estilo)")
+        parts.append("Substitua estes termos quando aparecerem na escrita:")
+        for evitar, substituto in gloss.items():
+            parts.append(f"- \"{evitar}\" → \"{substituto}\"")
+
+    if cases:
+        parts.append("\n# CASES DISPONÍVEIS (use APENAS se relevante e citável)")
+        parts.append("Pode mencionar como 'um caso similar' (anônimo). NÃO invente novos cases.")
+        for c in cases[:2]:  # cap at 2 to limit prompt bloat
+            parts.append(f"- {c.get('descricao', '')}")
+
+    return "\n".join(parts)
+
+
+def _initial_structure_block(ctx: dict) -> str:
+    """Estrutura mínima obrigatória para a mensagem INITIAL (apresentação + humildade)."""
+    tratamento = ctx.get("tratamento_formal")  # may be None for now (PR3 will populate)
+    saudacao_hint = f"{tratamento}," if tratamento else "Oi,"
+    return f"""# ESTRUTURA MÍNIMA DA INITIAL (obrigatória)
+1. Saudação cordial: comece com "{saudacao_hint}".
+2. Apresentação em 1 frase: nome do remetente + empresa + o que a empresa faz. Ex: "Aqui é o {settings.your_name}, da {settings.business_name} — ajudo {{nicho_label}} a melhorar presença digital".
+3. Razão do contato com humildade (não auditoria do negócio do lead).
+4. Observação como hipótese — use SEMPRE templates hipotéticos (ver bloco acima).
+5. Pergunta aberta ou CTA mole (use o CTA escolhido da taxonomia).
+6. Saída honrosa opcional: "se já estiverem resolvendo, desconsidera" / "espero não estar incomodando".
+
+NUNCA afirme que algo está errado no negócio do lead. Sempre apresente como observação/pergunta."""
 
 
 # ---------------------------------------------------------------------------
@@ -258,60 +375,9 @@ def _format_diag_block(ctx: dict) -> str:
 
 # Specs por tipo de mensagem da cadência
 # ---------------------------------------------------------------------------
-# Validação pós-LLM — rejeita texto curto, sem frase, ou com hallucination
+# A validação pós-LLM agora vive em ``app.pipeline.outreach.validators``
+# (PR1.2/PR1.4) — esta camada apenas orquestra ``validate_hard`` + fixers.
 # ---------------------------------------------------------------------------
-
-# Comprimento mínimo (chars) por tipo — abaixo disso é texto truncado/só assinatura
-_MIN_LENGTHS = {
-    "initial": 180,
-    "bump_d2": 25,
-    "insight_d5": 100,
-    "angle_d9": 90,
-    "breakup_d14": 80,
-}
-
-# Padrões proibidos — rapport falso, corporativês, hallucination de clima/dia
-_FORBIDDEN_PATTERNS = [
-    re.compile(r"\b(?:t[aá]|est[aá])\s+(?:gelado|quente|frio|chovendo|ensolarado|nublado)\b", re.IGNORECASE),
-    re.compile(r"\bclima\s+(?:d[ae]|aí|por\s+aí|em)\b", re.IGNORECASE),
-    re.compile(r"\btempo\s+(?:aí|por\s+aí|t[aá]\b)", re.IGNORECASE),
-    re.compile(r"\btudo\s+bem\s+com\s+(?:voc[eê]|tu)\b", re.IGNORECASE),
-    re.compile(r"\bvenho\s+por\s+meio", re.IGNORECASE),
-    re.compile(r"\bespero\s+que\s+esta", re.IGNORECASE),
-    re.compile(r"\bprezad[oa]\b", re.IGNORECASE),
-    re.compile(r"\b(?:sexta|segunda|terça|quarta|quinta|sábado|domingo)\s+(?:linda|chegou|abençoada|tranquila)\b", re.IGNORECASE),
-    re.compile(r"\bbom\s+dia.*sexta", re.IGNORECASE),
-    re.compile(r"\b\d+\s*[-–]\s*\d+\s+dias\b", re.IGNORECASE),  # ranges tipo "30-45 dias"
-    re.compile(r"\b(?:aumenta|aumentou|cresce|cresceu)\s+\d+\s*%", re.IGNORECASE),  # % inventado
-    re.compile(r"\b\d+\s*x\s+(?:mais|menos)\b", re.IGNORECASE),  # "3x mais leads"
-]
-
-
-def _validate_llm_output(text: str | None, msg_type: str) -> str | None:
-    """
-    Valida output do LLM. Retorna None se não passar (caller cai pro fallback).
-    """
-    if not text:
-        return None
-
-    text_clean = text.strip()
-    min_len = _MIN_LENGTHS.get(msg_type, 60)
-
-    if len(text_clean) < min_len:
-        logger.warning("LLM output too short (type=%s, len=%d, min=%d)", msg_type, len(text_clean), min_len)
-        return None
-
-    if not re.search(r"[.?!]", text_clean):
-        logger.warning("LLM output has no sentence punctuation (type=%s)", msg_type)
-        return None
-
-    for pat in _FORBIDDEN_PATTERNS:
-        m = pat.search(text_clean)
-        if m:
-            logger.warning("LLM output hit forbidden pattern (type=%s, match=%r)", msg_type, m.group(0))
-            return None
-
-    return text_clean
 
 
 CADENCE_SPECS = {
@@ -329,12 +395,13 @@ CADENCE_SPECS = {
     "bump_d2": {
         "day": "D+2",
         "max_lines": "2-3",
-        "purpose": "top of mind sem repetir pitch — mensagem ULTRA curta",
+        "purpose": "top of mind COM 1 elemento novo (pergunta ou fato), não ping puro",
         "extra_rules": [
-            "Permitido APENAS: 'só dando ping', 'chegou a ver?', 'tomei a liberdade de ressuscitar o tópico', 'top of mind', 'só pra não perder o tópico'.",
-            "PROIBIDO: comentar clima/tempo, dia da semana, fim de semana, 'tudo bem com você', qualquer assunto não-trabalho.",
-            "PROIBIDO: introduzir qualquer informação nova sobre o lead, sobre o produto, ou sobre o mercado.",
-            "Estrutura: 1 linha de bump + assinatura. Apenas isso.",
+            "Adicione UMA pergunta diferente da initial OU UM fato novo do diagnóstico que não foi citado antes.",
+            "Ainda assim ultra-curto (2-3 linhas).",
+            "PROIBIDO repetir ângulo ou CTA da initial.",
+            "PROIBIDO comentar clima, dia da semana, fim de semana, 'tudo bem com você'.",
+            "PROIBIDO ser pitch agressivo — é só um nudge com um detalhe novo.",
         ],
     },
     "insight_d5": {
@@ -359,6 +426,12 @@ CADENCE_SPECS = {
             "Apoie no `nivel_recomendado` ou nos `nivel_oportunidades` — esses são os vetores válidos pra pivot.",
             "Mensagem inteira tem que ter substância. NÃO termine com só assinatura.",
             "CTA leve.",
+            "ESTRUTURA OPCIONAL — frame PSPP (Problema → Solução → Prova → Próximo passo): "
+            "Problema = 1 dor concreta do diagnóstico já citado em mensagens anteriores; "
+            "Solução = 1 entrega curta (não pitch completo); "
+            "Prova = case similar OU métrica REAL do diagnóstico (sem inventar); "
+            "Próximo passo = pequeno (diagnóstico ou piloto, não preço).",
+            "PSPP é opcional. Se outro ângulo encaixa melhor, vá nele.",
         ],
     },
     "breakup_d14": {
@@ -374,20 +447,86 @@ CADENCE_SPECS = {
 }
 
 
-def _generate_ai_message(ctx: dict, msg_type: str) -> str | None:
+def _parse_llm_response(raw: str) -> tuple[str | None, str | None, str, bool, bool]:
+    """Parse the structured LLM response with ÂNGULO/CTA/TEXTO headers.
+
+    Returns ``(angulo, cta, text, angulo_header_present, cta_header_present)``.
+
+    - ``angulo`` / ``cta``: chosen key, or None if missing entirely OR explicitly "none".
+    - ``text``: message body. Falls back to ``raw`` if no ``TEXTO:`` header was found.
+    - ``*_header_present``: True if the header line was found in ``raw`` (used to
+      distinguish "missing" from "explicit none" for validation purposes).
+    """
+    angulo_match = re.search(r"^ÂNGULO:\s*(\S+)\s*$", raw, re.MULTILINE)
+    cta_match = re.search(r"^CTA:\s*(\S+)\s*$", raw, re.MULTILINE)
+    text_match = re.search(r"^TEXTO:\s*\n(.*)$", raw, re.MULTILINE | re.DOTALL)
+    angulo = angulo_match.group(1) if angulo_match else None
+    cta = cta_match.group(1) if cta_match else None
+    text = text_match.group(1).strip() if text_match else raw
+    if angulo == "none":
+        angulo = None
+    if cta == "none":
+        cta = None
+    return angulo, cta, text, angulo_match is not None, cta_match is not None
+
+
+def _generate_ai_message(
+    ctx: dict,
+    msg_type: str,
+    angulos_usados: set[str],
+    ctas_usados: set[str],
+) -> GenerationResult:
     """
     Gera mensagem via LLM seguindo persona B2B + cadência fria.
-    Retorna None se API falhar ou não houver chave configurada.
+
+    Returns
+    -------
+    GenerationResult
+        - ``text`` populated + ``errors=[]`` + ``angulo``/``cta`` set → success.
+        - ``text=None`` + ``errors=[]`` → infrastructure failure (no API key, no
+          choices, empty text, transport exception). Caller falls back silently.
+        - ``text=None`` + ``errors=[...]`` → LLM call succeeded but the response
+          failed taxonomy parsing or ``validate_hard``. Caller falls back AND
+          persists the errors with ``status="erro_geracao"``.
     """
     if not settings.llm_api_key:
-        return None
+        return GenerationResult()
 
     spec = CADENCE_SPECS.get(msg_type)
     if not spec:
-        return None
+        return GenerationResult()
 
     facts = _format_ctx_facts(ctx)
     diag = _format_diag_block(ctx)
+
+    # ------------------------------------------------------------------
+    # Taxonomy pools — what the LLM may choose for THIS toque
+    # ------------------------------------------------------------------
+    all_angulos = load_angulos()
+    available_angulos = {k: v for k, v in all_angulos.items() if k not in angulos_usados}
+    available_ctas = [c for c in ctas_for(msg_type) if c not in ctas_usados]
+
+    def _render_dict_lines(d: dict[str, str]) -> str:
+        return "\n".join(f"- {k}: {v}" for k, v in d.items()) if d else "(nenhum)"
+
+    def _render_set_lines(items) -> str:
+        items = list(items)
+        return "\n".join(f"- {k}" for k in items) if items else "(nenhum)"
+
+    def _render_list_lines(items: list[str]) -> str:
+        return "\n".join(f"- {k}" for k in items) if items else "(nenhum)"
+
+    taxonomy_block = (
+        "# TAXONOMIA (obrigatório retornar nos campos da resposta)\n"
+        "Ângulos disponíveis pra esse toque (escolha 1):\n"
+        f"{_render_dict_lines(available_angulos)}\n\n"
+        "Ângulos JÁ usados nesta cadência (NÃO repita):\n"
+        f"{_render_set_lines(angulos_usados)}\n\n"
+        "CTAs disponíveis pra esse toque (escolha 1):\n"
+        f"{_render_list_lines(available_ctas)}\n\n"
+        "CTAs JÁ usados (NÃO repita):\n"
+        f"{_render_set_lines(ctas_usados)}"
+    )
 
     if ctx["has_lp"]:
         lp_instruction = f"\n# LANDING PAGE DE DEMONSTRAÇÃO\nVocê pode (não obrigatório) referenciar a LP de demonstração: {ctx['lp_url']}\nUse APENAS se fizer sentido pro tipo de mensagem (initial/insight). Em bump/breakup, não use."
@@ -396,10 +535,18 @@ def _generate_ai_message(ctx: dict, msg_type: str) -> str | None:
 
     rules_block = "\n".join(f"- {r}" for r in spec["extra_rules"])
 
-    # Bloco de calibração de hook só aparece pra mensagem INITIAL
+    # Blocos específicos da INITIAL: calibração de hook + estrutura mínima
     hook_block = ""
     if msg_type == "initial":
-        hook_block = "\n\n" + _hook_calibration_block(ctx)
+        initial_extras = _hook_calibration_block(ctx) + "\n\n" + _initial_structure_block(ctx)
+        hook_block = "\n\n" + initial_extras
+
+    # PR4.3 — Per-nicho compliance + glossário + cases injection.
+    # Tries canonical key first, then raw nicho. Empty if neither has config.
+    nicho_canonico_key = (ctx.get("nicho_canonico") or "").strip().lower()
+    nicho_key = (ctx.get("nicho") or "").strip().lower()
+    compliance_block = _nicho_compliance_block(nicho_canonico_key) or _nicho_compliance_block(nicho_key)
+    compliance_section = f"\n\n{compliance_block}" if compliance_block else ""
 
     prompt = f"""{_persona_block()}
 
@@ -408,7 +555,7 @@ def _generate_ai_message(ctx: dict, msg_type: str) -> str | None:
 
 # DIAGNÓSTICO + ESTRATÉGIA (use o que existir, ignore o resto)
 {diag}
-{lp_instruction}{hook_block}
+{lp_instruction}{hook_block}{compliance_section}
 
 # TIPO DESTA MENSAGEM
 - Tipo: {msg_type} ({spec["day"]} da cadência de 5 toques)
@@ -416,6 +563,8 @@ def _generate_ai_message(ctx: dict, msg_type: str) -> str | None:
 - Tamanho máximo: {spec["max_lines"]} linhas
 - Regras específicas:
 {rules_block}
+
+{taxonomy_block}
 
 # REGRAS GLOBAIS DE FORMATO
 - Saída em português do Brasil natural, conversacional.
@@ -425,7 +574,15 @@ def _generate_ai_message(ctx: dict, msg_type: str) -> str | None:
 - Se você não tiver UM detalhe específico real do lead pra mencionar, use observação sóbria sobre nicho/cidade/rating em vez de inventar.
 - A mensagem precisa ter SUBSTÂNCIA — corpo + assinatura. NÃO entregue só assinatura ou frase truncada.
 
-Retorne APENAS o texto da mensagem pronta pra copiar e colar."""
+# FORMATO DE RESPOSTA (obrigatório)
+Retorne EXATAMENTE neste formato, sem variações:
+
+ÂNGULO: <chave do ângulo escolhido>
+CTA: <chave do CTA escolhido>
+TEXTO:
+<corpo da mensagem pronto pra copiar e colar>
+
+Nenhuma das chaves pode ser inventada — usar SOMENTE valores listados em "disponíveis". Se o pool estiver vazio (nenhum disponível), retorne a chave especial "none" — o sistema vai tratar."""
 
     headers = {
         "Content-Type": "application/json",
@@ -448,17 +605,102 @@ Retorne APENAS o texto da mensagem pronta pra copiar e colar."""
         data = resp.json()
         choices = data.get("choices") or []
         if not choices:
-            return None
-        text = (choices[0].get("message", {}).get("content", "") or "").strip()
-        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
-        if not text:
-            return None
-        if text.startswith('"') and text.endswith('"'):
-            text = text[1:-1]
-        return _validate_llm_output(text, msg_type)
+            return GenerationResult()
+        raw = (choices[0].get("message", {}).get("content", "") or "").strip()
+        raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+        if not raw:
+            return GenerationResult()
+        if raw.startswith('"') and raw.endswith('"'):
+            raw = raw[1:-1].strip()
+        if not raw:
+            return GenerationResult()
+
+        # ------------------------------------------------------------------
+        # Parse structured output (ÂNGULO / CTA / TEXTO)
+        # ------------------------------------------------------------------
+        angulo, cta, text, angulo_present, cta_present = _parse_llm_response(raw)
+
+        errors: list[str] = []
+
+        # Taxonomy validation — header presence
+        if not angulo_present:
+            errors.append("taxonomy:angulo_ausente")
+        if not cta_present:
+            errors.append("taxonomy:cta_ausente")
+
+        # Taxonomy validation — value membership
+        # Cap raw LLM values at 64 chars to keep error codes / logs bounded.
+        valid_cta_pool = ctas_for(msg_type)
+        angulo_safe = (angulo or "")[:64]
+        cta_safe = (cta or "")[:64]
+        if angulo is not None and angulo not in all_angulos:
+            errors.append(f"taxonomy:angulo_invalido:{angulo_safe}")
+        if cta is not None and cta not in valid_cta_pool:
+            errors.append(f"taxonomy:cta_invalido:{cta_safe}")
+
+        # Taxonomy validation — no repeat within cadence
+        if angulo is not None and angulo in angulos_usados:
+            errors.append(f"taxonomy:angulo_repetido:{angulo_safe}")
+        if cta is not None and cta in ctas_usados:
+            errors.append(f"taxonomy:cta_repetido:{cta_safe}")
+
+        # Body validation
+        body_result = validate_hard(text, msg_type)
+        if not body_result.passed:
+            errors.extend(body_result.errors)
+
+        # Soft validation — clichés. 2+ matches → reject; 0-1 → tolerable.
+        # Clichés are softer signals than placeholders, so this runs AFTER
+        # validate_hard. A single match logs but doesn't block.
+        cliche_hits = detect_ai_cliches(text)
+        if len(cliche_hits) >= 2:
+            errors.extend(cliche_hits)  # already prefixed with "cliche:"
+        elif cliche_hits:
+            logger.info("Outreach cliché tolerated (single match): %s", cliche_hits[0])
+
+        # ------------------------------------------------------------------
+        # PR4.2 — Glossário + Compliance per-nicho soft validation.
+        #
+        # Lookup key precedence: nicho_canonico (canonical) → nicho (raw).
+        # Whichever returns a non-empty result wins; if both miss, no-op.
+        #
+        # Thresholds:
+        #   - compliance: 1+ match blocks immediately (regulatory).
+        #   - glossário: 2+ matches block (style); 1 match is tolerated.
+        # ------------------------------------------------------------------
+        nicho_key = (ctx.get("nicho") or "").strip().lower()
+        nicho_canonico_key = (ctx.get("nicho_canonico") or "").strip().lower()
+
+        compliance_hits = (
+            check_compliance(text, nicho_canonico_key)
+            or check_compliance(text, nicho_key)
+        )
+        if compliance_hits:
+            errors.extend(compliance_hits)
+
+        glossario_hits = (
+            check_glossario(text, nicho_canonico_key)
+            or check_glossario(text, nicho_key)
+        )
+        if len(glossario_hits) >= 2:
+            errors.extend(glossario_hits)
+        elif glossario_hits:
+            logger.info("Glossary term tolerated (single match): %s", glossario_hits[0])
+
+        if errors:
+            logger.warning(
+                "LLM outreach failed validation (type=%s, errors=%s)",
+                msg_type,
+                errors,
+            )
+            return GenerationResult(text=None, errors=errors, angulo=None, cta=None)
+
+        # Apply deterministic fixers in order: spacing first, then capitalization.
+        text = fix_capitalization(fix_punctuation_spacing(text))
+        return GenerationResult(text=text, errors=[], angulo=angulo, cta=cta)
     except Exception as exc:
         logger.warning("LLM outreach failed (type=%s): %s", msg_type, exc)
-        return None
+        return GenerationResult()
 
 
 # ---------------------------------------------------------------------------
@@ -549,6 +791,8 @@ def generate_messages(public_id: str, lead_data: dict, has_lp: bool = False) -> 
     Usa LLM quando há diagnóstico + chave configurada; fallback determinístico caso contrário.
     has_lp: se True, mensagens podem referenciar a LP de demonstração.
     """
+    from app.pipeline.outreach.config import compliance_for
+
     lp = _lp_url(public_id) if has_lp else None
     ctx = _build_context(lead_data, has_lp=has_lp, lp_url=lp)
 
@@ -559,17 +803,42 @@ def generate_messages(public_id: str, lead_data: dict, has_lp: bool = False) -> 
     phone = _clean_phone(lead_data.get("telefone", ""))
     has_diag = bool(ctx["resumo_executivo"] or ctx["prioridades_top3"] or ctx["nivel_recomendado"])
 
+    # PR4.3 — needs_review notification flag. Computed once per cadence (nicho
+    # doesn't change between toques). All 5 messages inherit the same value:
+    # True if the lead's nicho has a compliance config (regulated nichos:
+    # advocacia, medicina, odontologia, contabilidade, arquitetura, engenharia).
+    # Tries canonical key first, then raw nicho. Frontend renders a badge.
+    nicho_canonico_key = (lead_data.get("nicho_canonico") or "").strip().lower()
+    nicho_key = (lead_data.get("nicho") or "").strip().lower()
+    needs_review = bool(compliance_for(nicho_canonico_key) or compliance_for(nicho_key))
+
     messages: list[dict] = []
     last_idx = len(CADENCE_ORDER) - 1
+    # Per-cadence taxonomy bookkeeping (isolated to this call — never leaks).
+    angulos_usados: set[str] = set()
+    ctas_usados: set[str] = set()
+
     for i, msg_type in enumerate(CADENCE_ORDER):
-        text: str | None = None
+        result = GenerationResult()
         if has_diag:
-            text = _generate_ai_message(ctx, msg_type)
+            result = _generate_ai_message(ctx, msg_type, angulos_usados, ctas_usados)
             # Rate limit só ENTRE chamadas LLM, não na última.
             if i < last_idx:
                 time.sleep(1)
-        if not text:
+
+        if result.text:
+            text = result.text
+            status = "pronta"
+            if result.angulo:
+                angulos_usados.add(result.angulo)
+            if result.cta:
+                ctas_usados.add(result.cta)
+        else:
             text = _fallback(ctx, msg_type)
+            # Erro só quando o LLM rodou e a validação reprovou; falhas de
+            # infraestrutura (sem chave, sem diag, sem choices) caem em
+            # fallback silencioso com status="pronta".
+            status = "erro_geracao" if result.errors else "pronta"
 
         whatsapp_link = ""
         if phone and text:
@@ -579,6 +848,11 @@ def generate_messages(public_id: str, lead_data: dict, has_lp: bool = False) -> 
             "type": msg_type,
             "message_text": text,
             "whatsapp_link": whatsapp_link,
+            "status": status,
+            "validation_errors": result.errors or None,
+            "angulo_usado": result.angulo,
+            "cta_usado": result.cta,
+            "needs_review": needs_review,
         })
 
     return messages

@@ -6,11 +6,23 @@ from app.pipeline.enrichment.providers.cnpj_enricher import CnpjProvider
 
 
 class FakeLead:
-    def __init__(self, cnpj=None, nome="Test", cidade=None, website=None):
+    def __init__(
+        self,
+        cnpj=None,
+        nome="Test",
+        cidade=None,
+        website=None,
+        nicho=None,
+        nicho_canonico=None,
+        tratamento_formal=None,
+    ):
         self.cnpj = cnpj
         self.nome = nome
         self.cidade = cidade
         self.website = website
+        self.nicho = nicho
+        self.nicho_canonico = nicho_canonico
+        self.tratamento_formal = tratamento_formal
 
 
 def test_can_run_with_cnpj():
@@ -112,6 +124,83 @@ def test_handles_timeout(mock_get):
     result = provider.run(FakeLead(cnpj="12345678000190"), EnrichmentContext())
     assert result.success is False
     assert any("error" in e.lower() or "timeout" in e.lower() for e in result.errors)
+
+
+# --- PR3.2: tratamento_formal inference inside CnpjProvider.run ---
+
+@patch("app.pipeline.enrichment.providers.cnpj_enricher.requests.get")
+def test_run_infers_tratamento_formal_for_regulated_single_socio(mock_get):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "razao_social": "ESCRITORIO ADV LTDA",
+        "qsa": [{"nome_socio": "Maria Silva"}],
+    }
+    mock_get.return_value = mock_resp
+
+    provider = CnpjProvider()
+    lead = FakeLead(cnpj="12345678000190", nicho="advocacia")
+    result = provider.run(lead, EnrichmentContext())
+
+    assert result.success is True
+    assert result.data.get("tratamento_formal") == "Dra"
+
+
+@patch("app.pipeline.enrichment.providers.cnpj_enricher.requests.get")
+def test_run_skips_tratamento_formal_for_non_regulated_nicho(mock_get):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "razao_social": "PADARIA DO CENTRO LTDA",
+        "qsa": [{"nome_socio": "Maria Silva"}],
+    }
+    mock_get.return_value = mock_resp
+
+    provider = CnpjProvider()
+    lead = FakeLead(cnpj="12345678000190", nicho="padaria")
+    result = provider.run(lead, EnrichmentContext())
+
+    assert result.success is True
+    assert "tratamento_formal" not in result.data
+
+
+@patch("app.pipeline.enrichment.providers.cnpj_enricher.requests.get")
+def test_run_skips_tratamento_formal_for_multiple_socios(mock_get):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "razao_social": "CLINICA ODONTO LTDA",
+        "qsa": [
+            {"nome_socio": "Maria Silva"},
+            {"nome_socio": "João Souza"},
+        ],
+    }
+    mock_get.return_value = mock_resp
+
+    provider = CnpjProvider()
+    lead = FakeLead(cnpj="12345678000190", nicho="odontologia")
+    result = provider.run(lead, EnrichmentContext())
+
+    assert result.success is True
+    assert "tratamento_formal" not in result.data
+
+
+@patch("app.pipeline.enrichment.providers.cnpj_enricher.requests.get")
+def test_run_uses_nicho_canonico_when_nicho_missing(mock_get):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "razao_social": "CONSULTORIO DR FULANO",
+        "qsa": [{"nome_socio": "Fernanda Souza"}],
+    }
+    mock_get.return_value = mock_resp
+
+    provider = CnpjProvider()
+    lead = FakeLead(cnpj="12345678000190", nicho=None, nicho_canonico="dentista")
+    result = provider.run(lead, EnrichmentContext())
+
+    assert result.success is True
+    assert result.data.get("tratamento_formal") == "Dra"
 
 
 @patch("app.pipeline.enrichment.providers.cnpj_enricher.requests.get")

@@ -151,6 +151,11 @@ export interface OutreachMessage {
   whatsapp_link: string | null;
   sent_at: string | null;
   response_received_at: string | null;
+  needs_review?: boolean;
+  copy_count?: number;
+  click_count?: number;
+  manual_rating?: number | null;
+  variant_label?: string | null;
   created_at: string;
 }
 
