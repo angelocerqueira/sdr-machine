@@ -13,6 +13,11 @@ import urllib.parse
 import requests
 
 from app.config import settings
+from app.pipeline.outreach.validators import (
+    fix_capitalization,
+    fix_punctuation_spacing,
+    validate_hard,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -258,60 +263,9 @@ def _format_diag_block(ctx: dict) -> str:
 
 # Specs por tipo de mensagem da cadência
 # ---------------------------------------------------------------------------
-# Validação pós-LLM — rejeita texto curto, sem frase, ou com hallucination
+# A validação pós-LLM agora vive em ``app.pipeline.outreach.validators``
+# (PR1.2/PR1.4) — esta camada apenas orquestra ``validate_hard`` + fixers.
 # ---------------------------------------------------------------------------
-
-# Comprimento mínimo (chars) por tipo — abaixo disso é texto truncado/só assinatura
-_MIN_LENGTHS = {
-    "initial": 180,
-    "bump_d2": 25,
-    "insight_d5": 100,
-    "angle_d9": 90,
-    "breakup_d14": 80,
-}
-
-# Padrões proibidos — rapport falso, corporativês, hallucination de clima/dia
-_FORBIDDEN_PATTERNS = [
-    re.compile(r"\b(?:t[aá]|est[aá])\s+(?:gelado|quente|frio|chovendo|ensolarado|nublado)\b", re.IGNORECASE),
-    re.compile(r"\bclima\s+(?:d[ae]|aí|por\s+aí|em)\b", re.IGNORECASE),
-    re.compile(r"\btempo\s+(?:aí|por\s+aí|t[aá]\b)", re.IGNORECASE),
-    re.compile(r"\btudo\s+bem\s+com\s+(?:voc[eê]|tu)\b", re.IGNORECASE),
-    re.compile(r"\bvenho\s+por\s+meio", re.IGNORECASE),
-    re.compile(r"\bespero\s+que\s+esta", re.IGNORECASE),
-    re.compile(r"\bprezad[oa]\b", re.IGNORECASE),
-    re.compile(r"\b(?:sexta|segunda|terça|quarta|quinta|sábado|domingo)\s+(?:linda|chegou|abençoada|tranquila)\b", re.IGNORECASE),
-    re.compile(r"\bbom\s+dia.*sexta", re.IGNORECASE),
-    re.compile(r"\b\d+\s*[-–]\s*\d+\s+dias\b", re.IGNORECASE),  # ranges tipo "30-45 dias"
-    re.compile(r"\b(?:aumenta|aumentou|cresce|cresceu)\s+\d+\s*%", re.IGNORECASE),  # % inventado
-    re.compile(r"\b\d+\s*x\s+(?:mais|menos)\b", re.IGNORECASE),  # "3x mais leads"
-]
-
-
-def _validate_llm_output(text: str | None, msg_type: str) -> str | None:
-    """
-    Valida output do LLM. Retorna None se não passar (caller cai pro fallback).
-    """
-    if not text:
-        return None
-
-    text_clean = text.strip()
-    min_len = _MIN_LENGTHS.get(msg_type, 60)
-
-    if len(text_clean) < min_len:
-        logger.warning("LLM output too short (type=%s, len=%d, min=%d)", msg_type, len(text_clean), min_len)
-        return None
-
-    if not re.search(r"[.?!]", text_clean):
-        logger.warning("LLM output has no sentence punctuation (type=%s)", msg_type)
-        return None
-
-    for pat in _FORBIDDEN_PATTERNS:
-        m = pat.search(text_clean)
-        if m:
-            logger.warning("LLM output hit forbidden pattern (type=%s, match=%r)", msg_type, m.group(0))
-            return None
-
-    return text_clean
 
 
 CADENCE_SPECS = {
@@ -374,17 +328,29 @@ CADENCE_SPECS = {
 }
 
 
-def _generate_ai_message(ctx: dict, msg_type: str) -> str | None:
+def _generate_ai_message(ctx: dict, msg_type: str) -> tuple[str | None, list[str]]:
     """
     Gera mensagem via LLM seguindo persona B2B + cadência fria.
-    Retorna None se API falhar ou não houver chave configurada.
+
+    Returns
+    -------
+    tuple[str | None, list[str]]
+        - ``(text, [])``  → LLM call succeeded AND validated. ``text`` is
+          already passed through the deterministic fixers.
+        - ``(None, [])``  → infrastructure failure (no API key, no choices,
+          empty text, transport error). Caller falls back silently —
+          these are NOT validation failures.
+        - ``(None, errors)`` → LLM call succeeded but ``validate_hard``
+          rejected the output. ``errors`` is the list of error codes from
+          the validator. Caller falls back and persists the errors on the
+          ``OutreachMessage`` row (``status="erro_geracao"``).
     """
     if not settings.llm_api_key:
-        return None
+        return None, []
 
     spec = CADENCE_SPECS.get(msg_type)
     if not spec:
-        return None
+        return None, []
 
     facts = _format_ctx_facts(ctx)
     diag = _format_diag_block(ctx)
@@ -448,17 +414,31 @@ Retorne APENAS o texto da mensagem pronta pra copiar e colar."""
         data = resp.json()
         choices = data.get("choices") or []
         if not choices:
-            return None
+            return None, []
         text = (choices[0].get("message", {}).get("content", "") or "").strip()
         text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
         if not text:
-            return None
+            return None, []
         if text.startswith('"') and text.endswith('"'):
-            text = text[1:-1]
-        return _validate_llm_output(text, msg_type)
+            text = text[1:-1].strip()
+        if not text:
+            return None, []
+
+        result = validate_hard(text, msg_type)
+        if not result.passed:
+            logger.warning(
+                "LLM outreach failed hard validation (type=%s, errors=%s)",
+                msg_type,
+                result.errors,
+            )
+            return None, result.errors
+
+        # Apply deterministic fixers in order: spacing first, then capitalization.
+        text = fix_capitalization(fix_punctuation_spacing(text))
+        return text, []
     except Exception as exc:
         logger.warning("LLM outreach failed (type=%s): %s", msg_type, exc)
-        return None
+        return None, []
 
 
 # ---------------------------------------------------------------------------
@@ -563,13 +543,20 @@ def generate_messages(public_id: str, lead_data: dict, has_lp: bool = False) -> 
     last_idx = len(CADENCE_ORDER) - 1
     for i, msg_type in enumerate(CADENCE_ORDER):
         text: str | None = None
+        validation_errors: list[str] = []
         if has_diag:
-            text = _generate_ai_message(ctx, msg_type)
+            text, validation_errors = _generate_ai_message(ctx, msg_type)
             # Rate limit só ENTRE chamadas LLM, não na última.
             if i < last_idx:
                 time.sleep(1)
         if not text:
             text = _fallback(ctx, msg_type)
+            # Erro só quando o LLM rodou e a validação reprovou; falhas de
+            # infraestrutura (sem chave, sem diag, sem choices) caem em
+            # fallback silencioso com status="pronta".
+            status = "erro_geracao" if validation_errors else "pronta"
+        else:
+            status = "pronta"
 
         whatsapp_link = ""
         if phone and text:
@@ -579,6 +566,8 @@ def generate_messages(public_id: str, lead_data: dict, has_lp: bool = False) -> 
             "type": msg_type,
             "message_text": text,
             "whatsapp_link": whatsapp_link,
+            "status": status,
+            "validation_errors": validation_errors or None,
         })
 
     return messages
