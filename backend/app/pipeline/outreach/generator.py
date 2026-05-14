@@ -144,6 +144,7 @@ def _build_context(lead_data: dict, has_lp: bool, lp_url: str | None) -> dict:
         "nome": lead_data.get("nome", ""),
         "nicho": lead_data.get("nicho") or lead_data.get("categoria") or "",
         "cidade": lead_data.get("cidade", ""),
+        "tratamento_formal": lead_data.get("tratamento_formal"),  # populated in PR3
         "rating": lead_data.get("rating", ""),
         "reviews_count": lead_data.get("reviews_count", ""),
         "website": lead_data.get("website") or "",
@@ -204,7 +205,28 @@ Seu trabalho é ABRIR conversa, não fechar venda. O sucesso é uma resposta —
    - atracao → diferenciação, mostra ângulo único
    - consideracao → comparação, evidência
    - acao → CTA mais direto, mas ainda calibrado
-   - apologia → relacionamento, parceria"""
+   - apologia → relacionamento, parceria
+
+# TRATAMENTO PESSOAL
+- Use "você" (singular) quando o lead tem sócio identificável (campo `tratamento_formal` preenchido) — sinaliza relação pessoal.
+- Caso contrário, use "vocês" (plural) — fala com o negócio/time.
+- Mantenha consistência: não misture os dois dentro da mesma mensagem.
+
+# TEMPLATES HIPOTÉTICOS (use quando apresentar uma observação)
+Linguagem segura — use uma destas estruturas para qualquer observação não verificada:
+- "parece que..."
+- "pelo que vi do site..."
+- "posso estar enganado, mas..."
+- "pode ser proposital, mas notei..."
+
+Hipóteses tratadas como fatos = motivo nº 1 de queimar lead. Sempre enquadre como observação.
+
+# QUANTIFICAÇÃO PERMITIDA
+Só liberadas observações que usem APENAS dados reais já no contexto:
+- ✅ "vi {{reviews_count}} avaliações no Google" — OK (dado real)
+- ✅ "rating {{rating}}★" — OK (dado real)
+- ❌ "se 10% dos seus leads fechassem..." — PROIBIDO (cálculo hipotético, regex bloqueia)
+- ❌ "você poderia faturar X mais" — PROIBIDO (número inventado)"""
 
 
 def _hook_calibration_block(ctx: dict) -> str:
@@ -228,6 +250,22 @@ FONTES DE HOOK (em ordem de preferência, use a 1ª disponível):
 6. Reviews recentes mencionarem dor recorrente — se review_destaque indica isso
 
 NÃO invente alavanca. Se nada disso bate, use uma observação mais sóbria (rating + ausência de algo concreto)."""
+
+
+def _initial_structure_block(ctx: dict) -> str:
+    """Estrutura mínima obrigatória para a mensagem INITIAL (apresentação + humildade)."""
+    tratamento = ctx.get("tratamento_formal")  # may be None for now (PR3 will populate)
+    saudacao_hint = f"{tratamento}." if tratamento else "Oi"
+    tratamento_display = tratamento or '"Oi"'
+    return f"""# ESTRUTURA MÍNIMA DA INITIAL (obrigatória)
+1. Saudação cordial: comece com "{saudacao_hint}" (se houver tratamento formal, use {tratamento_display}).
+2. Apresentação em 1 frase: nome do remetente + empresa + o que a empresa faz. Ex: "Aqui é o {settings.your_name}, da {settings.business_name} — ajudo {{nicho_label}} a melhorar presença digital".
+3. Razão do contato com humildade (não auditoria do negócio do lead).
+4. Observação como hipótese — use SEMPRE templates hipotéticos (ver bloco acima).
+5. Pergunta aberta ou CTA mole (use o CTA escolhido da taxonomia).
+6. Saída honrosa opcional: "se já estiverem resolvendo, desconsidera" / "espero não estar incomodando".
+
+NUNCA afirme que algo está errado no negócio do lead. Sempre apresente como observação/pergunta."""
 
 
 # ---------------------------------------------------------------------------
@@ -307,12 +345,13 @@ CADENCE_SPECS = {
     "bump_d2": {
         "day": "D+2",
         "max_lines": "2-3",
-        "purpose": "top of mind sem repetir pitch — mensagem ULTRA curta",
+        "purpose": "top of mind COM 1 elemento novo (pergunta ou fato), não ping puro",
         "extra_rules": [
-            "Permitido APENAS: 'só dando ping', 'chegou a ver?', 'tomei a liberdade de ressuscitar o tópico', 'top of mind', 'só pra não perder o tópico'.",
-            "PROIBIDO: comentar clima/tempo, dia da semana, fim de semana, 'tudo bem com você', qualquer assunto não-trabalho.",
-            "PROIBIDO: introduzir qualquer informação nova sobre o lead, sobre o produto, ou sobre o mercado.",
-            "Estrutura: 1 linha de bump + assinatura. Apenas isso.",
+            "Adicione UMA pergunta diferente da initial OU UM fato novo do diagnóstico que não foi citado antes.",
+            "Ainda assim ultra-curto (2-3 linhas).",
+            "PROIBIDO repetir ângulo ou CTA da initial.",
+            "PROIBIDO comentar clima, dia da semana, fim de semana, 'tudo bem com você'.",
+            "PROIBIDO ser pitch agressivo — é só um nudge com um detalhe novo.",
         ],
     },
     "insight_d5": {
@@ -440,10 +479,11 @@ def _generate_ai_message(
 
     rules_block = "\n".join(f"- {r}" for r in spec["extra_rules"])
 
-    # Bloco de calibração de hook só aparece pra mensagem INITIAL
+    # Blocos específicos da INITIAL: calibração de hook + estrutura mínima
     hook_block = ""
     if msg_type == "initial":
-        hook_block = "\n\n" + _hook_calibration_block(ctx)
+        initial_extras = _hook_calibration_block(ctx) + "\n\n" + _initial_structure_block(ctx)
+        hook_block = "\n\n" + initial_extras
 
     prompt = f"""{_persona_block()}
 

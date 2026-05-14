@@ -116,6 +116,7 @@ _FORBIDDEN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         "multiplicador_inventado",
         re.compile(r"\b\d+\s*x\s+(?:mais|menos)\b", re.IGNORECASE),
     ),
+    ("calculo_hipotetico", re.compile(r"\bse\s+\d+\s*%", re.IGNORECASE)),
 ]
 
 

@@ -240,3 +240,16 @@ class TestValidateHard:
         assert hasattr(result, "passed")
         assert hasattr(result, "errors")
         assert isinstance(result.errors, list)
+
+    def test_calculo_hipotetico_blocks_hypothetical_percentage(self):
+        text = "Oi! Olhei o site da Odonto Sorriso. Se 10% dos seus leads do Google fechassem, seriam 5 clientes a mais por mês. " * 3  # pad to min_length
+        result = validate_hard(text, "initial")
+        assert not result.passed
+        assert any(err == "forbidden:calculo_hipotetico" for err in result.errors)
+
+    def test_calculo_hipotetico_does_not_block_real_data(self):
+        # "123 avaliações" doesn't match \bse\s+\d+\s*%
+        text = "Oi! Vi a Odonto Sorriso no Google com 123 avaliações e rating 4.7 estrelas — presença local clara. " * 4
+        result = validate_hard(text, "initial")
+        # might fail OTHER hard validators, but NOT calculo_hipotetico
+        assert not any(err == "forbidden:calculo_hipotetico" for err in result.errors)
