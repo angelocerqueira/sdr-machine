@@ -3,7 +3,7 @@ import string
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, Column, Integer, String, Text, Numeric, Float,
+    Boolean, Column, Integer, SmallInteger, String, Text, Numeric, Float,
     DateTime, Date, ForeignKey, Index, JSON, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
@@ -142,6 +142,10 @@ class OutreachMessage(Base):
     cta_usado = Column(String(40), nullable=True)
     angulo_usado = Column(String(40), nullable=True)
     needs_review = Column(Boolean, nullable=False, default=False, server_default="false")
+    copy_count = Column(Integer, nullable=False, default=0, server_default="0")
+    click_count = Column(Integer, nullable=False, default=0, server_default="0")
+    manual_rating = Column(SmallInteger, nullable=True)
+    variant_label = Column(String(8), nullable=True)
     created_at = Column(DateTime, default=func.now())
 
     lead = relationship("Lead", back_populates="outreach_messages")

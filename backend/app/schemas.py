@@ -213,6 +213,10 @@ class OutreachMessageOut(BaseModel):
     angulo_usado: str | None = None
     needs_review: bool = False
     created_at: datetime
+    copy_count: int = 0
+    click_count: int = 0
+    manual_rating: int | None = None
+    variant_label: str | None = None
 
     model_config = {"from_attributes": True}
 
