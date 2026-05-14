@@ -3,12 +3,64 @@ Módulo 1: Scraping de negócios locais.
 Fontes: Google Maps (Apify) e CNPJ (MinhaReceita).
 """
 
+import logging
 import re
+from dataclasses import dataclass, field
+from typing import Any
+
 import requests
 
 from app.config import settings
 from app.integrations.resolver import provider_config_for
 from app.pipeline.cnpj_scraper import scrape_cnpj
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SourceResult:
+    """Telemetry from a single (source, niche, city) scrape pass."""
+    source: str
+    nicho: str
+    cidade: str
+    returned: int = 0
+    rating_filtered: int = 0
+    no_name_filtered: int = 0
+    inactive_filtered: int = 0
+    accepted: int = 0
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        d = {
+            "source": self.source,
+            "nicho": self.nicho,
+            "cidade": self.cidade,
+            "returned": self.returned,
+            "accepted": self.accepted,
+        }
+        if self.rating_filtered:
+            d["rating_filtered"] = self.rating_filtered
+        if self.no_name_filtered:
+            d["no_name_filtered"] = self.no_name_filtered
+        if self.inactive_filtered:
+            d["inactive_filtered"] = self.inactive_filtered
+        if self.error:
+            d["error"] = self.error
+        return d
+
+
+@dataclass
+class ScrapeReport:
+    """Aggregate telemetry across the whole scrape job."""
+    leads: list[dict] = field(default_factory=list)
+    per_search: list[SourceResult] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    apify_returned: int = 0
+    rating_filtered: int = 0
+    no_name_filtered: int = 0
+    inactive_filtered: int = 0
+    dedup_filtered: int = 0
+    min_rating_used: float = 0.0
 
 
 def extract_place_id(url: str | None) -> str | None:
@@ -23,19 +75,13 @@ def extract_place_id(url: str | None) -> str | None:
 
 
 def extract_has_instagram(payload: dict | None) -> bool:
-    """Check if Apify Google Maps payload indicates Instagram presence.
-
-    Checks common fields: 'instagramUrl', 'socialLinks' entries, and
-    description/website text for instagram.com references. Never raises.
-    """
+    """Check if Apify Google Maps payload indicates Instagram presence."""
     if not payload or not isinstance(payload, dict):
         return False
 
-    # Direct field from some Apify actors
     if payload.get("instagramUrl"):
         return True
 
-    # socialLinks array (compass actor format)
     social = payload.get("socialLinks") or []
     if isinstance(social, list):
         for entry in social:
@@ -46,7 +92,6 @@ def extract_has_instagram(payload: dict | None) -> bool:
             if "instagram" in service or "instagram.com" in url:
                 return True
 
-    # Inline instagram link in website or description fields
     for key in ("website", "websiteUri", "url", "description"):
         v = payload.get(key)
         if isinstance(v, str) and "instagram.com" in v.lower():
@@ -55,18 +100,23 @@ def extract_has_instagram(payload: dict | None) -> bool:
     return False
 
 
-def scrape_google_maps(niche: str, city: str, max_results: int | None = None) -> list[dict]:
+def scrape_google_maps(niche: str, city: str, max_results: int | None = None) -> SourceResult:
     """
     Scrape Google Maps via Apify Actor 'compass/crawler-google-places'.
-    Retorna lista de negócios com nome, telefone, site, rating, etc.
+    Returns SourceResult with the leads and per-search telemetry.
     """
     if max_results is None:
         max_results = settings.max_results_per_search
 
+    result = SourceResult(source="google_maps", nicho=niche, cidade=city)
+    leads: list[dict] = []
+
     _apify_cfg = provider_config_for("apify") or {}
     _apify_token = _apify_cfg.get("token", "")
     if not _apify_token:
-        return []
+        result.error = "apify_token_missing"
+        logger.warning("scrape.google_maps.no_token niche=%r city=%r", niche, city)
+        return result
 
     url = "https://api.apify.com/v2/acts/compass~crawler-google-places/run-sync-get-dataset-items"
 
@@ -79,25 +129,24 @@ def scrape_google_maps(niche: str, city: str, max_results: int | None = None) ->
         "maxReviews": 3,
         "onlyDataFromSearchPage": False,
     }
+    headers = {"Content-Type": "application/json"}
+    params = {"token": _apify_token, "timeout": 120, "memory": 1024}
 
-    headers = {
-        "Content-Type": "application/json",
-    }
+    try:
+        resp = requests.post(url, json=payload, headers=headers, params=params, timeout=180)
+        resp.raise_for_status()
+        items = resp.json() or []
+    except Exception as exc:
+        result.error = str(exc)[:200]
+        logger.exception("scrape.google_maps.fail niche=%r city=%r", niche, city)
+        return result
 
-    params = {
-        "token": _apify_token,
-        "timeout": 120,
-        "memory": 1024,
-    }
+    result.returned = len(items)
 
-    resp = requests.post(url, json=payload, headers=headers, params=params, timeout=180)
-    resp.raise_for_status()
-    results = resp.json()
-
-    leads = []
-    for item in results:
+    for item in items:
         rating = item.get("totalScore", 0) or 0
         if rating < settings.min_rating:
+            result.rating_filtered += 1
             continue
 
         google_maps_url = item.get("url", "")
@@ -121,10 +170,23 @@ def scrape_google_maps(niche: str, city: str, max_results: int | None = None) ->
             "has_instagram": extract_has_instagram(item),
         }
 
-        if lead["nome"]:
-            leads.append(lead)
+        if not lead["nome"]:
+            result.no_name_filtered += 1
+            continue
 
-    return leads
+        leads.append(lead)
+        result.accepted += 1
+
+    logger.info(
+        "scrape.google_maps.done niche=%r city=%r returned=%d accepted=%d "
+        "rating_filtered=%d no_name=%d min_rating=%s",
+        niche, city, result.returned, result.accepted,
+        result.rating_filtered, result.no_name_filtered, settings.min_rating,
+    )
+
+    # Attach leads via attribute (not part of dataclass to_dict telemetry)
+    result._leads = leads  # type: ignore[attr-defined]
+    return result
 
 
 def scrape_all(
@@ -132,21 +194,19 @@ def scrape_all(
     cidades: list[str],
     max_results: int | None = None,
     fontes: list[str] | None = None,
-) -> tuple[list[dict], list[str]]:
+) -> ScrapeReport:
     """Scrape all enabled sources for every niche×city combination.
 
-    fontes: subset of ["google_maps", "cnpj"]. Defaults to both.
-    Each source failure is isolated — logged to errors, never crashes the job.
-    Leads are deduplicated by phone number (digits) or CNPJ across sources.
-    Returns (leads, errors).
+    Returns a ScrapeReport with leads, per-search telemetry and aggregated counters.
+    Each source failure is isolated — captured per-search, never crashes the job.
+    Leads are deduplicated by place_id, phone, CNPJ or name across sources.
     """
     if max_results is None:
         max_results = settings.max_results_per_search
     if fontes is None:
         fontes = ["google_maps", "cnpj"]
 
-    all_leads: list[dict] = []
-    errors: list[str] = []
+    report = ScrapeReport(min_rating_used=settings.min_rating)
     seen: set[str] = set()
 
     def _dedup_key(lead: dict) -> str | None:
@@ -157,35 +217,62 @@ def scrape_all(
         cnpj = re.sub(r"\D", "", lead.get("cnpj") or "")
         return tel or cnpj or None
 
-    def _add_lead(lead: dict) -> None:
+    def _add_lead(lead: dict) -> bool:
         key = _dedup_key(lead)
         if key:
             if key in seen:
-                return
+                return False
             seen.add(key)
         else:
-            # No phone or CNPJ — dedup by name to avoid exact duplicates
             name_key = (lead.get("nome") or "").strip().lower()
             if name_key in seen:
-                return
+                return False
             if name_key:
                 seen.add(name_key)
-        all_leads.append(lead)
+        report.leads.append(lead)
+        return True
 
     for niche in nichos:
         for city in cidades:
             if "google_maps" in fontes:
-                try:
-                    for lead in scrape_google_maps(niche, city, max_results):
-                        _add_lead(lead)
-                except Exception as exc:
-                    errors.append(f"[google_maps] {niche} em {city}: {str(exc)[:200]}")
+                gm_result = scrape_google_maps(niche, city, max_results)
+                gm_leads = getattr(gm_result, "_leads", [])
+                report.apify_returned += gm_result.returned
+                report.rating_filtered += gm_result.rating_filtered
+                report.no_name_filtered += gm_result.no_name_filtered
+                if gm_result.error:
+                    report.errors.append(
+                        f"[google_maps] {niche} em {city}: {gm_result.error}"
+                    )
+                for lead in gm_leads:
+                    if not _add_lead(lead):
+                        report.dedup_filtered += 1
+                report.per_search.append(gm_result)
 
             if "cnpj" in fontes:
+                cnpj_result = SourceResult(source="cnpj", nicho=niche, cidade=city)
                 try:
-                    for lead in scrape_cnpj(niche, city, max_results):
-                        _add_lead(lead)
+                    cnpj_leads = scrape_cnpj(niche, city, max_results)
+                    cnpj_result.returned = len(cnpj_leads)
+                    cnpj_result.accepted = cnpj_result.returned
+                    for lead in cnpj_leads:
+                        if not _add_lead(lead):
+                            report.dedup_filtered += 1
+                    logger.info(
+                        "scrape.cnpj.done niche=%r city=%r returned=%d",
+                        niche, city, cnpj_result.returned,
+                    )
                 except Exception as exc:
-                    errors.append(f"[cnpj] {niche} em {city}: {str(exc)[:200]}")
+                    cnpj_result.error = str(exc)[:200]
+                    report.errors.append(f"[cnpj] {niche} em {city}: {str(exc)[:200]}")
+                    logger.exception("scrape.cnpj.fail niche=%r city=%r", niche, city)
+                report.per_search.append(cnpj_result)
 
-    return all_leads, errors
+    logger.info(
+        "scrape.summary nichos=%d cidades=%d apify_returned=%d "
+        "rating_filtered=%d dedup=%d accepted=%d errors=%d",
+        len(nichos), len(cidades), report.apify_returned,
+        report.rating_filtered, report.dedup_filtered, len(report.leads),
+        len(report.errors),
+    )
+    return report

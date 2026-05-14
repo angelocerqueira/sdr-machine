@@ -1,5 +1,5 @@
 from unittest.mock import patch
-from app.pipeline.scraper import scrape_all
+from app.pipeline.scraper import scrape_all, SourceResult
 
 
 _GM_LEAD = {
@@ -17,65 +17,90 @@ _CNPJ_LEAD = {
 _CNPJ_LEAD_SAME_PHONE = {**_CNPJ_LEAD, "telefone": "4933334444", "cnpj": "00000000000200"}
 
 
+def _gm_result(leads: list[dict]) -> SourceResult:
+    """Build a SourceResult that mimics scrape_google_maps returning these leads."""
+    r = SourceResult(source="google_maps", nicho="dentista", cidade="Chapecó SC")
+    r.returned = len(leads)
+    r.accepted = len(leads)
+    r._leads = leads  # type: ignore[attr-defined]
+    return r
+
+
 def test_both_sources_combined():
-    with patch("app.pipeline.scraper.scrape_google_maps", return_value=[_GM_LEAD]):
+    with patch("app.pipeline.scraper.scrape_google_maps", return_value=_gm_result([_GM_LEAD])):
         with patch("app.pipeline.scraper.scrape_cnpj", return_value=[_CNPJ_LEAD]):
-            leads, errors = scrape_all(["dentista"], ["Chapecó SC"], fontes=["google_maps", "cnpj"])
-    assert len(leads) == 2
-    assert errors == []
+            report = scrape_all(["dentista"], ["Chapecó SC"], fontes=["google_maps", "cnpj"])
+    assert len(report.leads) == 2
+    assert report.errors == []
 
 
 def test_dedup_by_phone_across_sources():
     """Same phone in Google Maps and CNPJ — only one lead created."""
-    with patch("app.pipeline.scraper.scrape_google_maps", return_value=[_GM_LEAD]):
+    with patch("app.pipeline.scraper.scrape_google_maps", return_value=_gm_result([_GM_LEAD])):
         with patch("app.pipeline.scraper.scrape_cnpj", return_value=[_CNPJ_LEAD_SAME_PHONE]):
-            leads, errors = scrape_all(["dentista"], ["Chapecó SC"], fontes=["google_maps", "cnpj"])
-    assert len(leads) == 1
+            report = scrape_all(["dentista"], ["Chapecó SC"], fontes=["google_maps", "cnpj"])
+    assert len(report.leads) == 1
+    assert report.dedup_filtered == 1
 
 
 def test_google_maps_failure_does_not_fail_job():
-    with patch("app.pipeline.scraper.scrape_google_maps", side_effect=Exception("Apify down")):
+    failed = SourceResult(source="google_maps", nicho="dentista", cidade="Chapecó SC", error="Apify down")
+    with patch("app.pipeline.scraper.scrape_google_maps", return_value=failed):
         with patch("app.pipeline.scraper.scrape_cnpj", return_value=[_CNPJ_LEAD]):
-            leads, errors = scrape_all(["dentista"], ["Chapecó SC"], fontes=["google_maps", "cnpj"])
-    assert len(leads) == 1
-    assert any("google_maps" in e for e in errors)
+            report = scrape_all(["dentista"], ["Chapecó SC"], fontes=["google_maps", "cnpj"])
+    assert len(report.leads) == 1
+    assert any("google_maps" in e for e in report.errors)
 
 
 def test_cnpj_failure_does_not_fail_job():
-    with patch("app.pipeline.scraper.scrape_google_maps", return_value=[_GM_LEAD]):
+    with patch("app.pipeline.scraper.scrape_google_maps", return_value=_gm_result([_GM_LEAD])):
         with patch("app.pipeline.scraper.scrape_cnpj", side_effect=Exception("timeout")):
-            leads, errors = scrape_all(["dentista"], ["Chapecó SC"], fontes=["google_maps", "cnpj"])
-    assert len(leads) == 1
-    assert any("cnpj" in e for e in errors)
+            report = scrape_all(["dentista"], ["Chapecó SC"], fontes=["google_maps", "cnpj"])
+    assert len(report.leads) == 1
+    assert any("cnpj" in e for e in report.errors)
 
 
 def test_both_sources_fail_returns_empty_with_errors():
-    with patch("app.pipeline.scraper.scrape_google_maps", side_effect=Exception("Apify down")):
+    failed = SourceResult(source="google_maps", nicho="dentista", cidade="Chapecó SC", error="Apify down")
+    with patch("app.pipeline.scraper.scrape_google_maps", return_value=failed):
         with patch("app.pipeline.scraper.scrape_cnpj", side_effect=Exception("timeout")):
-            leads, errors = scrape_all(["dentista"], ["Chapecó SC"], fontes=["google_maps", "cnpj"])
-    assert leads == []
-    assert len(errors) == 2
+            report = scrape_all(["dentista"], ["Chapecó SC"], fontes=["google_maps", "cnpj"])
+    assert report.leads == []
+    assert len(report.errors) == 2
 
 
 def test_only_google_maps_fonte():
-    with patch("app.pipeline.scraper.scrape_google_maps", return_value=[_GM_LEAD]) as mock_gm:
+    with patch("app.pipeline.scraper.scrape_google_maps", return_value=_gm_result([_GM_LEAD])) as mock_gm:
         with patch("app.pipeline.scraper.scrape_cnpj", return_value=[_CNPJ_LEAD]) as mock_cnpj:
-            leads, _ = scrape_all(["dentista"], ["Chapecó SC"], fontes=["google_maps"])
+            report = scrape_all(["dentista"], ["Chapecó SC"], fontes=["google_maps"])
     mock_gm.assert_called_once()
     mock_cnpj.assert_not_called()
-    assert len(leads) == 1
+    assert len(report.leads) == 1
 
 
 def test_only_cnpj_fonte():
-    with patch("app.pipeline.scraper.scrape_google_maps", return_value=[_GM_LEAD]) as mock_gm:
+    with patch("app.pipeline.scraper.scrape_google_maps", return_value=_gm_result([_GM_LEAD])) as mock_gm:
         with patch("app.pipeline.scraper.scrape_cnpj", return_value=[_CNPJ_LEAD]) as mock_cnpj:
-            leads, _ = scrape_all(["dentista"], ["Chapecó SC"], fontes=["cnpj"])
+            scrape_all(["dentista"], ["Chapecó SC"], fontes=["cnpj"])
     mock_gm.assert_not_called()
     mock_cnpj.assert_called_once()
 
 
 def test_default_fontes_uses_both():
-    with patch("app.pipeline.scraper.scrape_google_maps", return_value=[_GM_LEAD]):
+    with patch("app.pipeline.scraper.scrape_google_maps", return_value=_gm_result([_GM_LEAD])):
         with patch("app.pipeline.scraper.scrape_cnpj", return_value=[]):
-            leads, _ = scrape_all(["dentista"], ["Chapecó SC"])  # no fontes param
-    assert len(leads) == 1
+            report = scrape_all(["dentista"], ["Chapecó SC"])  # no fontes param
+    assert len(report.leads) == 1
+
+
+def test_telemetry_aggregates_across_searches():
+    gm = _gm_result([_GM_LEAD])
+    gm.rating_filtered = 3
+    gm.returned = 4  # 3 filtered + 1 accepted
+    with patch("app.pipeline.scraper.scrape_google_maps", return_value=gm):
+        with patch("app.pipeline.scraper.scrape_cnpj", return_value=[]):
+            report = scrape_all(["dentista"], ["Chapecó SC"], fontes=["google_maps"])
+    assert report.apify_returned == 4
+    assert report.rating_filtered == 3
+    assert len(report.per_search) == 1
+    assert report.per_search[0].source == "google_maps"

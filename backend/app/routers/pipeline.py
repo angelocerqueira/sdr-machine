@@ -70,10 +70,13 @@ def _run_scrape(job_id: int, params: dict):
         max_results = params.get("max_results") or settings.max_results_per_search
         fontes = params.get("fontes") or ["google_maps", "cnpj"]
 
-        raw_leads, errors = scrape_all(nichos=nichos, cidades=cidades, max_results=max_results, fontes=fontes)
+        report = scrape_all(nichos=nichos, cidades=cidades, max_results=max_results, fontes=fontes)
+        raw_leads = report.leads
+        errors = list(report.errors)
 
         created = 0
         skipped_existing = 0
+        db_errors = 0
         for idx, ld in enumerate(raw_leads):
             try:
                 place_id = ld.get("place_id")
@@ -112,17 +115,35 @@ def _run_scrape(job_id: int, params: dict):
                 _emit(job_id, {"type": "progress", "current": idx + 1, "total": len(raw_leads)})
             except Exception as exc:
                 db.rollback()
+                db_errors += 1
                 errors.append(f"Lead {ld.get('nome', '?')}: {str(exc)[:120]}")
 
         job.status = "done_with_errors" if errors else "done"
         job.result_summary = {
+            # Outcome
             "created": created,
             "skipped_existing": skipped_existing,
+            "db_errors": db_errors,
+            # Funnel (raw → accepted → deduped → inserted)
+            "apify_returned": report.apify_returned,
+            "rating_filtered": report.rating_filtered,
+            "no_name_filtered": report.no_name_filtered,
+            "dedup_filtered": report.dedup_filtered,
             "total_scraped": len(raw_leads),
+            # Compat alias for the existing jobs UI ("X / total ok")
+            "total": len(raw_leads),
+            "min_rating_used": report.min_rating_used,
+            "per_search": [r.to_dict() for r in report.per_search],
             "errors": errors,
         }
         job.finished_at = datetime.utcnow()
         db.commit()
+        logger.info(
+            "scrape.job_done job_id=%d created=%d skipped_existing=%d "
+            "apify_returned=%d rating_filtered=%d dedup=%d errors=%d",
+            job_id, created, skipped_existing, report.apify_returned,
+            report.rating_filtered, report.dedup_filtered, len(errors),
+        )
         _emit(job_id, {"type": "done", "summary": job.result_summary})
 
     except Exception as exc:
