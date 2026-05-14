@@ -526,17 +526,20 @@ Nenhuma das chaves pode ser inventada — usar SOMENTE valores listados em "disp
             errors.append("taxonomy:cta_ausente")
 
         # Taxonomy validation — value membership
+        # Cap raw LLM values at 64 chars to keep error codes / logs bounded.
         valid_cta_pool = ctas_for(msg_type)
+        angulo_safe = (angulo or "")[:64]
+        cta_safe = (cta or "")[:64]
         if angulo is not None and angulo not in all_angulos:
-            errors.append(f"taxonomy:angulo_invalido:{angulo}")
+            errors.append(f"taxonomy:angulo_invalido:{angulo_safe}")
         if cta is not None and cta not in valid_cta_pool:
-            errors.append(f"taxonomy:cta_invalido:{cta}")
+            errors.append(f"taxonomy:cta_invalido:{cta_safe}")
 
         # Taxonomy validation — no repeat within cadence
         if angulo is not None and angulo in angulos_usados:
-            errors.append(f"taxonomy:angulo_repetido:{angulo}")
+            errors.append(f"taxonomy:angulo_repetido:{angulo_safe}")
         if cta is not None and cta in ctas_usados:
-            errors.append(f"taxonomy:cta_repetido:{cta}")
+            errors.append(f"taxonomy:cta_repetido:{cta_safe}")
 
         # Body validation
         body_result = validate_hard(text, msg_type)
