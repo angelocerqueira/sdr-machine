@@ -16,10 +16,14 @@ import requests
 from app.config import settings
 from app.pipeline.outreach.config import ctas_for, load_angulos
 from app.pipeline.outreach.validators import (
+    check_compliance,
+    check_glossario,
     detect_ai_cliches,
     fix_capitalization,
     fix_punctuation_spacing,
+    is_review_negative,
     validate_hard,
+    wrap_negative_review,
 )
 
 logger = logging.getLogger(__name__)
@@ -131,6 +135,12 @@ def _build_context(lead_data: dict, has_lp: bool, lp_url: str | None) -> dict:
         elif isinstance(first, str):
             review_destaque = first[:140]
 
+    # PR4.2 salvaguarda: detect negative reviews and swap for a neutral framing
+    # BEFORE the text enters the prompt. The LLM never sees the raw negative
+    # words, so it can't paraphrase them or quote them back into the message.
+    review_negative = is_review_negative(review_destaque)
+    review_destaque = wrap_negative_review(review_destaque)
+
     tech = lead_data.get("tech_stack") or []
     tech_names = []
     for t in tech[:5]:
@@ -144,6 +154,7 @@ def _build_context(lead_data: dict, has_lp: bool, lp_url: str | None) -> dict:
     return {
         "nome": lead_data.get("nome", ""),
         "nicho": lead_data.get("nicho") or lead_data.get("categoria") or "",
+        "nicho_canonico": lead_data.get("nicho_canonico"),  # PR4.2 — preferred key for per-nicho config lookups
         "cidade": lead_data.get("cidade", ""),
         "tratamento_formal": lead_data.get("tratamento_formal"),  # populated in PR3
         "rating": lead_data.get("rating", ""),
@@ -156,7 +167,8 @@ def _build_context(lead_data: dict, has_lp: bool, lp_url: str | None) -> dict:
         "porte": lead_data.get("porte", ""),
         "idade_anos": _empresa_idade_anos(lead_data.get("data_fundacao")),
         "tech_stack_names": tech_names,
-        "review_destaque": review_destaque,
+        "review_destaque": review_destaque,        # wrapped if negative (PR4.2)
+        "review_negative": review_negative,         # PR4.2 — flag for prompt warning
         "opportunity_reasons": (lead_data.get("opportunity_reasons") or [])[:3],
         # Diagnóstico
         "qualificado": sa.get("qualificado", True),
@@ -600,6 +612,35 @@ Nenhuma das chaves pode ser inventada — usar SOMENTE valores listados em "disp
             errors.extend(cliche_hits)  # already prefixed with "cliche:"
         elif cliche_hits:
             logger.info("Outreach cliché tolerated (single match): %s", cliche_hits[0])
+
+        # ------------------------------------------------------------------
+        # PR4.2 — Glossário + Compliance per-nicho soft validation.
+        #
+        # Lookup key precedence: nicho_canonico (canonical) → nicho (raw).
+        # Whichever returns a non-empty result wins; if both miss, no-op.
+        #
+        # Thresholds:
+        #   - compliance: 1+ match blocks immediately (regulatory).
+        #   - glossário: 2+ matches block (style); 1 match is tolerated.
+        # ------------------------------------------------------------------
+        nicho_key = (ctx.get("nicho") or "").strip().lower()
+        nicho_canonico_key = (ctx.get("nicho_canonico") or "").strip().lower()
+
+        compliance_hits = (
+            check_compliance(text, nicho_canonico_key)
+            or check_compliance(text, nicho_key)
+        )
+        if compliance_hits:
+            errors.extend(compliance_hits)
+
+        glossario_hits = (
+            check_glossario(text, nicho_canonico_key)
+            or check_glossario(text, nicho_key)
+        )
+        if len(glossario_hits) >= 2:
+            errors.extend(glossario_hits)
+        elif glossario_hits:
+            logger.info("Glossary term tolerated (single match): %s", glossario_hits[0])
 
         if errors:
             logger.warning(

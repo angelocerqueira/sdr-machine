@@ -391,3 +391,135 @@ def test_one_cliche_is_tolerated(mock_post):
     assert "Achei curioso" in initial["message_text"]
     assert initial["angulo_usado"] == "seo"
     assert initial["cta_usado"] == "convite_10min"
+
+
+# ---------------------------------------------------------------------------
+# Scenario 10+ (PR4.2): glossário + compliance soft validators + review wrap
+# ---------------------------------------------------------------------------
+
+
+def _lead_with_nicho(nicho: str) -> dict:
+    """Build a copy of LEAD_WITH_DIAG with the given nicho/nicho_canonico."""
+    return {**LEAD_WITH_DIAG, "nicho": nicho, "nicho_canonico": nicho}
+
+
+@patch("app.pipeline.outreach.generator.requests.post")
+def test_compliance_term_blocks_immediately(mock_post):
+    """A single compliance bloqueante ('garantia de resultado' for medicina)
+    → erro_geracao with `compliance:*` code, fallback used."""
+    # Body must pass hard validators (length, punctuation, no placeholders,
+    # no forbidden patterns) so we isolate the compliance signal.
+    compliance_body = (
+        "Oi! Vi a Odonto Sorriso no Google com 4.7 estrelas e 123 avaliações, "
+        "presença local clara. olhei o site e o gap principal tá na conversa "
+        "com o paciente pelo mobile. nosso atendimento oferece garantia de "
+        "resultado clínico documentado. faz sentido a gente trocar 10 min "
+        "essa semana? abraço, João."
+    )
+    bad_response = _wrap("seo", "convite_10min", body=compliance_body)
+    mock_post.return_value = _build_mock_response(bad_response)
+
+    lead = _lead_with_nicho("medicina")
+    with patch.object(settings, "llm_api_key", "fake-key"):
+        messages = generate_messages("pub-10", lead, has_lp=False)
+
+    initial = next(m for m in messages if m["type"] == "initial")
+    assert initial["status"] == "erro_geracao"
+    assert initial["validation_errors"], "expected non-empty validation_errors"
+    assert "compliance:garantia de resultado" in initial["validation_errors"]
+    # Body is the deterministic fallback (NOT the bloqueante text).
+    assert "garantia de resultado" not in initial["message_text"]
+    assert initial["angulo_usado"] is None
+    assert initial["cta_usado"] is None
+
+
+@patch("app.pipeline.outreach.generator.requests.post")
+def test_glossario_single_match_is_tolerated(mock_post):
+    """A single glossário-only term ('ping' for advocacia) is tolerated →
+    status=pronta, no errors, LLM text persisted.
+
+    `ping` lives in advocacia.glossario.evitar but NOT in compliance bloqueantes,
+    so it isolates the glossário-only path from compliance.
+    """
+    one_glossario_body = (
+        "Oi! Vi a Odonto Sorriso no Google com 4.7 estrelas e 123 avaliações, "
+        "presença local clara. olhei o site e percebi alguns ajustes "
+        "interessantes em mobile e em sinais de credibilidade no topo da "
+        "página. deixei um ping aqui pra ver se faz sentido a gente trocar "
+        "10 min essa semana. abraço, João."
+    )
+    response = _wrap("seo", "convite_10min", body=one_glossario_body)
+    mock_post.return_value = _build_mock_response(response)
+
+    lead = _lead_with_nicho("advocacia")
+    with patch.object(settings, "llm_api_key", "fake-key"):
+        messages = generate_messages("pub-11", lead, has_lp=False)
+
+    initial = next(m for m in messages if m["type"] == "initial")
+    assert initial["status"] == "pronta", (
+        f"expected pronta (1 glossário match tolerated), got {initial['status']} "
+        f"with errors={initial['validation_errors']}"
+    )
+    assert initial["validation_errors"] is None
+    # LLM body persisted.
+    assert "ping" in initial["message_text"]
+    assert initial["angulo_usado"] == "seo"
+    assert initial["cta_usado"] == "convite_10min"
+
+
+@patch("app.pipeline.outreach.generator.requests.post")
+def test_glossario_two_matches_trigger_fallback(mock_post):
+    """2 glossário-only terms ('ping' + 'tópico' for advocacia) → erro_geracao
+    with 2 `glossario:*` codes, fallback used.
+
+    Both terms live in advocacia.glossario.evitar but NOT in compliance
+    bloqueantes — isolates the glossário-threshold path.
+    """
+    two_glossario_body = (
+        "Oi! Vi a Odonto Sorriso no Google com 4.7 estrelas e 123 avaliações, "
+        "presença local clara. olhei o site e percebi ajustes interessantes "
+        "em mobile e em sinais de credibilidade no topo da página. deixei um "
+        "ping aqui pra retomar o tópico — faz sentido a gente trocar 10 min "
+        "essa semana? abraço, João."
+    )
+    bad_response = _wrap("seo", "convite_10min", body=two_glossario_body)
+    mock_post.return_value = _build_mock_response(bad_response)
+
+    lead = _lead_with_nicho("advocacia")
+    with patch.object(settings, "llm_api_key", "fake-key"):
+        messages = generate_messages("pub-12", lead, has_lp=False)
+
+    initial = next(m for m in messages if m["type"] == "initial")
+    assert initial["status"] == "erro_geracao"
+    assert initial["validation_errors"], "expected non-empty validation_errors"
+    glossario_errors = [
+        e for e in initial["validation_errors"] if e.startswith("glossario:")
+    ]
+    assert len(glossario_errors) >= 2, (
+        f"expected at least 2 glossario:* codes, got {initial['validation_errors']}"
+    )
+    assert "glossario:ping" in initial["validation_errors"]
+    assert "glossario:tópico" in initial["validation_errors"]
+    # Body is the deterministic fallback (NOT the LLM text).
+    assert "ping" not in initial["message_text"]
+    assert initial["angulo_usado"] is None
+    assert initial["cta_usado"] is None
+
+
+def test_negative_review_wrapped_in_context():
+    """``_build_context`` swaps a negative review text for a neutral framing
+    and sets ``review_negative=True``. The raw negative wording must NOT leak
+    into ``ctx["review_destaque"]``."""
+    from app.pipeline.outreach.generator import _build_context
+
+    lead = {
+        **LEAD_WITH_DIAG,
+        "top_reviews": [{"text": "Profissionais mal educados, péssimo atendimento"}],
+    }
+    ctx = _build_context(lead, has_lp=False, lp_url=None)
+
+    assert ctx["review_negative"] is True
+    # Neutral framing replaces the raw text — no negative words leak through.
+    assert "mal educad" not in ctx["review_destaque"].lower()
+    assert "péssimo" not in ctx["review_destaque"].lower()
+    assert "avaliação" in ctx["review_destaque"].lower()

@@ -2,11 +2,15 @@
 
 from app.pipeline.outreach.validators import (
     ValidationResult,
+    check_compliance,
+    check_glossario,
     detect_ai_cliches,
     detect_placeholders,
     fix_capitalization,
     fix_punctuation_spacing,
+    is_review_negative,
     validate_hard,
+    wrap_negative_review,
 )
 
 
@@ -297,3 +301,95 @@ class TestDetectAiCliches:
         assert len(result) == 2
         assert "cliche:achei_curioso" in result
         assert "cliche:espero_tudo_bem" in result
+
+
+# ---------------------------------------------------------------------------
+# check_glossario (PR4.2)
+# ---------------------------------------------------------------------------
+
+
+class TestCheckGlossario:
+    def test_finds_advocacia_term(self):
+        # "captação de clientes" is in advocacia.evitar
+        result = check_glossario("vamos fazer captação de clientes", "advocacia")
+        assert result == ["glossario:captação de clientes"]
+
+    def test_clean_text_returns_empty(self):
+        assert check_glossario("texto limpo", "advocacia") == []
+
+    def test_unknown_nicho_returns_empty(self):
+        # No config for "unknown_nicho" → no-op
+        assert check_glossario("captar clientes", "unknown_nicho") == []
+
+    def test_case_insensitive(self):
+        result = check_glossario("Vamos fazer CAPTAÇÃO DE CLIENTES.", "advocacia")
+        assert "glossario:captação de clientes" in result
+
+    def test_multiple_terms_returns_multiple_codes(self):
+        # Both "captação de clientes" and "captar clientes" are in advocacia
+        result = check_glossario("captação de clientes e captar clientes", "advocacia")
+        assert len(result) == 2
+        assert "glossario:captação de clientes" in result
+        assert "glossario:captar clientes" in result
+
+    def test_empty_text_returns_empty(self):
+        assert check_glossario("", "advocacia") == []
+
+
+# ---------------------------------------------------------------------------
+# check_compliance (PR4.2)
+# ---------------------------------------------------------------------------
+
+
+class TestCheckCompliance:
+    def test_medicina_bloqueante(self):
+        # "garantia de resultado" is in medicina.bloqueantes
+        result = check_compliance("garantia de resultado clínico", "medicina")
+        assert "compliance:garantia de resultado" in result
+
+    def test_clean_text_returns_empty(self):
+        assert check_compliance("ok text", "medicina") == []
+
+    def test_odontologia_bloqueante(self):
+        # "antes e depois" is in odontologia.bloqueantes
+        result = check_compliance("antes e depois", "odontologia")
+        assert "compliance:antes e depois" in result
+
+    def test_unknown_nicho_returns_empty(self):
+        assert check_compliance("antes e depois", "unknown_nicho") == []
+
+    def test_empty_text_returns_empty(self):
+        assert check_compliance("", "medicina") == []
+
+
+# ---------------------------------------------------------------------------
+# is_review_negative / wrap_negative_review (PR4.2)
+# ---------------------------------------------------------------------------
+
+
+class TestReviewSalvaguarda:
+    def test_mal_educados_is_negative(self):
+        assert is_review_negative("Profissionais mal educados") is True
+
+    def test_positive_review_not_negative(self):
+        assert is_review_negative("Atendimento excelente") is False
+
+    def test_demorou_is_negative(self):
+        assert is_review_negative("Demorou muito") is True
+
+    def test_empty_is_not_negative(self):
+        assert is_review_negative("") is False
+
+    def test_mal_alone_does_not_trigger(self):
+        # "normal" / "mal" inside other words must NOT trigger.
+        assert is_review_negative("Normal e adequado") is False
+
+    def test_wrap_negative_returns_neutral_framing(self):
+        original = "Atendimento ruim e demorado"
+        out = wrap_negative_review(original)
+        assert out != original
+        assert "avaliação" in out.lower()
+
+    def test_wrap_positive_returns_original(self):
+        original = "Atendimento ótimo"
+        assert wrap_negative_review(original) == original

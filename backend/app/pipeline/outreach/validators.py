@@ -26,6 +26,8 @@ the full picture for debugging / logging.
 import re
 from dataclasses import dataclass, field
 
+from app.pipeline.outreach.config import compliance_for, glossario_for
+
 # ---------------------------------------------------------------------------
 # Public dataclass
 # ---------------------------------------------------------------------------
@@ -271,6 +273,104 @@ def detect_ai_cliches(text: str) -> list[str]:
     return [f"cliche:{label}" for label, pat in _AI_CLICHE_PATTERNS if pat.search(text)]
 
 
+# ---------------------------------------------------------------------------
+# Glossário + Compliance soft validators (PR4.2)
+#
+# Both run AFTER `validate_hard` + cliché detection. They consume per-nicho
+# config from ``app.pipeline.outreach.config``:
+#   - ``glossario_for(nicho)`` → {evitar: substituto} mapping (style guide).
+#   - ``compliance_for(nicho)`` → {regulacao, bloqueantes, preferir} (regulatory).
+#
+# Substring match, case-insensitive — terms are short Portuguese phrases that
+# need to be caught regardless of casing. Empty list means no config for that
+# nicho (graceful no-op rather than KeyError).
+# ---------------------------------------------------------------------------
+
+
+def check_glossario(text: str, nicho: str) -> list[str]:
+    """Return list of ``glossario:<term>`` codes for terms found in text.
+
+    Substring search, case-insensitive. Returns ``[]`` if ``nicho`` has no
+    glossario config (unknown / falsy).
+    """
+    if not text:
+        return []
+    terms = glossario_for(nicho)  # {evitar: substituto}
+    if not terms:
+        return []
+    text_lower = text.lower()
+    return [f"glossario:{term}" for term in terms if term.lower() in text_lower]
+
+
+def check_compliance(text: str, nicho: str) -> list[str]:
+    """Return list of ``compliance:<term>`` codes for ``bloqueantes`` found.
+
+    Substring search, case-insensitive. Returns ``[]`` if ``nicho`` has no
+    compliance config OR no ``bloqueantes`` list.
+    """
+    if not text:
+        return []
+    cfg = compliance_for(nicho)
+    bloqueantes = cfg.get("bloqueantes", [])
+    if not bloqueantes:
+        return []
+    text_lower = text.lower()
+    return [f"compliance:{term}" for term in bloqueantes if term.lower() in text_lower]
+
+
+# ---------------------------------------------------------------------------
+# Negative review salvaguarda (PR4.2)
+#
+# Heuristic detection — case-insensitive substring of explicit negative
+# markers. "mal" alone is too broad (matches "normal", "mal-"-anything that
+# isn't actually negative), so we require compound markers ("mal educad",
+# "mal-educad") or distinct words ("ruim", "péssimo", "horrível").
+#
+# When detected, ``wrap_negative_review`` swaps the original text for a neutral
+# framing so the LLM never sees the raw negative review (and can't quote it).
+# ---------------------------------------------------------------------------
+
+
+_NEGATIVE_REVIEW_MARKERS = (
+    "ruim", "péssimo", "péssima", "pessimo", "pessima",
+    "horrível", "horrivel", "horrendo", "decepcionante",
+    "grosseir",  # grosseiro, grosseira, grosseiros, grosseiras
+    "mal educad",  # mal educado(s), mal educada(s)
+    "mal-educad",
+    "descaso", "demorou", "atraso",
+    "não recomendo", "nao recomendo",
+    "perdi tempo", "perda de tempo",
+    "experiência ruim", "experiencia ruim",
+)
+
+_NEUTRAL_REVIEW_FRAMING = (
+    "vi que apareceu uma avaliação no Google que pode não refletir o trabalho de vocês"
+)
+
+
+def is_review_negative(review_text: str) -> bool:
+    """Return True if the review text contains any negative marker.
+
+    Case-insensitive substring search. Compound markers (e.g. ``"mal educad"``)
+    intentionally avoid the "mal" / "normal" overreach.
+    """
+    if not review_text:
+        return False
+    lower = review_text.lower()
+    return any(marker in lower for marker in _NEGATIVE_REVIEW_MARKERS)
+
+
+def wrap_negative_review(review_text: str) -> str:
+    """Replace a negative review with a neutral framing; passthrough otherwise.
+
+    If ``is_review_negative(review_text)`` is True, return the neutral framing
+    string. Otherwise return ``review_text`` unchanged.
+    """
+    if is_review_negative(review_text):
+        return _NEUTRAL_REVIEW_FRAMING
+    return review_text
+
+
 def validate_hard(text: str, msg_type: str) -> ValidationResult:
     """
     Run all hard validators in order and return a ValidationResult collecting
@@ -311,9 +411,13 @@ def validate_hard(text: str, msg_type: str) -> ValidationResult:
 
 __all__ = [
     "ValidationResult",
+    "check_compliance",
+    "check_glossario",
     "detect_ai_cliches",
     "detect_placeholders",
     "fix_capitalization",
     "fix_punctuation_spacing",
+    "is_review_negative",
     "validate_hard",
+    "wrap_negative_review",
 ]
