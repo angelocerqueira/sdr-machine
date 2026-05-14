@@ -206,7 +206,7 @@ class OutreachMessageOut(BaseModel):
     whatsapp_link: str | None = None
     sent_at: datetime | None = None
     response_received_at: datetime | None = None
-    status: str = "pronta"
+    status: str
     validation_errors: list[str] | None = None
     created_at: datetime
 
