@@ -328,15 +328,18 @@ def test_invalid_angulo_key_triggers_fallback(mock_post):
 
 @patch("app.pipeline.outreach.generator.requests.post")
 def test_two_cliches_trigger_fallback(mock_post):
-    """LLM body with 2 clichés ('achei curioso' + 'espero que esteja tudo bem')
+    """LLM body with 2 clichés ('achei curioso' + 'faz sentido conversarmos X min')
     → erro_geracao, validation_errors contains 2+ cliche:* codes, fallback used.
+
+    Both clichés are SOFT signals only (no overlap with _FORBIDDEN_PATTERNS),
+    so this test isolates the cliché-threshold path from hard validation.
     """
     two_cliche_body = (
         "Achei curioso o site da Odonto Sorriso e a forma como vocês "
-        "mantêm reputação alta no Google. Espero que esteja tudo bem por "
-        "aí — olhei a página e o gap principal tá na captação de lead "
-        "pelo mobile, com poucos sinais de credibilidade no topo. "
-        "abraço, João."
+        "mantêm reputação alta no Google. Olhei a página e o gap "
+        "principal tá na captação de lead pelo mobile, com poucos "
+        "sinais de credibilidade no topo. Faz sentido conversarmos "
+        "10 min essa semana? abraço, João."
     )
     bad_response = _wrap("seo", "convite_10min", body=two_cliche_body)
     mock_post.return_value = _build_mock_response(bad_response)
