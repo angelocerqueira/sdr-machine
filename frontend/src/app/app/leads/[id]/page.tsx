@@ -275,7 +275,7 @@ export default function LeadPage() {
                   : undefined
               }
             />
-            <LaHeader lead={lead} />
+            <LaHeader lead={lead} onLeadUpdated={() => { refreshLead(); refreshLeads(); }} />
             <LaTabStrip
               activeTab={activeTab}
               setActiveTab={setActiveTab}
