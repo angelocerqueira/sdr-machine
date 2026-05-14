@@ -1,0 +1,7 @@
+{
+  "initial": ["pergunta_aberta_diagnostica", "convite_10min", "diagnostico_link", "validacao_aberta"],
+  "bump_d2": ["chegou_a_ver", "pergunta_nova_curta"],
+  "insight_d5": ["sem_cta", "valeria_compartilhar"],
+  "angle_d9": ["reuniao_curta", "diagnostico_link", "pergunta_pivot", "piloto_curto"],
+  "breakup_d14": ["porta_aberta", "sem_pressao", "diagnostico_gratuito"]
+}
