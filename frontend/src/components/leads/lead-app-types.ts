@@ -60,7 +60,18 @@ export interface LeadAppDetail {
   tech_stack: Array<{ name: string; category: string }>;
   opportunity_reasons: string[];
   sources: Array<{ provider: string; status: string; time: string; note: string }>;
-  messages: Array<{ id: number; type: string; sent_at: string | null; text: string; created_at?: string; needs_review?: boolean }>;
+  messages: Array<{
+    id: number;
+    type: string;
+    sent_at: string | null;
+    text: string;
+    created_at?: string;
+    needs_review?: boolean;
+    copy_count?: number;
+    click_count?: number;
+    manual_rating?: number | null;
+    variant_label?: string | null;
+  }>;
   recommendation: {
     level: string;
     label: string;

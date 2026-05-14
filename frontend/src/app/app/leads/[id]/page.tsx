@@ -140,6 +140,10 @@ export default function LeadPage() {
       text: m.message_text,
       created_at: m.created_at,
       needs_review: m.needs_review,
+      copy_count: m.copy_count,
+      click_count: m.click_count,
+      manual_rating: m.manual_rating,
+      variant_label: m.variant_label,
     }));
   }
 
