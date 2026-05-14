@@ -30,6 +30,26 @@ def _bypass_auth():
         yield
 
 
+@pytest.fixture(autouse=True)
+def _sync_job_threads(request):
+    """Run pipeline job runners inline instead of in real threads.
+
+    Production uses threading.Thread for parallelism. Tests need deterministic
+    execution — patching the spawner to run synchronously matches the old
+    bg.add_task behaviour TestClient relied on. Tests that specifically need
+    to exercise the threaded path can opt out with @pytest.mark.real_threads.
+    """
+    if "real_threads" in request.keywords:
+        yield
+        return
+
+    def _sync_spawn(runner, job_id, params):
+        runner(job_id, params)
+
+    with patch("app.routers.pipeline._spawn_job_thread", _sync_spawn):
+        yield
+
+
 @pytest.fixture
 def db():
     session = TestSession()

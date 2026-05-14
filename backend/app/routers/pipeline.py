@@ -4,7 +4,7 @@ import logging
 import threading
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 from sse_starlette.sse import EventSourceResponse
@@ -46,6 +46,66 @@ def _emit(job_id: int, event: dict):
     _job_events[job_id].append(event)
     if event.get("type") in ("done", "error"):
         threading.Timer(60, lambda: _job_events.pop(job_id, None)).start()
+
+
+# ---------------------------------------------------------------------------
+# Job scheduling: real threads + global concurrency ceiling
+# ---------------------------------------------------------------------------
+#
+# We don't use FastAPI's BackgroundTasks for runners because pairing them with
+# starlette's BaseHTTPMiddleware (AuthMiddleware) can serialize subsequent
+# requests until the in-flight task completes. Threads decouple runners from
+# the request lifecycle entirely.
+#
+# The semaphore caps concurrent jobs to avoid hammering external providers
+# (Apify, Anthropic) and the DB pool. Jobs above the ceiling wait — the
+# `pipeline.run_*` endpoints return immediately; the wait happens inside the
+# thread, not the HTTP request.
+
+import time  # noqa: E402
+
+_JOB_CONCURRENCY_CEILING = 8
+_job_semaphore = threading.Semaphore(_JOB_CONCURRENCY_CEILING)
+
+
+def _spawn_job_thread(runner, job_id: int, params: dict) -> None:
+    """Spawn a daemon thread that acquires the job semaphore before running.
+
+    Logs queue→start latency so we can spot backpressure in production.
+    """
+    queued_at = time.monotonic()
+
+    def _wrapped():
+        _job_semaphore.acquire()
+        try:
+            wait_s = time.monotonic() - queued_at
+            if wait_s > 1.0:
+                logger.warning(
+                    "job.queue_wait job_id=%d waited=%.1fs ceiling=%d",
+                    job_id, wait_s, _JOB_CONCURRENCY_CEILING,
+                )
+            else:
+                logger.info("job.start job_id=%d queue_wait=%.3fs", job_id, wait_s)
+            runner(job_id, params)
+        except Exception:
+            logger.exception("job.runner_crashed job_id=%d", job_id)
+            # Best-effort: mark as failed so the UI doesn't show forever-running.
+            db = SessionLocal()
+            try:
+                job = db.get(Job, job_id)
+                if job and job.status in ("pending", "running"):
+                    job.status = "failed"
+                    job.error_message = "runner crashed (see backend logs)"
+                    job.finished_at = datetime.utcnow()
+                    db.commit()
+            except Exception:
+                logger.exception("job.failed_marker_failed job_id=%d", job_id)
+            finally:
+                db.close()
+        finally:
+            _job_semaphore.release()
+
+    threading.Thread(target=_wrapped, daemon=True, name=f"job-{job_id}").start()
 
 
 # ---------------------------------------------------------------------------
@@ -498,11 +558,7 @@ def _run_csv_import(job_id: int, params: dict):
                 )
                 db.add(classify_job)
                 db.commit()
-                threading.Thread(
-                    target=_run_classify,
-                    args=(classify_job.id, classify_job.params),
-                    daemon=True,
-                ).start()
+                _spawn_job_thread(_run_classify, classify_job.id, classify_job.params)
         except Exception as exc:
             logger.warning("failed to chain classification: %s", exc)
 
@@ -659,18 +715,18 @@ _RUNNERS = {
 }
 
 
-def _start_job(job_type: str, params: dict, bg: BackgroundTasks, db: Session) -> Job:
+def _start_job(job_type: str, params: dict, db: Session) -> Job:
     existing = db.query(Job).filter(Job.type == job_type, Job.status == "running").first()
     if existing:
         raise HTTPException(
             status_code=409,
             detail=f"Já existe um job '{job_type}' em execução (#{existing.id})"
         )
-    job = Job(type=job_type, params=params)
+    job = Job(type=job_type, params=params, status="pending")
     db.add(job)
     db.commit()
     db.refresh(job)
-    bg.add_task(_RUNNERS[job_type], job.id, params)
+    _spawn_job_thread(_RUNNERS[job_type], job.id, params)
     return job
 
 
@@ -754,37 +810,28 @@ def preview_pipeline(payload: PipelinePreviewRequest, db: Session = Depends(get_
 
 
 @router.post("/pipeline/scrape", response_model=JobOut)
-def run_scrape(req: ScrapeRequest, bg: BackgroundTasks, db: Session = Depends(get_db)):
-    params = req.model_dump()
-    job = _start_job("scrape", params, bg, db)
-    return job
+def run_scrape(req: ScrapeRequest, db: Session = Depends(get_db)):
+    return _start_job("scrape", req.model_dump(), db)
 
 
 @router.post("/pipeline/enrich", response_model=JobOut)
-def run_enrich(req: EnrichRequest, bg: BackgroundTasks, db: Session = Depends(get_db)):
-    params = req.model_dump()
-    job = _start_job("enrich", params, bg, db)
-    return job
+def run_enrich(req: EnrichRequest, db: Session = Depends(get_db)):
+    return _start_job("enrich", req.model_dump(), db)
 
 
 @router.post("/pipeline/generate", response_model=JobOut)
-def run_generate(req: GenerateRequest, bg: BackgroundTasks, db: Session = Depends(get_db)):
-    params = req.model_dump()
-    job = _start_job("generate", params, bg, db)
-    return job
+def run_generate(req: GenerateRequest, db: Session = Depends(get_db)):
+    return _start_job("generate", req.model_dump(), db)
 
 
 @router.post("/pipeline/outreach", response_model=JobOut)
-def run_outreach(req: OutreachRequest, bg: BackgroundTasks, db: Session = Depends(get_db)):
-    params = req.model_dump()
-    job = _start_job("outreach", params, bg, db)
-    return job
+def run_outreach(req: OutreachRequest, db: Session = Depends(get_db)):
+    return _start_job("outreach", req.model_dump(), db)
 
 
 @router.post("/pipeline/classify", response_model=JobOut)
 def start_classify_job(
     body: ClassifyRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     # Guard against concurrent classification jobs
@@ -802,7 +849,7 @@ def start_classify_job(
     db.add(job)
     db.commit()
     db.refresh(job)
-    background_tasks.add_task(_run_classify, job.id, body.model_dump())
+    _spawn_job_thread(_run_classify, job.id, body.model_dump())
     return job
 
 
@@ -811,7 +858,6 @@ async def run_csv_import(
     file: UploadFile = File(...),
     nicho: str = Form(""),
     cidade: str = Form(""),
-    bg: BackgroundTasks = None,
     db: Session = Depends(get_db),
 ):
     if not file.filename or not file.filename.endswith(".csv"):
@@ -830,8 +876,7 @@ async def run_csv_import(
             raise HTTPException(status_code=400, detail="Encoding do arquivo não suportado")
 
     params = {"file_content": file_content, "nicho": nicho, "cidade": cidade}
-    job = _start_job("csv_import", params, bg, db)
-    return job
+    return _start_job("csv_import", params, db)
 
 
 @router.get("/jobs", response_model=JobListOut)
