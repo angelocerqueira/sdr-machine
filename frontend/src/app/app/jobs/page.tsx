@@ -28,12 +28,15 @@ const KEY_MAP: Record<string, string> = {
 
 function getResultText(job: Job) {
   const s = job.result_summary;
-  if (!s?.total) return job.error_message || "—";
-  const count = s[KEY_MAP[job.type] ?? "success"] ?? 0;
+  if (!s) return job.error_message || "—";
+  // Scrape stores total_scraped; other stages store total.
+  const total = (s.total ?? s.total_scraped) as number | undefined;
+  const count = (s[KEY_MAP[job.type] ?? "success"] as number | undefined) ?? 0;
   const errCount = (s.errors as string[] | undefined)?.length ?? 0;
+  if (total === undefined) return job.error_message || "—";
   return errCount > 0
-    ? `${count}/${s.total} ok, ${errCount} erros`
-    : `${count}/${s.total} ok`;
+    ? `${count}/${total} ok, ${errCount} erros`
+    : `${count}/${total} ok`;
 }
 
 function formatDuration(startedAt: string | null, finishedAt: string | null): string {
@@ -84,12 +87,72 @@ function JobDetailModal({ job, onClose }: { job: Job; onClose: () => void }) {
 
   // Result summary
   if (s) {
-    const countKey = KEY_MAP[job.type];
-    if (countKey && s[countKey] !== undefined) {
-      logLines.push({ text: `${countKey.charAt(0).toUpperCase() + countKey.slice(1)}: ${s[countKey]} / ${s.total ?? "?"}` });
-    }
-    if (s.disqualified !== undefined) {
-      logLines.push({ text: `Desqualificados: ${s.disqualified}` });
+    if (job.type === "scrape") {
+      // Scrape funnel: raw → filters → dedup → DB
+      const created = (s.created as number | undefined) ?? 0;
+      const totalScraped = (s.total_scraped as number | undefined) ?? 0;
+      const apifyReturned = (s.apify_returned as number | undefined) ?? 0;
+      const ratingFiltered = (s.rating_filtered as number | undefined) ?? 0;
+      const noNameFiltered = (s.no_name_filtered as number | undefined) ?? 0;
+      const dedupFiltered = (s.dedup_filtered as number | undefined) ?? 0;
+      const skippedExisting = (s.skipped_existing as number | undefined) ?? 0;
+      const dbErrors = (s.db_errors as number | undefined) ?? 0;
+      const minRating = s.min_rating_used as number | undefined;
+
+      logLines.push({ text: "" });
+      logLines.push({ text: "── Funil ──" });
+      logLines.push({ text: `Apify retornou: ${apifyReturned}` });
+      if (ratingFiltered > 0) {
+        logLines.push({
+          text: `  ↳ Filtrados por rating < ${minRating ?? "?"}: ${ratingFiltered}`,
+          isError: ratingFiltered === apifyReturned && apifyReturned > 0,
+        });
+      }
+      if (noNameFiltered > 0) {
+        logLines.push({ text: `  ↳ Sem nome: ${noNameFiltered}` });
+      }
+      if (dedupFiltered > 0) {
+        logLines.push({ text: `  ↳ Duplicados (entre buscas): ${dedupFiltered}` });
+      }
+      logLines.push({ text: `Aceitos para inserção: ${totalScraped}` });
+      if (skippedExisting > 0) {
+        logLines.push({ text: `  ↳ Já existiam no banco: ${skippedExisting}` });
+      }
+      if (dbErrors > 0) {
+        logLines.push({ text: `  ↳ Erros de banco: ${dbErrors}`, isError: true });
+      }
+      logLines.push({ text: `Criados: ${created}` });
+
+      // Per-search breakdown (helps spot which combo killed it)
+      const perSearch = (s.per_search as Array<Record<string, unknown>> | undefined) ?? [];
+      if (perSearch.length > 0) {
+        logLines.push({ text: "" });
+        logLines.push({ text: "── Por busca ──" });
+        perSearch.forEach((ps) => {
+          const source = ps.source ?? "?";
+          const nicho = ps.nicho ?? "?";
+          const cidade = ps.cidade ?? "?";
+          const returned = (ps.returned as number | undefined) ?? 0;
+          const accepted = (ps.accepted as number | undefined) ?? 0;
+          const rf = (ps.rating_filtered as number | undefined) ?? 0;
+          const err = ps.error as string | undefined;
+          const tag = `[${source}] ${nicho} · ${cidade}`;
+          if (err) {
+            logLines.push({ text: `${tag}: ERRO ${err}`, isError: true });
+          } else {
+            const extra = rf > 0 ? ` (${rf} filtr.)` : "";
+            logLines.push({ text: `${tag}: ${accepted}/${returned}${extra}` });
+          }
+        });
+      }
+    } else {
+      const countKey = KEY_MAP[job.type];
+      if (countKey && s[countKey] !== undefined) {
+        logLines.push({ text: `${countKey.charAt(0).toUpperCase() + countKey.slice(1)}: ${s[countKey]} / ${s.total ?? "?"}` });
+      }
+      if (s.disqualified !== undefined) {
+        logLines.push({ text: `Desqualificados: ${s.disqualified}` });
+      }
     }
   }
 
@@ -99,7 +162,11 @@ function JobDetailModal({ job, onClose }: { job: Job; onClose: () => void }) {
   }
 
   // Per-item errors
-  errors.forEach((e) => logLines.push({ text: e, isError: true }));
+  if (errors.length > 0) {
+    logLines.push({ text: "" });
+    logLines.push({ text: "── Erros ──" });
+    errors.forEach((e) => logLines.push({ text: e, isError: true }));
+  }
 
   return (
     <div

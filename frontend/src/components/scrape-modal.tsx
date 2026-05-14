@@ -199,7 +199,7 @@ export function ScrapeModal({ open, onConfirm, onCancel }: ScrapeModalProps) {
           {/* Max results */}
           <div>
             <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1.5 font-[family-name:var(--font-mono)]">
-              Máximo de resultados
+              Teto por busca (até N)
             </label>
             <input
               type="number"
@@ -209,6 +209,9 @@ export function ScrapeModal({ open, onConfirm, onCancel }: ScrapeModalProps) {
               max={100}
               className={inputClass}
             />
+            <p className="mt-1.5 text-[11px] text-text-muted leading-snug">
+              Limite máximo por nicho×cidade. Apify pode retornar menos se houver poucos resultados na região, ou se places forem filtrados por rating mínimo.
+            </p>
           </div>
 
 
