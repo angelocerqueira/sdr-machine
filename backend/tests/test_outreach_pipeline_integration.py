@@ -138,9 +138,9 @@ def test_valid_llm_output_is_persisted_with_status_pronta(mock_post):
     assert "presença local clara" in initial["message_text"]
     # Fixers applied: first letter capitalized (already was)
     assert initial["message_text"].lstrip()[0].isupper()
-    # No leftover ".lowercase" glue patterns from the LLM (capitalization fixed)
-    # "olhei" appeared lowercase in the LLM text after ". " — should now be "Olhei"
-    assert ". Olhei" in initial["message_text"] or "Olhei" in initial["message_text"]
+    # LLM text had lowercase "olhei" after ". " — fix_capitalization must uppercase it
+    assert ". Olhei" in initial["message_text"]
+    assert ". olhei" not in initial["message_text"]
 
 
 # ---------------------------------------------------------------------------
