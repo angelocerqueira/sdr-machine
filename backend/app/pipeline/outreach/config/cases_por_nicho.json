@@ -1,0 +1,50 @@
+{
+  "advocacia": [
+    {
+      "id": "case_adv_01",
+      "descricao": "Escritório de advocacia (10 sócios) implementou jornada digital de presença institucional — 4x mais consultas qualificadas em 6 meses",
+      "metrica": "aumento de consultas qualificadas",
+      "tempo": "6 meses"
+    }
+  ],
+  "medicina": [
+    {
+      "id": "case_med_01",
+      "descricao": "Clínica médica multidisciplinar consolidou presença institucional digital — agendamentos online +60% em 4 meses",
+      "metrica": "agendamentos online",
+      "tempo": "4 meses"
+    }
+  ],
+  "odontologia": [
+    {
+      "id": "case_odo_01",
+      "descricao": "Clínica odontológica reformulou site + canal de atendimento — taxa de no-show caiu 30% em 3 meses",
+      "metrica": "redução de no-show",
+      "tempo": "3 meses"
+    }
+  ],
+  "contabilidade": [
+    {
+      "id": "case_cont_01",
+      "descricao": "Escritório contábil estruturou conteúdo digital e captação por autoridade — 5 novos clientes recorrentes em 6 meses",
+      "metrica": "novos clientes recorrentes",
+      "tempo": "6 meses"
+    }
+  ],
+  "arquitetura": [
+    {
+      "id": "case_arq_01",
+      "descricao": "Estúdio de arquitetura organizou portfólio institucional digital — 3 projetos premium fechados em 5 meses",
+      "metrica": "projetos premium fechados",
+      "tempo": "5 meses"
+    }
+  ],
+  "engenharia": [
+    {
+      "id": "case_eng_01",
+      "descricao": "Empresa de engenharia consolidou portfólio digital — 2 obras institucionais via inbound em 4 meses",
+      "metrica": "obras via inbound",
+      "tempo": "4 meses"
+    }
+  ]
+}
