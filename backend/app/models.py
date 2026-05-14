@@ -135,6 +135,8 @@ class OutreachMessage(Base):
     whatsapp_link = Column(Text)
     sent_at = Column(DateTime)
     response_received_at = Column(DateTime)
+    status = Column(String(20), nullable=False, server_default="pronta")
+    validation_errors = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=func.now())
 
     lead = relationship("Lead", back_populates="outreach_messages")
