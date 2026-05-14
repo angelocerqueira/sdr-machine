@@ -81,6 +81,7 @@ class Lead(Base):
     parent_lead_id = Column(Integer, ForeignKey("leads.id", ondelete="SET NULL"), nullable=True)
     nome_limpo = Column(String(255), nullable=True)
     place_id = Column(String(100), nullable=True)
+    tratamento_formal = Column(String(10), nullable=True)
     lp_html = Column(Text)
     job_id = Column(Integer, ForeignKey("jobs.id", ondelete="SET NULL"))
     created_at = Column(DateTime, default=func.now())
@@ -103,6 +104,7 @@ class Lead(Base):
         Index("idx_leads_prioridade", "prioridade"),
         Index("idx_leads_parent_lead_id", "parent_lead_id"),
         Index("idx_leads_place_id", "place_id"),
+        Index("idx_leads_tratamento_formal", "tratamento_formal"),
     )
 
 

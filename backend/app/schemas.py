@@ -24,6 +24,7 @@ class LeadBase(BaseModel):
     cnae: str | None = None
     data_fundacao: date | None = None
     socios: list = []
+    tratamento_formal: str | None = None
 
 
 class LeadOut(LeadBase):
