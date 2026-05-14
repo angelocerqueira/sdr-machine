@@ -241,6 +241,36 @@ def fix_capitalization(text: str) -> str:
 _SENTENCE_PUNCT_RE = re.compile(r"[.?!]")
 
 
+# ---------------------------------------------------------------------------
+# AI cliché soft detector (PR3.3)
+#
+# Soft signals (NOT in validate_hard). Caller decides whether to reject based
+# on count (current policy: 2+ matches → reject, 0-1 tolerated).
+#
+# Opening patterns ("notei que", "vi que vocês") use ^ + re.MULTILINE so they
+# match at the start of ANY line. Message bodies are short (~5-8 lines max),
+# and any line-start "notei que" is a clichê signature in practice.
+# ---------------------------------------------------------------------------
+
+_AI_CLICHE_PATTERNS = [
+    ("achei_curioso", re.compile(r"\bachei\s+curios[oa]\b", re.IGNORECASE)),
+    ("espero_tudo_bem", re.compile(r"\bespero\s+que\s+esteja\s+tudo\s+bem\b", re.IGNORECASE)),
+    ("notei_que_abertura", re.compile(r"^[^.!?\n]*\bnotei\s+que\b", re.IGNORECASE | re.MULTILINE)),
+    ("vi_que_voces_abertura", re.compile(r"^\s*vi\s+que\s+voc[eê]s\b", re.IGNORECASE | re.MULTILINE)),
+    ("faz_sentido_conversarmos_x_min", re.compile(r"\bfaz\s+sentido\s+conversarmos\s+\d+\s*min", re.IGNORECASE)),
+]
+
+
+def detect_ai_cliches(text: str) -> list[str]:
+    """Return list of cliché labels found (with 'cliche:' prefix).
+
+    Soft signal — caller decides whether to reject.
+    """
+    if not text:
+        return []
+    return [f"cliche:{label}" for label, pat in _AI_CLICHE_PATTERNS if pat.search(text)]
+
+
 def validate_hard(text: str, msg_type: str) -> ValidationResult:
     """
     Run all hard validators in order and return a ValidationResult collecting
@@ -281,6 +311,7 @@ def validate_hard(text: str, msg_type: str) -> ValidationResult:
 
 __all__ = [
     "ValidationResult",
+    "detect_ai_cliches",
     "detect_placeholders",
     "fix_capitalization",
     "fix_punctuation_spacing",

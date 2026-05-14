@@ -16,6 +16,7 @@ import requests
 from app.config import settings
 from app.pipeline.outreach.config import ctas_for, load_angulos
 from app.pipeline.outreach.validators import (
+    detect_ai_cliches,
     fix_capitalization,
     fix_punctuation_spacing,
     validate_hard,
@@ -375,6 +376,12 @@ CADENCE_SPECS = {
             "Apoie no `nivel_recomendado` ou nos `nivel_oportunidades` — esses são os vetores válidos pra pivot.",
             "Mensagem inteira tem que ter substância. NÃO termine com só assinatura.",
             "CTA leve.",
+            "ESTRUTURA OPCIONAL — frame PSPP (Problema → Solução → Prova → Próximo passo): "
+            "Problema = 1 dor concreta do diagnóstico já citado em mensagens anteriores; "
+            "Solução = 1 entrega curta (não pitch completo); "
+            "Prova = case similar OU métrica REAL do diagnóstico (sem inventar); "
+            "Próximo passo = pequeno (diagnóstico ou piloto, não preço).",
+            "PSPP é opcional. Se outro ângulo encaixa melhor, vá nele.",
         ],
     },
     "breakup_d14": {
@@ -584,6 +591,15 @@ Nenhuma das chaves pode ser inventada — usar SOMENTE valores listados em "disp
         body_result = validate_hard(text, msg_type)
         if not body_result.passed:
             errors.extend(body_result.errors)
+
+        # Soft validation — clichés. 2+ matches → reject; 0-1 → tolerable.
+        # Clichés are softer signals than placeholders, so this runs AFTER
+        # validate_hard. A single match logs but doesn't block.
+        cliche_hits = detect_ai_cliches(text)
+        if len(cliche_hits) >= 2:
+            errors.extend(cliche_hits)  # already prefixed with "cliche:"
+        elif cliche_hits:
+            logger.info("Outreach cliché tolerated (single match): %s", cliche_hits[0])
 
         if errors:
             logger.warning(

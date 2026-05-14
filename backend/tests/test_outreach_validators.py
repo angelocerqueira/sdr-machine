@@ -2,6 +2,7 @@
 
 from app.pipeline.outreach.validators import (
     ValidationResult,
+    detect_ai_cliches,
     detect_placeholders,
     fix_capitalization,
     fix_punctuation_spacing,
@@ -253,3 +254,46 @@ class TestValidateHard:
         result = validate_hard(text, "initial")
         # might fail OTHER hard validators, but NOT calculo_hipotetico
         assert not any(err == "forbidden:calculo_hipotetico" for err in result.errors)
+
+
+# ---------------------------------------------------------------------------
+# detect_ai_cliches (PR3.3)
+# ---------------------------------------------------------------------------
+
+class TestDetectAiCliches:
+    def test_achei_curioso(self):
+        assert detect_ai_cliches("Achei curioso o site da sua empresa.") == [
+            "cliche:achei_curioso"
+        ]
+
+    def test_espero_tudo_bem(self):
+        result = detect_ai_cliches("Espero que esteja tudo bem.")
+        assert "cliche:espero_tudo_bem" in result
+
+    def test_notei_que_abertura_anywhere_line_start(self):
+        # Matches at line-start anywhere in the message (re.MULTILINE)
+        result = detect_ai_cliches("Notei que vocês não têm chatbot ainda.")
+        assert "cliche:notei_que_abertura" in result
+
+    def test_vi_que_voces_abertura(self):
+        result = detect_ai_cliches("Vi que vocês não têm WhatsApp.")
+        assert "cliche:vi_que_voces_abertura" in result
+
+    def test_faz_sentido_conversarmos_x_min(self):
+        result = detect_ai_cliches("Faz sentido conversarmos 10 min?")
+        assert "cliche:faz_sentido_conversarmos_x_min" in result
+
+    def test_empty_string_returns_empty_list(self):
+        assert detect_ai_cliches("") == []
+
+    def test_neutral_text_returns_empty_list(self):
+        assert detect_ai_cliches(
+            "Texto neutro sem clichês — tudo bem, conta uma coisa."
+        ) == []
+
+    def test_multiple_cliches_returned_separately(self):
+        # Mixed: 2 different cliché signatures → 2 labels
+        result = detect_ai_cliches("Achei curioso. Espero que esteja tudo bem.")
+        assert len(result) == 2
+        assert "cliche:achei_curioso" in result
+        assert "cliche:espero_tudo_bem" in result

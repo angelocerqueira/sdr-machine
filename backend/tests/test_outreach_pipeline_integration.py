@@ -319,3 +319,72 @@ def test_invalid_angulo_key_triggers_fallback(mock_post):
     assert initial["validation_errors"], "expected non-empty validation_errors"
     assert "taxonomy:angulo_invalido:bogus" in initial["validation_errors"]
     assert initial["angulo_usado"] is None
+
+
+# ---------------------------------------------------------------------------
+# Scenario 8 (PR3.3): 2+ clichés → reject + fallback
+# ---------------------------------------------------------------------------
+
+
+@patch("app.pipeline.outreach.generator.requests.post")
+def test_two_cliches_trigger_fallback(mock_post):
+    """LLM body with 2 clichés ('achei curioso' + 'espero que esteja tudo bem')
+    → erro_geracao, validation_errors contains 2+ cliche:* codes, fallback used.
+    """
+    two_cliche_body = (
+        "Achei curioso o site da Odonto Sorriso e a forma como vocês "
+        "mantêm reputação alta no Google. Espero que esteja tudo bem por "
+        "aí — olhei a página e o gap principal tá na captação de lead "
+        "pelo mobile, com poucos sinais de credibilidade no topo. "
+        "abraço, João."
+    )
+    bad_response = _wrap("seo", "convite_10min", body=two_cliche_body)
+    mock_post.return_value = _build_mock_response(bad_response)
+
+    with patch.object(settings, "llm_api_key", "fake-key"):
+        messages = generate_messages("pub-8", LEAD_WITH_DIAG, has_lp=False)
+
+    initial = next(m for m in messages if m["type"] == "initial")
+    assert initial["status"] == "erro_geracao"
+    assert initial["validation_errors"], "expected non-empty validation_errors"
+    cliche_errors = [e for e in initial["validation_errors"] if e.startswith("cliche:")]
+    assert len(cliche_errors) >= 2, (
+        f"expected at least 2 cliche:* codes, got {initial['validation_errors']}"
+    )
+    # Body is the deterministic fallback (NOT the LLM clichê text).
+    assert "Achei curioso" not in initial["message_text"]
+    assert initial["angulo_usado"] is None
+    assert initial["cta_usado"] is None
+
+
+# ---------------------------------------------------------------------------
+# Scenario 9 (PR3.3): 1 cliché tolerated → status=pronta, LLM text persisted
+# ---------------------------------------------------------------------------
+
+
+@patch("app.pipeline.outreach.generator.requests.post")
+def test_one_cliche_is_tolerated(mock_post):
+    """LLM body with exactly 1 cliché ('achei curioso') → pronta, no errors,
+    the LLM body is persisted (cliché was tolerated, not blocked)."""
+    one_cliche_body = (
+        "Achei curioso o site da Odonto Sorriso e como vocês mantêm "
+        "presença local forte com 4.7 estrelas no Google. olhei a página "
+        "e o gap principal tá na captação de lead pelo mobile, com poucos "
+        "sinais de credibilidade no topo. abraço, João."
+    )
+    response = _wrap("seo", "convite_10min", body=one_cliche_body)
+    mock_post.return_value = _build_mock_response(response)
+
+    with patch.object(settings, "llm_api_key", "fake-key"):
+        messages = generate_messages("pub-9", LEAD_WITH_DIAG, has_lp=False)
+
+    initial = next(m for m in messages if m["type"] == "initial")
+    assert initial["status"] == "pronta", (
+        f"expected pronta (1 cliché tolerated), got {initial['status']} "
+        f"with errors={initial['validation_errors']}"
+    )
+    assert initial["validation_errors"] is None
+    # LLM body persisted (with fixers applied to capitalization).
+    assert "Achei curioso" in initial["message_text"]
+    assert initial["angulo_usado"] == "seo"
+    assert initial["cta_usado"] == "convite_10min"
