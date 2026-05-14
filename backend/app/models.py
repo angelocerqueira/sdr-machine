@@ -137,6 +137,8 @@ class OutreachMessage(Base):
     response_received_at = Column(DateTime)
     status = Column(String(20), nullable=False, server_default="pronta")
     validation_errors = Column(JSON, nullable=True)
+    cta_usado = Column(String(40), nullable=True)
+    angulo_usado = Column(String(40), nullable=True)
     created_at = Column(DateTime, default=func.now())
 
     lead = relationship("Lead", back_populates="outreach_messages")

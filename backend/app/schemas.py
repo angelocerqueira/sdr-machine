@@ -208,6 +208,8 @@ class OutreachMessageOut(BaseModel):
     response_received_at: datetime | None = None
     status: str
     validation_errors: list[str] | None = None
+    cta_usado: str | None = None
+    angulo_usado: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
