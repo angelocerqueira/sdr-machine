@@ -156,6 +156,13 @@ export const getLeadLpUrlByPublicId = (publicId: string) =>
 export const getLeadMessages = (leadId: number) =>
   fetchAPI<OutreachMessage[]>(`/api/leads/${leadId}/messages`);
 
+export async function markMessageReviewed(leadId: number, messageId: number) {
+  return fetchAPI<{ id: number; needs_review: boolean }>(
+    `/api/leads/${leadId}/messages/${messageId}/mark-reviewed`,
+    { method: "POST" }
+  );
+}
+
 // Landing Pages
 export const getLeadLandingPages = (leadId: number) =>
   fetchAPI<LandingPage[]>(`/api/leads/${leadId}/landing-pages`);

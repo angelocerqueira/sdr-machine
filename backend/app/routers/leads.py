@@ -6,7 +6,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Job, LandingPage, Lead
+from app.models import Job, LandingPage, Lead, OutreachMessage
 from app.schemas import (
     BulkDeleteResult,
     BulkLeadDelete,
@@ -338,6 +338,25 @@ def get_lead_messages(lead_id: int, db: Session = Depends(get_db)):
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead.outreach_messages
+
+
+@router.post("/{lead_id}/messages/{message_id}/mark-reviewed")
+def mark_message_reviewed(lead_id: int, message_id: int, db: Session = Depends(get_db)):
+    """Clear the needs_review flag on an outreach message (PR4.3).
+
+    Used by the human-in-the-loop review workflow: when the SDR has read and
+    approved a message generated for a regulated nicho, they hit this endpoint
+    to remove the review badge.
+    """
+    msg = db.query(OutreachMessage).filter(
+        OutreachMessage.id == message_id,
+        OutreachMessage.lead_id == lead_id,
+    ).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    msg.needs_review = False
+    db.commit()
+    return {"id": msg.id, "needs_review": False}
 
 
 @router.get("/{lead_id}/jobs", response_model=list[JobOut])

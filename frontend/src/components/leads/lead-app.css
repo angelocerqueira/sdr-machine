@@ -993,6 +993,18 @@
   font-size: 11px;
   color: var(--text-muted);
 }
+.la-msg-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: var(--r-1, 4px);
+  margin-left: 8px;
+  letter-spacing: 0.02em;
+}
+.la-msg-badge-review {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
 .la-msg-actions {
   margin-left: auto;
   display: flex;

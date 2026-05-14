@@ -211,6 +211,7 @@ class OutreachMessageOut(BaseModel):
     validation_errors: list[str] | None = None
     cta_usado: str | None = None
     angulo_usado: str | None = None
+    needs_review: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}

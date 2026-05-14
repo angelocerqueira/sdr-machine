@@ -151,6 +151,7 @@ export interface OutreachMessage {
   whatsapp_link: string | null;
   sent_at: string | null;
   response_received_at: string | null;
+  needs_review?: boolean;
   created_at: string;
 }
 

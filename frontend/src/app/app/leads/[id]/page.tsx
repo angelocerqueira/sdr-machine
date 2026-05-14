@@ -139,6 +139,7 @@ export default function LeadPage() {
       sent_at: m.sent_at,
       text: m.message_text,
       created_at: m.created_at,
+      needs_review: m.needs_review,
     }));
   }
 

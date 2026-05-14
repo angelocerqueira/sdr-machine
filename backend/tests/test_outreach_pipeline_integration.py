@@ -523,3 +523,65 @@ def test_negative_review_wrapped_in_context():
     assert "mal educad" not in ctx["review_destaque"].lower()
     assert "péssimo" not in ctx["review_destaque"].lower()
     assert "avaliação" in ctx["review_destaque"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Scenario 20+ (PR4.3): needs_review notification flag + prompt injection
+# ---------------------------------------------------------------------------
+
+
+@patch("app.pipeline.outreach.generator.requests.post")
+def test_compliance_nicho_sets_needs_review_flag(mock_post):
+    """A lead with a regulated nicho (advocacia) → all 5 messages carry
+    needs_review=True for the SDR review badge in the UI."""
+    mock_post.side_effect = _mock_sequence(_CADENCE_RESPONSES)
+
+    lead = _lead_with_nicho("advocacia")
+    with patch.object(settings, "llm_api_key", "fake-key"):
+        messages = generate_messages("pub-20", lead, has_lp=False)
+
+    assert len(messages) == 5
+    for msg in messages:
+        assert msg["needs_review"] is True, (
+            f"expected needs_review=True for {msg['type']} (compliance nicho), got {msg['needs_review']}"
+        )
+
+
+@patch("app.pipeline.outreach.generator.requests.post")
+def test_non_compliance_nicho_no_needs_review(mock_post):
+    """A lead with a non-regulated nicho (restaurante) → all 5 messages have
+    needs_review=False — no review badge needed."""
+    mock_post.side_effect = _mock_sequence(_CADENCE_RESPONSES)
+
+    lead = _lead_with_nicho("restaurante")
+    with patch.object(settings, "llm_api_key", "fake-key"):
+        messages = generate_messages("pub-21", lead, has_lp=False)
+
+    assert len(messages) == 5
+    for msg in messages:
+        assert msg["needs_review"] is False, (
+            f"expected needs_review=False for {msg['type']} (non-compliance nicho), got {msg['needs_review']}"
+        )
+
+
+@patch("app.pipeline.outreach.generator.requests.post")
+def test_compliance_block_appears_in_prompt(mock_post):
+    """Smoke test: when nicho=medicina, the LLM prompt contains the
+    `# COMPLIANCE DO NICHO` injection block. Spies on requests.post payload."""
+    mock_post.side_effect = _mock_sequence(_CADENCE_RESPONSES)
+
+    lead = _lead_with_nicho("medicina")
+    with patch.object(settings, "llm_api_key", "fake-key"):
+        generate_messages("pub-22", lead, has_lp=False)
+
+    assert mock_post.call_count >= 1, "LLM should have been called at least once"
+    # First call's payload should already contain the compliance section.
+    first_call = mock_post.call_args_list[0]
+    payload = first_call.kwargs.get("json") or (first_call.args[1] if len(first_call.args) > 1 else None)
+    assert payload is not None, "could not extract LLM payload"
+    prompt_text = payload["messages"][0]["content"]
+    assert "# COMPLIANCE DO NICHO" in prompt_text, (
+        "compliance block should appear in the LLM prompt for regulated nichos"
+    )
+    # Medicina's regulação tag should be present.
+    assert "CFM" in prompt_text, "regulação tag (CFM) should appear in compliance block"

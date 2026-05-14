@@ -141,6 +141,7 @@ class OutreachMessage(Base):
     validation_errors = Column(JSON, nullable=True)
     cta_usado = Column(String(40), nullable=True)
     angulo_usado = Column(String(40), nullable=True)
+    needs_review = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(DateTime, default=func.now())
 
     lead = relationship("Lead", back_populates="outreach_messages")

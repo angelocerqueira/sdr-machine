@@ -359,6 +359,7 @@ def _run_outreach(job_id: int, params: dict):
                         validation_errors=msg.get("validation_errors"),
                         angulo_usado=msg.get("angulo_usado"),
                         cta_usado=msg.get("cta_usado"),
+                        needs_review=msg.get("needs_review", False),
                     )
                     db.add(om)
                 lead.status = "outreach_ready"

@@ -154,3 +154,66 @@ class TestSearchExpanded:
         items = resp.json()["items"]
         assert len(items) == 1
         assert items[0]["razao_social"] == "Empresa Alpha LTDA"
+
+
+class TestMarkMessageReviewed:
+    """PR4.3 — POST /api/leads/{lead_id}/messages/{message_id}/mark-reviewed."""
+
+    def test_mark_message_reviewed_clears_flag(self, client, db, sample_lead):
+        from app.models import OutreachMessage
+
+        msg = OutreachMessage(
+            lead_id=sample_lead.id,
+            type="initial",
+            message_text="Oi! Mensagem de teste.",
+            whatsapp_link="https://wa.me/55...",
+            status="pronta",
+            needs_review=True,
+        )
+        db.add(msg)
+        db.commit()
+        db.refresh(msg)
+
+        resp = client.post(
+            f"/api/leads/{sample_lead.id}/messages/{msg.id}/mark-reviewed"
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["id"] == msg.id
+        assert body["needs_review"] is False
+
+        # DB row reflects the change.
+        db.refresh(msg)
+        assert msg.needs_review is False
+
+    def test_mark_message_reviewed_returns_404_for_unknown_message(self, client, sample_lead):
+        resp = client.post(
+            f"/api/leads/{sample_lead.id}/messages/99999/mark-reviewed"
+        )
+        assert resp.status_code == 404
+
+    def test_mark_message_reviewed_404_when_lead_mismatch(self, client, db, sample_lead):
+        """A message that exists but belongs to a different lead → 404 (RESTful
+        path mismatch is treated as not-found, not as a leak across leads)."""
+        from app.models import Lead, OutreachMessage
+
+        other = Lead(nome="Other", telefone="55555")
+        db.add(other)
+        db.commit()
+        db.refresh(other)
+
+        msg = OutreachMessage(
+            lead_id=other.id,
+            type="initial",
+            message_text="Outra mensagem.",
+            status="pronta",
+            needs_review=True,
+        )
+        db.add(msg)
+        db.commit()
+        db.refresh(msg)
+
+        resp = client.post(
+            f"/api/leads/{sample_lead.id}/messages/{msg.id}/mark-reviewed"
+        )
+        assert resp.status_code == 404

@@ -265,6 +265,44 @@ FONTES DE HOOK (em ordem de preferência, use a 1ª disponível):
 NÃO invente alavanca. Se nada disso bate, use uma observação mais sóbria (rating + ausência de algo concreto)."""
 
 
+def _nicho_compliance_block(nicho: str) -> str:
+    """Compliance + glossário + cases injection per nicho. Empty string if nicho has no config."""
+    from app.pipeline.outreach.config import cases_for, compliance_for, glossario_for
+    comp = compliance_for(nicho)
+    gloss = glossario_for(nicho)
+    cases = cases_for(nicho)
+    if not (comp or gloss or cases):
+        return ""
+
+    parts = []
+
+    if comp:
+        regulacao = comp.get("regulacao", "")
+        bloqueantes = comp.get("bloqueantes", [])
+        preferir = comp.get("preferir", [])
+        parts.append(f"# COMPLIANCE DO NICHO ({regulacao})")
+        if bloqueantes:
+            parts.append("BLOQUEADOS — NUNCA escreva, mesmo parafraseando:")
+            parts.extend(f"- {t}" for t in bloqueantes)
+        if preferir:
+            parts.append("PREFERIR estes termos institucionais:")
+            parts.extend(f"- {t}" for t in preferir)
+
+    if gloss:
+        parts.append("\n# GLOSSÁRIO DO NICHO (estilo)")
+        parts.append("Substitua estes termos quando aparecerem na escrita:")
+        for evitar, substituto in gloss.items():
+            parts.append(f"- \"{evitar}\" → \"{substituto}\"")
+
+    if cases:
+        parts.append("\n# CASES DISPONÍVEIS (use APENAS se relevante e citável)")
+        parts.append("Pode mencionar como 'um caso similar' (anônimo). NÃO invente novos cases.")
+        for c in cases[:2]:  # cap at 2 to limit prompt bloat
+            parts.append(f"- {c.get('descricao', '')}")
+
+    return "\n".join(parts)
+
+
 def _initial_structure_block(ctx: dict) -> str:
     """Estrutura mínima obrigatória para a mensagem INITIAL (apresentação + humildade)."""
     tratamento = ctx.get("tratamento_formal")  # may be None for now (PR3 will populate)
@@ -503,6 +541,13 @@ def _generate_ai_message(
         initial_extras = _hook_calibration_block(ctx) + "\n\n" + _initial_structure_block(ctx)
         hook_block = "\n\n" + initial_extras
 
+    # PR4.3 — Per-nicho compliance + glossário + cases injection.
+    # Tries canonical key first, then raw nicho. Empty if neither has config.
+    nicho_canonico_key = (ctx.get("nicho_canonico") or "").strip().lower()
+    nicho_key = (ctx.get("nicho") or "").strip().lower()
+    compliance_block = _nicho_compliance_block(nicho_canonico_key) or _nicho_compliance_block(nicho_key)
+    compliance_section = f"\n\n{compliance_block}" if compliance_block else ""
+
     prompt = f"""{_persona_block()}
 
 # DADOS DO LEAD
@@ -510,7 +555,7 @@ def _generate_ai_message(
 
 # DIAGNÓSTICO + ESTRATÉGIA (use o que existir, ignore o resto)
 {diag}
-{lp_instruction}{hook_block}
+{lp_instruction}{hook_block}{compliance_section}
 
 # TIPO DESTA MENSAGEM
 - Tipo: {msg_type} ({spec["day"]} da cadência de 5 toques)
@@ -746,6 +791,8 @@ def generate_messages(public_id: str, lead_data: dict, has_lp: bool = False) -> 
     Usa LLM quando há diagnóstico + chave configurada; fallback determinístico caso contrário.
     has_lp: se True, mensagens podem referenciar a LP de demonstração.
     """
+    from app.pipeline.outreach.config import compliance_for
+
     lp = _lp_url(public_id) if has_lp else None
     ctx = _build_context(lead_data, has_lp=has_lp, lp_url=lp)
 
@@ -755,6 +802,15 @@ def generate_messages(public_id: str, lead_data: dict, has_lp: bool = False) -> 
 
     phone = _clean_phone(lead_data.get("telefone", ""))
     has_diag = bool(ctx["resumo_executivo"] or ctx["prioridades_top3"] or ctx["nivel_recomendado"])
+
+    # PR4.3 — needs_review notification flag. Computed once per cadence (nicho
+    # doesn't change between toques). All 5 messages inherit the same value:
+    # True if the lead's nicho has a compliance config (regulated nichos:
+    # advocacia, medicina, odontologia, contabilidade, arquitetura, engenharia).
+    # Tries canonical key first, then raw nicho. Frontend renders a badge.
+    nicho_canonico_key = (lead_data.get("nicho_canonico") or "").strip().lower()
+    nicho_key = (lead_data.get("nicho") or "").strip().lower()
+    needs_review = bool(compliance_for(nicho_canonico_key) or compliance_for(nicho_key))
 
     messages: list[dict] = []
     last_idx = len(CADENCE_ORDER) - 1
@@ -796,6 +852,7 @@ def generate_messages(public_id: str, lead_data: dict, has_lp: bool = False) -> 
             "validation_errors": result.errors or None,
             "angulo_usado": result.angulo,
             "cta_usado": result.cta,
+            "needs_review": needs_review,
         })
 
     return messages

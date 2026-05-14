@@ -33,6 +33,14 @@ export function LaTabMsgs({ lead }: { lead: LeadAppDetail }) {
             <div key={m.id} className="la-msg">
               <div className="la-msg-head">
                 <span className="la-msg-label">{m.type.replace(/_/g, " ")}</span>
+                {m.needs_review && (
+                  <span
+                    className="la-msg-badge la-msg-badge-review"
+                    title="Nicho com compliance — revise antes de enviar"
+                  >
+                    🔍 revisar
+                  </span>
+                )}
                 <span className="la-msg-when">{when}</span>
                 <div className="la-msg-actions">
                   <button
