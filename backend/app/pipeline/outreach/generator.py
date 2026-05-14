@@ -255,10 +255,9 @@ NÃO invente alavanca. Se nada disso bate, use uma observação mais sóbria (ra
 def _initial_structure_block(ctx: dict) -> str:
     """Estrutura mínima obrigatória para a mensagem INITIAL (apresentação + humildade)."""
     tratamento = ctx.get("tratamento_formal")  # may be None for now (PR3 will populate)
-    saudacao_hint = f"{tratamento}." if tratamento else "Oi"
-    tratamento_display = tratamento or '"Oi"'
+    saudacao_hint = f"{tratamento}," if tratamento else "Oi,"
     return f"""# ESTRUTURA MÍNIMA DA INITIAL (obrigatória)
-1. Saudação cordial: comece com "{saudacao_hint}" (se houver tratamento formal, use {tratamento_display}).
+1. Saudação cordial: comece com "{saudacao_hint}".
 2. Apresentação em 1 frase: nome do remetente + empresa + o que a empresa faz. Ex: "Aqui é o {settings.your_name}, da {settings.business_name} — ajudo {{nicho_label}} a melhorar presença digital".
 3. Razão do contato com humildade (não auditoria do negócio do lead).
 4. Observação como hipótese — use SEMPRE templates hipotéticos (ver bloco acima).
