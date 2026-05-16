@@ -101,3 +101,45 @@ def test_send_media_pdf_infers_document(adapter):
     with patch("httpx.post", return_value=fake_response) as mock_post:
         adapter.send_media(to_phone="5544999990000", media_url="https://x.com/relatorio.pdf")
     assert mock_post.call_args.kwargs["json"]["mediatype"] == "document"
+
+
+def test_fetch_history_returns_normalized_inbound_msgs(adapter):
+    fake_response = Mock(status_code=200)
+    fake_response.json.return_value = [
+        {
+            "key": {"id": "M1", "remoteJid": "5544999990000@s.whatsapp.net", "fromMe": False},
+            "message": {"conversation": "Bom dia!"},
+            "messageTimestamp": 1715000000,
+        },
+        {
+            "key": {"id": "M2", "remoteJid": "5544999990000@s.whatsapp.net", "fromMe": True},
+            "message": {"conversation": "Olá, sou do SDR"},
+            "messageTimestamp": 1714999900,
+        },
+        {
+            "key": {"id": "M3", "remoteJid": "5544999990000@s.whatsapp.net", "fromMe": False},
+            "message": {"extendedTextMessage": {"text": "Quanto custa?"}},
+            "messageTimestamp": 1715000100,
+        },
+    ]
+    with patch("httpx.get", return_value=fake_response) as mock_get:
+        result = adapter.fetch_history("5544999990000", limit=10)
+
+    # endpoint + filtro
+    url = mock_get.call_args[0][0]
+    assert url.endswith("/chat/findMessages/sdr")
+    params = mock_get.call_args.kwargs["params"]
+    assert params["where[key][remoteJid]"] == "5544999990000@s.whatsapp.net"
+
+    # apenas inbound (fromMe=False) retorna como InboundMessage
+    assert len(result) == 2
+    assert result[0].provider_message_id == "M1"
+    assert result[0].body == "Bom dia!"
+    assert result[1].body == "Quanto custa?"  # extendedTextMessage suportado
+
+
+def test_fetch_history_empty_returns_empty_list(adapter):
+    fake_response = Mock(status_code=200)
+    fake_response.json.return_value = []
+    with patch("httpx.get", return_value=fake_response):
+        assert adapter.fetch_history("5544999990000") == []

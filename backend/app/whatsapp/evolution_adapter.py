@@ -118,10 +118,57 @@ class EvolutionAdapter(WhatsAppProvider):
             status="sent",
         )
 
-    # --- placeholders pra próximas tasks ---
+    # --- fetch_history ---
+    @staticmethod
+    def _extract_body(msg_payload: dict) -> str | None:
+        """Evolution serializa texto em formatos diferentes."""
+        if not msg_payload:
+            return None
+        if "conversation" in msg_payload:
+            return msg_payload["conversation"]
+        ext = msg_payload.get("extendedTextMessage") or {}
+        if "text" in ext:
+            return ext["text"]
+        return None
 
-    def fetch_history(self, phone, *, limit=50):
-        raise NotImplementedError("Task 8")
+    def fetch_history(self, phone: str, *, limit: int = 50) -> list[InboundMessage]:
+        phone_norm = normalize_phone_br(phone)
+        chat_id = to_chat_id(phone_norm)
+        r = httpx.get(
+            self._url(f"chat/findMessages/{self.instance}"),
+            params={"where[key][remoteJid]": chat_id, "limit": limit},
+            headers=self._headers(),
+            timeout=self.timeout,
+        )
+        if r.status_code != 200:
+            raise RuntimeError(
+                f"Evolution fetch_history failed: status={r.status_code} body={r.text[:200]}"
+            )
+        raw_msgs = r.json() or []
+        result: list[InboundMessage] = []
+        for raw in raw_msgs:
+            key = raw.get("key") or {}
+            if key.get("fromMe", False):
+                continue  # outbound — fora do escopo (vem do nosso DB)
+            body = self._extract_body(raw.get("message") or {})
+            ts = raw.get("messageTimestamp")
+            received_at = (
+                datetime.fromtimestamp(int(ts), tz=timezone.utc)
+                if ts is not None else datetime.now(timezone.utc)
+            )
+            try:
+                from_phone = parse_chat_id(key.get("remoteJid", ""))
+            except ValueError:
+                continue  # grupos — skip
+            result.append(InboundMessage(
+                provider_message_id=key.get("id", ""),
+                from_phone=from_phone,
+                body=body,
+                received_at=received_at,
+            ))
+        return result
+
+    # --- placeholders pra próximas tasks ---
 
     def parse_webhook(self, raw):
         raise NotImplementedError("Task 9")
