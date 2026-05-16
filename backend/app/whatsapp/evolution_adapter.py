@@ -168,10 +168,57 @@ class EvolutionAdapter(WhatsAppProvider):
             ))
         return result
 
-    # --- placeholders pra próximas tasks ---
+    # --- parse_webhook ---
+    _STATUS_MAP = {
+        "PENDING": "queued",
+        "SERVER_ACK": "sent",
+        "DELIVERY_ACK": "delivered",
+        "READ": "read",
+        "PLAYED": "read",
+        "ERROR": "failed",
+    }
 
-    def parse_webhook(self, raw):
-        raise NotImplementedError("Task 9")
+    def parse_webhook(self, raw: dict) -> list[InboundMessage | StatusUpdate]:
+        event = raw.get("event") or ""
+        data = raw.get("data") or {}
+
+        if event == "messages.upsert":
+            key = data.get("key") or {}
+            if key.get("fromMe", False):
+                return []
+            try:
+                from_phone = parse_chat_id(key.get("remoteJid", ""))
+            except ValueError:
+                return []  # grupos
+            body = self._extract_body(data.get("message") or {})
+            ts = data.get("messageTimestamp")
+            received_at = (
+                datetime.fromtimestamp(int(ts), tz=timezone.utc)
+                if ts is not None else datetime.now(timezone.utc)
+            )
+            return [InboundMessage(
+                provider_message_id=key.get("id", ""),
+                from_phone=from_phone,
+                body=body,
+                received_at=received_at,
+            )]
+
+        if event == "messages.update":
+            key = data.get("key") or {}
+            update = data.get("update") or {}
+            evo_status = (update.get("status") or "").upper()
+            mapped = self._STATUS_MAP.get(evo_status)
+            if not mapped:
+                return []
+            return [StatusUpdate(
+                provider_message_id=key.get("id", ""),
+                status=mapped,  # type: ignore[arg-type]
+                timestamp=datetime.now(timezone.utc),
+            )]
+
+        return []
+
+    # --- placeholders pra próximas tasks ---
 
     def health_check(self):
         raise NotImplementedError("Task 10")

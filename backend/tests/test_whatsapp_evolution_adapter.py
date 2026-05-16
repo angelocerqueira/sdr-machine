@@ -143,3 +143,74 @@ def test_fetch_history_empty_returns_empty_list(adapter):
     fake_response.json.return_value = []
     with patch("httpx.get", return_value=fake_response):
         assert adapter.fetch_history("5544999990000") == []
+
+
+def test_parse_webhook_messages_upsert_inbound(adapter):
+    raw = {
+        "event": "messages.upsert",
+        "instance": "sdr",
+        "data": {
+            "key": {
+                "id": "EVO-IN-99",
+                "remoteJid": "5544999990000@s.whatsapp.net",
+                "fromMe": False,
+            },
+            "message": {"conversation": "Faz sentido sim, manda info"},
+            "messageTimestamp": 1715000000,
+            "pushName": "Marcos",
+        },
+    }
+    out = adapter.parse_webhook(raw)
+    assert len(out) == 1
+    msg = out[0]
+    from app.whatsapp.types import InboundMessage
+    assert isinstance(msg, InboundMessage)
+    assert msg.provider_message_id == "EVO-IN-99"
+    assert msg.from_phone == "5544999990000"
+    assert msg.body == "Faz sentido sim, manda info"
+
+
+def test_parse_webhook_messages_upsert_outbound_ignored(adapter):
+    raw = {
+        "event": "messages.upsert",
+        "data": {
+            "key": {"id": "X", "remoteJid": "5544...@s.whatsapp.net", "fromMe": True},
+            "message": {"conversation": "..."},
+            "messageTimestamp": 1715000000,
+        },
+    }
+    assert adapter.parse_webhook(raw) == []  # outbound não interessa
+
+
+def test_parse_webhook_messages_update_status(adapter):
+    raw = {
+        "event": "messages.update",
+        "data": {
+            "key": {"id": "EVO-MSG-42", "remoteJid": "5544...@s.whatsapp.net"},
+            "update": {"status": "READ"},
+        },
+    }
+    out = adapter.parse_webhook(raw)
+    from app.whatsapp.types import StatusUpdate
+    assert len(out) == 1
+    s = out[0]
+    assert isinstance(s, StatusUpdate)
+    assert s.provider_message_id == "EVO-MSG-42"
+    assert s.status == "read"
+
+
+def test_parse_webhook_unknown_event_returns_empty(adapter):
+    raw = {"event": "connection.update", "data": {"state": "open"}}
+    assert adapter.parse_webhook(raw) == []
+
+
+def test_parse_webhook_group_message_ignored(adapter):
+    raw = {
+        "event": "messages.upsert",
+        "data": {
+            "key": {"id": "X", "remoteJid": "12345-67890@g.us", "fromMe": False},
+            "message": {"conversation": "msg de grupo"},
+            "messageTimestamp": 1715000000,
+        },
+    }
+    assert adapter.parse_webhook(raw) == []
