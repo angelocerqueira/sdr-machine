@@ -73,9 +73,52 @@ class EvolutionAdapter(WhatsAppProvider):
             status="sent",
         )
 
+    _MEDIA_EXT_MAP = {
+        "image": {"jpg", "jpeg", "png", "gif", "webp"},
+        "video": {"mp4", "mov", "webm"},
+        "audio": {"mp3", "ogg", "wav", "m4a"},
+        "document": {"pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv"},
+    }
+
+    def _infer_mediatype(self, media_url: str) -> str:
+        ext = media_url.rsplit(".", 1)[-1].lower().split("?")[0]
+        for kind, exts in self._MEDIA_EXT_MAP.items():
+            if ext in exts:
+                return kind
+        return "document"
+
+    def send_media(self, to_phone: str, media_url: str,
+                   caption: str | None = None) -> SentMessage:
+        phone = normalize_phone_br(to_phone)
+        mediatype = self._infer_mediatype(media_url)
+        body = {
+            "number": phone,
+            "mediatype": mediatype,
+            "media": media_url,
+        }
+        if caption:
+            body["caption"] = caption
+        r = httpx.post(
+            self._url(f"message/sendMedia/{self.instance}"),
+            json=body,
+            headers=self._headers(),
+            timeout=self.timeout,
+        )
+        if r.status_code not in (200, 201):
+            raise RuntimeError(
+                f"Evolution send_media failed: status={r.status_code} body={r.text[:200]}"
+            )
+        payload = r.json()
+        msg_id = (payload.get("key") or {}).get("id") or ""
+        return SentMessage(
+            provider_message_id=msg_id,
+            sent_at=datetime.now(timezone.utc),
+            phone_to=phone,
+            body=caption or "",
+            status="sent",
+        )
+
     # --- placeholders pra próximas tasks ---
-    def send_media(self, to_phone, media_url, caption=None):
-        raise NotImplementedError("Task 7")
 
     def fetch_history(self, phone, *, limit=50):
         raise NotImplementedError("Task 8")

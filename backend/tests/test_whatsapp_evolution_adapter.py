@@ -70,3 +70,34 @@ def test_send_text_raises_on_4xx(adapter):
             adapter.send_text(
                 to_phone="5544999990000", body="oi", idempotency_key="k",
             )
+
+
+def test_send_media_url_image(adapter):
+    fake_response = Mock(status_code=201)
+    fake_response.json.return_value = {
+        "key": {"id": "EVO-MM-1", "remoteJid": "5544999990000@s.whatsapp.net", "fromMe": True},
+        "status": "PENDING",
+    }
+    with patch("httpx.post", return_value=fake_response) as mock_post:
+        result = adapter.send_media(
+            to_phone="5544999990000",
+            media_url="https://cdn.example.com/lp/lead-42.png",
+            caption="LP personalizada pra você",
+        )
+    url = mock_post.call_args[0][0]
+    assert url.endswith("/message/sendMedia/sdr")
+    body = mock_post.call_args.kwargs["json"]
+    assert body["number"] == "5544999990000"
+    assert body["media"] == "https://cdn.example.com/lp/lead-42.png"
+    assert body["caption"] == "LP personalizada pra você"
+    # tipo inferido por extensão
+    assert body["mediatype"] == "image"
+    assert result.provider_message_id == "EVO-MM-1"
+
+
+def test_send_media_pdf_infers_document(adapter):
+    fake_response = Mock(status_code=201)
+    fake_response.json.return_value = {"key": {"id": "X"}, "status": "PENDING"}
+    with patch("httpx.post", return_value=fake_response) as mock_post:
+        adapter.send_media(to_phone="5544999990000", media_url="https://x.com/relatorio.pdf")
+    assert mock_post.call_args.kwargs["json"]["mediatype"] == "document"
