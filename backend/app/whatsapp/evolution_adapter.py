@@ -7,6 +7,7 @@ do lado do servidor Evolution (instância).
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone
 
 import httpx
@@ -218,7 +219,29 @@ class EvolutionAdapter(WhatsAppProvider):
 
         return []
 
-    # --- placeholders pra próximas tasks ---
-
-    def health_check(self):
-        raise NotImplementedError("Task 10")
+    # --- health_check ---
+    def health_check(self) -> ProviderHealth:
+        t0 = time.monotonic()
+        try:
+            r = httpx.get(
+                self._url(f"instance/connectionState/{self.instance}"),
+                headers=self._headers(),
+                timeout=self.timeout,
+            )
+        except httpx.HTTPError as exc:
+            return ProviderHealth(
+                ok=False, state="unreachable",
+                latency_ms=int((time.monotonic() - t0) * 1000),
+                error=str(exc)[:200],
+            )
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        if r.status_code != 200:
+            return ProviderHealth(
+                ok=False, state="error", latency_ms=latency_ms, error=r.text[:200],
+            )
+        body = r.json() if r.text else {}
+        state = (body.get("instance") or {}).get("state", "unknown")
+        return ProviderHealth(
+            ok=state == "open", state=state, latency_ms=latency_ms,
+            error=None if state == "open" else f"state={state}",
+        )

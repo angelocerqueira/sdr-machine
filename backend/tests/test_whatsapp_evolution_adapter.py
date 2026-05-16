@@ -214,3 +214,30 @@ def test_parse_webhook_group_message_ignored(adapter):
         },
     }
     assert adapter.parse_webhook(raw) == []
+
+
+def test_health_check_open(adapter):
+    fake_response = Mock(status_code=200)
+    fake_response.json.return_value = {"instance": {"state": "open"}}
+    with patch("httpx.get", return_value=fake_response):
+        h = adapter.health_check()
+    assert h.ok is True
+    assert h.state == "open"
+    assert h.error is None
+
+
+def test_health_check_connecting(adapter):
+    fake_response = Mock(status_code=200)
+    fake_response.json.return_value = {"instance": {"state": "connecting"}}
+    with patch("httpx.get", return_value=fake_response):
+        h = adapter.health_check()
+    assert h.ok is False
+    assert h.state == "connecting"
+
+
+def test_health_check_http_error(adapter):
+    fake_response = Mock(status_code=500, text="server error")
+    with patch("httpx.get", return_value=fake_response):
+        h = adapter.health_check()
+    assert h.ok is False
+    assert "server error" in (h.error or "")
