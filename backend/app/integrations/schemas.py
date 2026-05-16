@@ -37,6 +37,13 @@ class ApolloConfig(BaseModel):
     api_key: SecretStr
 
 
+class EvolutionConfig(BaseModel):
+    base_url: str           # ex: https://evo.example.com
+    instance: str           # nome da instância
+    api_key: SecretStr      # apikey header
+    webhook_secret: SecretStr | None = None  # HMAC pro receiver (P2)
+
+
 class LangsmithConfig(BaseModel):
     api_key: SecretStr
     project: str
@@ -50,6 +57,7 @@ PROVIDER_SCHEMAS: dict[str, type[BaseModel]] = {
     "llm": LlmConfig,
     "hunter": HunterConfig,
     "apollo": ApolloConfig,
+    "evolution": EvolutionConfig,
     "langsmith": LangsmithConfig,
 }
 
@@ -60,5 +68,6 @@ SECRET_FIELDS: dict[str, set[str]] = {
     "llm": {"api_key"},
     "hunter": {"api_key"},
     "apollo": {"api_key"},
+    "evolution": {"api_key", "webhook_secret"},
     "langsmith": {"api_key"},
 }

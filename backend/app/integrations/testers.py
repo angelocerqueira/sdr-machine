@@ -127,6 +127,35 @@ def check_apollo(cfg: dict, _t0: float | None = None) -> TestResult:
     )
 
 
+def check_evolution(cfg: dict, _t0: float | None = None) -> TestResult:
+    """Health check de instância Evolution API.
+
+    Considera ok=True apenas quando state == "open" (instância conectada
+    ao WhatsApp). Demais estados (connecting/close) → ok=False com
+    state no error pra UI exibir.
+    """
+    t0 = _t0 if _t0 is not None else time.monotonic()
+    base_url = cfg["base_url"].rstrip("/")
+    instance = cfg["instance"]
+    api_key = cfg["api_key"]
+    if hasattr(api_key, "get_secret_value"):
+        api_key = api_key.get_secret_value()
+    r = httpx.get(
+        f"{base_url}/instance/connectionState/{instance}",
+        headers={"apikey": api_key},
+        timeout=10.0,
+    )
+    if r.status_code != 200:
+        return _result(ok=False, t0=t0, error=r.text[:200])
+    body = r.json() if r.text else {}
+    state = (body.get("instance") or {}).get("state", "unknown")
+    return _result(
+        ok=state == "open",
+        t0=t0,
+        error=None if state == "open" else f"state={state}",
+    )
+
+
 def check_langsmith(cfg: dict, _t0: float | None = None) -> TestResult:
     t0 = _t0 if _t0 is not None else time.monotonic()
     r = httpx.get(
@@ -148,6 +177,7 @@ TESTERS: dict[str, callable] = {
     "llm": check_llm,
     "hunter": check_hunter,
     "apollo": check_apollo,
+    "evolution": check_evolution,
     "langsmith": check_langsmith,
 }
 
