@@ -54,3 +54,31 @@ def test_get_provider_disabled_row_treated_as_not_configured(db):
     _seed_evolution(db, enabled=False)
     with pytest.raises(ProviderNotConfigured):
         get_provider(db, workspace_id=1)
+
+
+def test_end_to_end_registry_send_text_mocked(db):
+    from datetime import datetime
+    from unittest.mock import Mock, patch
+
+    _seed_evolution(db)
+    adapter = get_provider(db, workspace_id=1)
+
+    fake_response = Mock(status_code=201)
+    fake_response.json.return_value = {
+        "key": {"id": "SMOKE-1", "remoteJid": "5544999990000@s.whatsapp.net", "fromMe": True},
+        "status": "PENDING",
+    }
+    with patch("httpx.post", return_value=fake_response) as mock_post:
+        result = adapter.send_text(
+            to_phone="5544999990000",
+            body="ping smoke",
+            idempotency_key="smoke-1",
+        )
+
+    # adapter usou config do DB
+    url = mock_post.call_args[0][0]
+    assert url == "https://evo.example.com/message/sendText/sdr"
+    headers = mock_post.call_args.kwargs["headers"]
+    assert headers["apikey"] == "SECRET_TOKEN"  # secret decifrado fluiu até httpx
+    assert result.provider_message_id == "SMOKE-1"
+    assert isinstance(result.sent_at, datetime)
