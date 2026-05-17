@@ -10,7 +10,7 @@ from app.database import SessionLocal
 from app.integrations.crypto import SettingsEncKeyMissing
 from app.middleware import AuthMiddleware
 from app.models import Job
-from app.routers import dashboard, leads, pipeline, settings, workspace_settings
+from app.routers import dashboard, leads, pipeline, settings, webhooks, workspace_settings
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ app.add_middleware(
 app.add_middleware(
     AuthMiddleware,
     database_url=app_settings.database_url,
-    public_paths=["/api/health", "/api/leads/p/", "/docs", "/openapi.json"],
+    public_paths=["/api/health", "/api/leads/p/", "/api/webhooks", "/docs", "/openapi.json"],
 )
 
 app.include_router(leads.router)
@@ -86,6 +86,7 @@ app.include_router(dashboard.router)
 app.include_router(settings.router)
 app.include_router(pipeline.router)
 app.include_router(workspace_settings.router)
+app.include_router(webhooks.router)
 
 
 @app.get("/api/health")
