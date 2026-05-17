@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
+from app.config import settings as app_settings
 from app.database import get_db
 from app.integrations.tenant import get_current_workspace_id
 from app.models import WorkspaceProfile, WorkspaceTargeting
@@ -260,6 +261,24 @@ def delete_integration(provider: str, request: Request, db: Session = Depends(ge
     db.query(IntegrationSettings).filter_by(workspace_id=ws, provider=provider).delete()
     db.commit()
     return None
+
+
+_WEBHOOK_URL_PROVIDERS = {"evolution"}
+
+
+@router.get("/integrations/{provider}/webhook-url")
+def get_webhook_url(provider: str, request: Request):
+    """URL pública do webhook pra este workspace/provider.
+
+    Frontend exibe num input read-only com botão copy em
+    `/app/settings/integracoes`. Provider precisa estar no allowlist
+    (atualmente: evolution).
+    """
+    if provider not in _WEBHOOK_URL_PROVIDERS:
+        raise HTTPException(status_code=404, detail="provider not found")
+    ws = get_current_workspace_id(request)
+    base = (app_settings.api_url or "http://localhost:8000").rstrip("/")
+    return {"url": f"{base}/api/webhooks/whatsapp/{ws}/{provider}"}
 
 
 @router.post("/integrations/{provider}/test")
