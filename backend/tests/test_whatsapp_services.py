@@ -2,11 +2,13 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.models import Conversation, ConversationMessage, Lead
+from app.models import Conversation, ConversationMessage, Lead, OutreachMessage
 from app.whatsapp.services import (
     append_message,
     find_lead_by_phone,
     get_or_create_conversation,
+    link_outreach_reply,
+    update_outreach_status,
 )
 
 
@@ -132,3 +134,91 @@ def test_append_message_outbound_does_not_increment_unread(db):
     )
     db.refresh(conv)
     assert conv.unread_count == 0
+
+
+def _make_outreach(db, *, lead_id, type_="initial",
+                   provider_message_id=None, status="enviada"):
+    om = OutreachMessage(
+        lead_id=lead_id, type=type_, message_text="oi",
+        status=status, provider_message_id=provider_message_id,
+    )
+    db.add(om)
+    db.commit()
+    db.refresh(om)
+    return om
+
+
+def test_link_outreach_reply_marks_lead_responded(db):
+    lead = _make_lead(db, telefone="5544999990000", status="outreach_sent")
+    om = _make_outreach(db, lead_id=lead.id)
+
+    result = link_outreach_reply(db, lead=lead, reply_timestamp=datetime.now(timezone.utc))
+    assert result is not None
+    assert result.id == om.id
+
+    db.refresh(lead)
+    assert lead.status == "responded"
+    assert lead.responded_at is not None
+
+
+def test_link_outreach_reply_no_double_advance(db):
+    lead = _make_lead(db, telefone="5544999990000", status="closed")
+    _make_outreach(db, lead_id=lead.id)
+
+    link_outreach_reply(db, lead=lead, reply_timestamp=datetime.now(timezone.utc))
+    db.refresh(lead)
+    assert lead.status == "closed"
+
+
+def test_link_outreach_reply_no_outreach_returns_none(db):
+    lead = _make_lead(db, telefone="5544999990000", status="outreach_sent")
+    result = link_outreach_reply(db, lead=lead, reply_timestamp=datetime.now(timezone.utc))
+    assert result is None
+    db.refresh(lead)
+    assert lead.status == "responded"
+    assert lead.responded_at is not None
+
+
+def test_update_outreach_status_delivered(db):
+    lead = _make_lead(db, telefone="5544999990000")
+    om = _make_outreach(db, lead_id=lead.id, provider_message_id="EVO-X-1")
+    ts = datetime.now(timezone.utc)
+
+    updated = update_outreach_status(
+        db, provider_message_id="EVO-X-1", new_status="delivered", timestamp=ts,
+    )
+    assert updated is not None
+    assert updated.id == om.id
+    assert updated.delivered_at is not None
+    assert updated.status == "enviada"
+
+
+def test_update_outreach_status_read(db):
+    lead = _make_lead(db, telefone="5544999990000")
+    om = _make_outreach(db, lead_id=lead.id, provider_message_id="EVO-Y-1")
+
+    updated = update_outreach_status(
+        db, provider_message_id="EVO-Y-1", new_status="read",
+        timestamp=datetime.now(timezone.utc),
+    )
+    assert updated.read_at is not None
+
+
+def test_update_outreach_status_failed_marks_status_and_reason(db):
+    lead = _make_lead(db, telefone="5544999990000")
+    om = _make_outreach(db, lead_id=lead.id, provider_message_id="EVO-Z-1")
+
+    updated = update_outreach_status(
+        db, provider_message_id="EVO-Z-1", new_status="failed",
+        timestamp=datetime.now(timezone.utc), failed_reason="bad number",
+    )
+    assert updated.status == "erro_envio"
+    assert updated.failed_reason == "bad number"
+
+
+def test_update_outreach_status_unknown_provider_msg_id(db):
+    result = update_outreach_status(
+        db, provider_message_id="DOESNT-EXIST", new_status="delivered",
+        timestamp=datetime.now(timezone.utc),
+    )
+    assert result is None
