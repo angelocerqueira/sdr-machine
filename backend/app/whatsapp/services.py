@@ -11,7 +11,7 @@ from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Conversation, ConversationMessage, Lead
+from app.models import Conversation, ConversationMessage, Lead, OutreachMessage
 from app.whatsapp.normalizer import normalize_phone_br
 
 logger = logging.getLogger(__name__)
@@ -139,3 +139,61 @@ def append_message(
         )
     db.refresh(msg)
     return msg
+
+
+_TERMINAL_LEAD_STATUSES = {"closed", "won", "lost", "delivered", "responded"}
+
+
+def link_outreach_reply(
+    db: Session, *, lead: Lead, reply_timestamp: datetime,
+) -> OutreachMessage | None:
+    """Marca o lead como respondido e retorna a OutreachMessage mais
+    recente (pra logging/contexto). Não regride leads que já passaram
+    de `responded`.
+    """
+    if lead.status not in _TERMINAL_LEAD_STATUSES:
+        lead.status = "responded"
+    if lead.responded_at is None:
+        lead.responded_at = reply_timestamp
+
+    latest = (
+        db.query(OutreachMessage)
+        .filter_by(lead_id=lead.id)
+        .order_by(OutreachMessage.created_at.desc())
+        .first()
+    )
+    db.commit()
+    return latest
+
+
+_STATUS_FIELD_MAP = {
+    "delivered": "delivered_at",
+    "read": "read_at",
+    "sent": "sent_at",
+}
+
+
+def update_outreach_status(
+    db: Session, *, provider_message_id: str, new_status: str,
+    timestamp: datetime, failed_reason: str | None = None,
+) -> OutreachMessage | None:
+    """Atualiza `OutreachMessage` pelo `provider_message_id`. Mapeia
+    status → coluna timestamp correspondente. `failed` seta
+    `status="erro_envio"` + `failed_reason`.
+    """
+    om = (
+        db.query(OutreachMessage)
+        .filter_by(provider_message_id=provider_message_id)
+        .first()
+    )
+    if om is None:
+        return None
+    if new_status == "failed":
+        om.status = "erro_envio"
+        om.failed_reason = failed_reason or "unknown"
+    field = _STATUS_FIELD_MAP.get(new_status)
+    if field is not None:
+        setattr(om, field, timestamp)
+    db.commit()
+    db.refresh(om)
+    return om
