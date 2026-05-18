@@ -3,6 +3,8 @@ import type {
   IntegrationSummary, ProviderId, TestResult,
 } from "./settings-types";
 
+export type { TestResult, IntegrationSummary, ProviderId } from "./settings-types";
+
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 async function authedFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
