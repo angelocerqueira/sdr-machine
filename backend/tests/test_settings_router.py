@@ -239,3 +239,74 @@ def test_integration_test_with_corrupt_secret_returns_422(client, db):
     res = client.post("/api/workspace/integrations/resend/test")
     assert res.status_code == 422
     assert "corrupted" in res.json()["detail"].lower()
+
+
+def test_evolution_connect_no_config(client, db):
+    """No IntegrationSettings row → 422."""
+    r = client.post("/api/workspace/integrations/evolution/connect")
+    assert r.status_code == 422
+
+
+def test_evolution_status_no_config(client, db):
+    r = client.get("/api/workspace/integrations/evolution/status")
+    assert r.status_code == 422
+
+
+def test_evolution_connect_returns_qr(client, db, httpx_mock):
+    from app.integrations.crypto import encrypt
+    from app.models import IntegrationSettings
+
+    db.add(IntegrationSettings(
+        workspace_id=1, provider="evolution", enabled=True,
+        config={
+            "base_url": "https://evo.example.com",
+            "instance": "sdr",
+            "api_key": encrypt("KEY"),
+            "webhook_secret": encrypt("SEC"),
+        },
+    ))
+    db.commit()
+
+    httpx_mock.add_response(
+        url="https://evo.example.com/instance/connect/sdr",
+        json={"base64": "data:image/png;base64,iVBORw0K", "code": "2@abc"},
+    )
+    httpx_mock.add_response(
+        url="https://evo.example.com/instance/connectionState/sdr",
+        json={"instance": {"state": "connecting"}},
+    )
+
+    r = client.post("/api/workspace/integrations/evolution/connect")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["ok"] is True
+    assert body["qr_base64"] == "data:image/png;base64,iVBORw0K"
+    assert body["code"] == "2@abc"
+    assert body["state"] == "connecting"
+
+
+def test_evolution_status_returns_state(client, db, httpx_mock):
+    from app.integrations.crypto import encrypt
+    from app.models import IntegrationSettings
+
+    db.add(IntegrationSettings(
+        workspace_id=1, provider="evolution", enabled=True,
+        config={
+            "base_url": "https://evo.example.com",
+            "instance": "sdr",
+            "api_key": encrypt("KEY"),
+            "webhook_secret": encrypt("SEC"),
+        },
+    ))
+    db.commit()
+
+    httpx_mock.add_response(
+        url="https://evo.example.com/instance/connectionState/sdr",
+        json={"instance": {"state": "open"}},
+    )
+
+    r = client.get("/api/workspace/integrations/evolution/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["state"] == "open"
+    assert body["ok"] is True

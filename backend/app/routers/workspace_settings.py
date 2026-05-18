@@ -123,6 +123,11 @@ from app.integrations.resolver import _decrypt_secrets  # shared logic within ap
 from app.integrations.schemas import PROVIDER_SCHEMAS, SECRET_FIELDS
 from app.integrations.testers import run_test
 from app.models import IntegrationSettings
+from app.whatsapp.registry import (
+    ProviderNotConfigured,
+    UnknownProviderError,
+    get_provider,
+)
 
 KNOWN_PROVIDERS = list(PROVIDER_SCHEMAS.keys())
 
@@ -279,6 +284,43 @@ def get_webhook_url(provider: str, request: Request):
     ws = get_current_workspace_id(request)
     base = (app_settings.api_url or "http://localhost:8000").rstrip("/")
     return {"url": f"{base}/api/webhooks/whatsapp/{ws}/{provider}"}
+
+
+@router.post("/integrations/evolution/connect")
+def evolution_connect(request: Request, db: Session = Depends(get_db)):
+    """Inicia connection flow Evolution (gera QR). Requer credenciais já salvas."""
+    ws = get_current_workspace_id(request)
+    try:
+        adapter = get_provider(db, workspace_id=ws, provider="evolution")
+    except (UnknownProviderError, ProviderNotConfigured) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    result = adapter.connect_instance()
+    if not result.get("ok"):
+        raise HTTPException(
+            status_code=502,
+            detail=result.get("error") or "Evolution connect failed",
+        )
+    # Also report current state so frontend doesn't need 2nd call
+    health = adapter.health_check()
+    result["state"] = health.state
+    return result
+
+
+@router.get("/integrations/evolution/status")
+def evolution_status(request: Request, db: Session = Depends(get_db)):
+    """Estado atual da instance Evolution. Usado pra polling após scan QR."""
+    ws = get_current_workspace_id(request)
+    try:
+        adapter = get_provider(db, workspace_id=ws, provider="evolution")
+    except (UnknownProviderError, ProviderNotConfigured) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    health = adapter.health_check()
+    return {
+        "state": health.state,
+        "ok": health.ok,
+        "latency_ms": health.latency_ms,
+        "error": health.error,
+    }
 
 
 @router.post("/integrations/{provider}/test")
