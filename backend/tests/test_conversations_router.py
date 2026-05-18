@@ -130,3 +130,78 @@ def test_get_conversation_detail(client, db):
 def test_get_conversation_not_found(client, db):
     r = client.get("/api/conversations/9999")
     assert r.status_code == 404
+
+
+from unittest.mock import Mock, patch
+from app.integrations.crypto import encrypt
+from app.models import IntegrationSettings
+
+
+def _seed_evolution(db):
+    db.add(IntegrationSettings(
+        workspace_id=1, provider="evolution", enabled=True,
+        config={
+            "base_url": "https://evo.example.com", "instance": "sdr",
+            "api_key": encrypt("X"), "webhook_secret": encrypt("Y"),
+        },
+    ))
+    db.commit()
+
+
+def test_send_message_outbound_ok(client, db):
+    _seed_evolution(db)
+    lead, conv = _seed_conversation(db, lead_telefone="5544999990000")
+
+    fake_response = Mock(status_code=201)
+    fake_response.json.return_value = {
+        "key": {"id": "SEND-1", "remoteJid": "5544999990000@s.whatsapp.net", "fromMe": True},
+        "status": "PENDING",
+    }
+    with patch("httpx.post", return_value=fake_response):
+        r = client.post(
+            f"/api/conversations/{conv.id}/messages",
+            json={"body": "oi do operador"},
+        )
+
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["direction"] == "out"
+    assert body["body"] == "oi do operador"
+    assert body["provider_message_id"] == "SEND-1"
+
+
+def test_send_message_persists_conversation_message(client, db):
+    _seed_evolution(db)
+    lead, conv = _seed_conversation(db, lead_telefone="5544999990000")
+
+    fake_response = Mock(status_code=201)
+    fake_response.json.return_value = {
+        "key": {"id": "SEND-2", "remoteJid": "x@s.whatsapp.net", "fromMe": True},
+        "status": "PENDING",
+    }
+    with patch("httpx.post", return_value=fake_response):
+        client.post(
+            f"/api/conversations/{conv.id}/messages",
+            json={"body": "msg X"},
+        )
+
+    from app.models import ConversationMessage
+    out_msgs = db.query(ConversationMessage).filter_by(
+        conversation_id=conv.id, direction="out"
+    ).all()
+    assert len(out_msgs) == 1
+    assert out_msgs[0].body == "msg X"
+    assert out_msgs[0].provider_message_id == "SEND-2"
+
+
+def test_send_message_conversation_not_found(client, db):
+    _seed_evolution(db)
+    r = client.post("/api/conversations/9999/messages", json={"body": "x"})
+    assert r.status_code == 404
+
+
+def test_send_message_empty_body_rejected(client, db):
+    _seed_evolution(db)
+    lead, conv = _seed_conversation(db, lead_telefone="5544999990000")
+    r = client.post(f"/api/conversations/{conv.id}/messages", json={"body": ""})
+    assert r.status_code == 422

@@ -115,3 +115,45 @@ def get_conversation(conversation_id: int, db: Session = Depends(get_db)):
         created_at=conv.created_at,
         messages=[MessageOut.model_validate(m) for m in messages],
     )
+
+
+@router.post("/{conversation_id}/messages", response_model=MessageOut, status_code=201)
+def send_message(
+    conversation_id: int, payload: SendMessageIn,
+    db: Session = Depends(get_db),
+):
+    conv = (
+        db.query(Conversation)
+        .filter_by(id=conversation_id, workspace_id=WORKSPACE_ID)
+        .first()
+    )
+    if not conv:
+        raise HTTPException(status_code=404, detail="conversation not found")
+
+    try:
+        adapter = get_provider(db, workspace_id=WORKSPACE_ID, provider=conv.provider)
+    except (UnknownProviderError, ProviderNotConfigured) as exc:
+        logger.warning(
+            "conversations.send.provider_unavailable conv=%s reason=%s",
+            conv.id, exc,
+        )
+        raise HTTPException(status_code=503, detail=f"provider unavailable: {exc}")
+
+    idempotency_key = f"manual_send_conv_{conv.id}_{int(datetime.utcnow().timestamp()*1000)}"
+
+    try:
+        sent = adapter.send_text(
+            to_phone=conv.phone, body=payload.body,
+            idempotency_key=idempotency_key,
+        )
+    except Exception as exc:
+        logger.exception("conversations.send.failed conv=%s", conv.id)
+        raise HTTPException(status_code=502, detail=f"send failed: {exc}")
+
+    msg = append_message(
+        db, conversation_id=conv.id, direction="out",
+        provider_message_id=sent.provider_message_id, body=payload.body,
+        timestamp=sent.sent_at,
+    )
+
+    return MessageOut.model_validate(msg)
