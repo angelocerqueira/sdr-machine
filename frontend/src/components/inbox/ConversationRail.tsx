@@ -19,7 +19,7 @@ export function ConversationRail({ conversation }: Props) {
           Telefone: <strong>{conversation.phone}</strong>
         </div>
         <Link
-          href={`/app/leads?selected=${conversation.lead_id}`}
+          href={`/app/leads/${conversation.lead_id}`}
           style={{
             display: "inline-block", marginTop: 12,
             padding: "6px 12px", borderRadius: 8,
