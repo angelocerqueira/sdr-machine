@@ -1,10 +1,25 @@
-/* Inbox layout */
+/* Inbox layout — mobile-first */
 .inbox-root {
   display: grid;
-  grid-template-columns: 320px 1fr 320px;
+  grid-template-columns: 1fr;
   height: calc(100vh - 56px);
   gap: 0;
   background: var(--surface);
+}
+
+.inbox-list-col,
+.inbox-rail-col {
+  display: none;
+}
+
+.inbox-root.show-list .inbox-list-col,
+.inbox-root.show-rail .inbox-rail-col {
+  display: block;
+  position: absolute;
+  inset: 56px 0 0 0;
+  background: var(--surface);
+  z-index: 10;
+  overflow-y: auto;
 }
 
 .inbox-list-col {
@@ -21,6 +36,19 @@
 .inbox-rail-col {
   border-left: 1px solid var(--border);
   overflow-y: auto;
+}
+
+@media (min-width: 769px) {
+  .inbox-root {
+    grid-template-columns: 320px 1fr 320px;
+  }
+  .inbox-list-col,
+  .inbox-rail-col {
+    display: block;
+    position: static;
+    inset: auto;
+    z-index: auto;
+  }
 }
 
 .inbox-conv-messages {
@@ -123,20 +151,3 @@
   font-size: 14px;
 }
 
-/* Mobile */
-@media (max-width: 768px) {
-  .inbox-root {
-    grid-template-columns: 1fr;
-  }
-  .inbox-list-col, .inbox-rail-col {
-    display: none;
-  }
-  .inbox-root.show-list .inbox-list-col,
-  .inbox-root.show-rail .inbox-rail-col {
-    display: block;
-    position: absolute;
-    inset: 56px 0 0 0;
-    background: var(--surface);
-    z-index: 10;
-  }
-}
