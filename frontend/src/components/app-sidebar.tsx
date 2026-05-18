@@ -12,6 +12,7 @@ import { useToast } from "@/components/ui/toast";
 const NAV_ITEMS: { key: string; icon: IconName; label: string; href: string }[] = [
   { key: "home", icon: "home", label: "Dashboard", href: "/app" },
   { key: "board", icon: "board", label: "Pipeline", href: "/app/pipeline" },
+  { key: "inbox", icon: "message", label: "Inbox", href: "/app/inbox" },
   { key: "leads", icon: "lead", label: "Leads", href: "/app/leads" },
   { key: "job", icon: "job", label: "Jobs", href: "/app/jobs" },
 ];
@@ -56,6 +57,30 @@ function JobBadge() {
   if (runningCount === 0) return null;
 
   return <span className="app-sidebar-btn-badge">{runningCount > 99 ? "99+" : runningCount}</span>;
+}
+
+function InboxUnreadBadge() {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    async function poll() {
+      try {
+        const { listConversations } = await import("@/lib/api-inbox");
+        const items = await listConversations({ filter: "unread" });
+        if (!cancelled) {
+          const total = items.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+          setCount(total);
+        }
+      } catch {
+        // ignore
+      }
+    }
+    poll();
+    const id = setInterval(poll, 10000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+  if (count === 0) return null;
+  return <span className="app-sidebar-btn-badge">{count > 99 ? "99+" : count}</span>;
 }
 
 export function AppSidebar() {
@@ -160,6 +185,7 @@ export function AppSidebar() {
           >
             <Icon name={it.icon} size={20} />
             {it.key === "job" && <JobBadge />}
+            {it.key === "inbox" && <InboxUnreadBadge />}
             <span className="app-sidebar-tip">{it.label}</span>
           </button>
         ))}
