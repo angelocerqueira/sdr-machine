@@ -234,15 +234,23 @@ class EvolutionAdapter(WhatsAppProvider):
                 timeout=self.timeout,
             )
         except httpx.HTTPError as exc:
+            logger.warning(
+                "evolution.connect.unreachable instance=%s exc=%s",
+                self.instance, exc,
+            )
             return {
                 "ok": False,
-                "error": str(exc)[:200],
+                "error": "Evolution server unreachable",
                 "latency_ms": int((time.monotonic() - t0) * 1000),
             }
         if r.status_code != 200:
+            logger.warning(
+                "evolution.connect.http_error instance=%s status=%s body=%r",
+                self.instance, r.status_code, r.text[:500],
+            )
             return {
                 "ok": False,
-                "error": r.text[:300],
+                "error": f"Evolution returned {r.status_code}",
                 "status_code": r.status_code,
                 "latency_ms": int((time.monotonic() - t0) * 1000),
             }

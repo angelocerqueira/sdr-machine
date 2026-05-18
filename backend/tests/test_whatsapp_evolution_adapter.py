@@ -241,3 +241,54 @@ def test_health_check_http_error(adapter):
         h = adapter.health_check()
     assert h.ok is False
     assert "server error" in (h.error or "")
+
+
+def test_connect_instance_returns_qr(adapter):
+    fake_response = Mock(status_code=200, text='{"base64":"x"}')
+    fake_response.json.return_value = {
+        "base64": "data:image/png;base64,QR",
+        "code": "2@xyz",
+    }
+    with patch("httpx.get", return_value=fake_response) as mock_get:
+        result = adapter.connect_instance()
+    url = mock_get.call_args[0][0]
+    assert url == "https://evo.example.com/instance/connect/sdr"
+    assert result["ok"] is True
+    assert result["qr_base64"] == "data:image/png;base64,QR"
+    assert result["code"] == "2@xyz"
+
+
+def test_connect_instance_alt_shape_qrcode_nested(adapter):
+    """Evolution variante: { qrcode: { base64, code } }"""
+    fake_response = Mock(status_code=200, text='{"qrcode":{}}')
+    fake_response.json.return_value = {
+        "qrcode": {"base64": "data:image/png;base64,XX", "code": "2@nested"},
+    }
+    with patch("httpx.get", return_value=fake_response):
+        result = adapter.connect_instance()
+    assert result["ok"] is True
+    assert result["qr_base64"] == "data:image/png;base64,XX"
+    assert result["code"] == "2@nested"
+
+
+def test_connect_instance_5xx_returns_sanitized(adapter):
+    """Evolution 5xx: erro genérico, não vaza body raw."""
+    fake_response = Mock(
+        status_code=502,
+        text="<html>internal server error stack...</html>",
+    )
+    with patch("httpx.get", return_value=fake_response):
+        result = adapter.connect_instance()
+    assert result["ok"] is False
+    assert "internal server error" not in result["error"].lower()
+    assert "502" in result["error"]
+
+
+def test_connect_instance_timeout_returns_sanitized(adapter):
+    """Timeout: erro genérico, sem detalhe interno."""
+    import httpx as _httpx
+
+    with patch("httpx.get", side_effect=_httpx.TimeoutException("timed out")):
+        result = adapter.connect_instance()
+    assert result["ok"] is False
+    assert "unreachable" in result["error"].lower()
