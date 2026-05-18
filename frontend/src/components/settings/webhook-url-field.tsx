@@ -34,12 +34,18 @@ export function WebhookUrlField({ provider, label = "URL do webhook", hint }: Pr
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+      return;
     } catch {
-      const input = document.querySelector<HTMLInputElement>(`input[data-webhook-url="${provider}"]`);
-      input?.select();
-      document.execCommand("copy");
+      // Clipboard API failed (insecure context, permissions). Try execCommand fallback.
+    }
+    const input = document.querySelector<HTMLInputElement>(`input[data-webhook-url="${provider}"]`);
+    input?.select();
+    const ok = document.execCommand("copy");
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+    } else {
+      setError("Falha ao copiar — selecione o campo e use Ctrl/Cmd+C");
     }
   }
 
