@@ -2,9 +2,9 @@ import pytest
 from pydantic import ValidationError
 
 
-def test_provider_schemas_registry_has_all_seven():
+def test_provider_schemas_registry_has_all_eight():
     from app.integrations.schemas import PROVIDER_SCHEMAS
-    expected = {"resend", "telegram", "apify", "llm", "hunter", "apollo", "langsmith"}
+    expected = {"resend", "telegram", "apify", "llm", "hunter", "apollo", "evolution", "langsmith"}
     assert set(PROVIDER_SCHEMAS.keys()) == expected
 
 

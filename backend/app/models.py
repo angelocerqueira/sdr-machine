@@ -86,6 +86,7 @@ class Lead(Base):
     job_id = Column(Integer, ForeignKey("jobs.id", ondelete="SET NULL"))
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    responded_at = Column(DateTime)
 
     job = relationship("Job", back_populates="leads")
     outreach_messages = relationship("OutreachMessage", back_populates="lead", cascade="all, delete-orphan")
@@ -146,6 +147,10 @@ class OutreachMessage(Base):
     click_count = Column(Integer, nullable=False, default=0, server_default="0")
     manual_rating = Column(SmallInteger, nullable=True)
     variant_label = Column(String(8), nullable=True)
+    provider_message_id = Column(String(120), index=True)
+    delivered_at = Column(DateTime)
+    read_at = Column(DateTime)
+    failed_reason = Column(Text)
     created_at = Column(DateTime, default=func.now())
 
     lead = relationship("Lead", back_populates="outreach_messages")
@@ -204,3 +209,66 @@ class WorkspaceTargeting(Base):
     disqualify_threshold = Column(Integer, nullable=True)
     skip_service_level_analysis = Column(Boolean, nullable=True)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    id = Column(Integer, primary_key=True)
+    workspace_id = Column(Integer, nullable=False, default=1)
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(String(20), nullable=False)
+    provider_chat_id = Column(String(120), nullable=False)
+    phone = Column(String(20), nullable=False)
+    last_message_at = Column(DateTime)
+    unread_count = Column(Integer, nullable=False, default=0)
+    status = Column(String(20), nullable=False, default="active")
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    lead = relationship("Lead")
+    messages = relationship(
+        "ConversationMessage",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="ConversationMessage.created_at",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id", "provider", "provider_chat_id",
+            name="uq_conversations_workspace_provider_chat",
+        ),
+        Index("ix_conversations_lead_id", "lead_id"),
+        Index("ix_conversations_phone", "phone"),
+    )
+
+
+class ConversationMessage(Base):
+    __tablename__ = "conversation_messages"
+
+    id = Column(Integer, primary_key=True)
+    conversation_id = Column(
+        Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
+    )
+    direction = Column(String(4), nullable=False)  # "in" | "out"
+    provider_message_id = Column(String(120), unique=True)
+    body = Column(Text)
+    media_url = Column(Text)
+    status = Column(String(20), nullable=False, default="queued")
+    sent_at = Column(DateTime)
+    delivered_at = Column(DateTime)
+    read_at = Column(DateTime)
+    received_at = Column(DateTime)
+    sent_by_user_id = Column(String(64))
+    outreach_message_id = Column(
+        Integer, ForeignKey("outreach_messages.id", ondelete="SET NULL")
+    )
+    error = Column(Text)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    conversation = relationship("Conversation", back_populates="messages")
+
+    __table_args__ = (
+        Index("ix_conversation_messages_conv_created", "conversation_id", "created_at"),
+    )
