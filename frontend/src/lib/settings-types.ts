@@ -1,6 +1,6 @@
 export type ProviderId =
   | "resend" | "telegram" | "apify" | "llm"
-  | "hunter" | "apollo" | "langsmith";
+  | "hunter" | "apollo" | "langsmith" | "evolution";
 
 export interface TestResult {
   ok: boolean;
@@ -51,4 +51,5 @@ export const PROVIDER_META: Record<ProviderId, { label: string; description: str
   hunter:    { label: "Hunter",    description: "Descoberta de email por domínio",                  docs: "https://hunter.io/api-documentation" },
   apollo:    { label: "Apollo",    description: "Enriquecimento de contato",                        docs: "https://apolloio.github.io/apollo-api-docs/" },
   langsmith: { label: "LangSmith", description: "Tracing de chains LLM",                            docs: "https://docs.smith.langchain.com" },
+  evolution: { label: "WhatsApp (Evolution)", description: "Envio e recebimento de mensagens WhatsApp via Evolution API", docs: "https://doc.evolution-api.com" },
 };

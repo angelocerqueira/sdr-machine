@@ -7,6 +7,7 @@ import { getIntegration, updateIntegration, deleteIntegration } from "@/lib/api-
 import { SecretField } from "@/components/settings/secret-field";
 import { TestButton } from "@/components/settings/test-button";
 import { StatusBadge } from "@/components/settings/status-badge";
+import { WebhookUrlField } from "@/components/settings/webhook-url-field";
 import { PROVIDER_META, type IntegrationSummary, type ProviderId } from "@/lib/settings-types";
 
 const PROVIDER_FIELDS: Record<ProviderId, { secrets: { key: string; label: string }[]; plain: { key: string; label: string; type?: string }[] }> = {
@@ -21,6 +22,16 @@ const PROVIDER_FIELDS: Record<ProviderId, { secrets: { key: string; label: strin
   apollo:    { secrets: [{ key: "api_key", label: "API key" }], plain: [] },
   langsmith: { secrets: [{ key: "api_key", label: "API key" }],
                plain:   [{ key: "project", label: "Projeto" }] },
+  evolution: {
+    secrets: [
+      { key: "api_key", label: "API key" },
+      { key: "webhook_secret", label: "Webhook secret (HMAC)" },
+    ],
+    plain: [
+      { key: "base_url", label: "Base URL Evolution", type: "url" },
+      { key: "instance", label: "Instance name" },
+    ],
+  },
 };
 
 export default function IntegrationDetail({ params }: { params: Promise<{ provider: string }> }) {
@@ -122,6 +133,19 @@ export default function IntegrationDetail({ params }: { params: Promise<{ provid
               />
             </div>
           ))}
+        </section>
+      )}
+
+      {provider === "evolution" && (
+        <section className="settings-section">
+          <h3 className="settings-section-title">Webhook</h3>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 8 }}>
+            Configure essa URL no painel da Evolution API pra receber mensagens. Use o webhook secret como header <code>X-Sdr-Signature</code>.
+          </p>
+          <WebhookUrlField
+            provider="evolution"
+            hint="Eventos: messages.upsert (inbound) + messages.update (status)"
+          />
         </section>
       )}
 

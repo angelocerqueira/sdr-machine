@@ -52,3 +52,6 @@ export const deleteIntegration = (provider: ProviderId) =>
   authedFetch<void>(`/api/workspace/integrations/${provider}`, { method: "DELETE" });
 export const testIntegration   = (provider: ProviderId) =>
   authedFetch<TestResult>(`/api/workspace/integrations/${provider}/test`, { method: "POST" });
+
+export const getProviderWebhookUrl = (provider: ProviderId) =>
+  authedFetch<{ url: string }>(`/api/workspace/integrations/${provider}/webhook-url`);
