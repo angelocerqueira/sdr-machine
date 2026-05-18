@@ -1,0 +1,56 @@
+.webhook-url-field {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin-top: 4px;
+}
+
+.webhook-url-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+  user-select: all;
+  cursor: text;
+  outline: none;
+}
+
+.webhook-url-copy {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+
+.webhook-url-copy:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.webhook-url-copy.copied {
+  background: var(--salvia, #88c08a);
+  color: white;
+  border-color: var(--salvia, #88c08a);
+}
+
+.webhook-url-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.webhook-url-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
