@@ -116,6 +116,13 @@ def test_integration_delete(client):
     assert res.json()["enabled"] is False
 
 
+def test_get_webhook_url_evolution(client):
+    r = client.get("/api/workspace/integrations/evolution/webhook-url")
+    assert r.status_code == 200
+    j = r.json()
+    assert "/api/webhooks/whatsapp/1/evolution" in j["url"]
+
+
 def test_integration_test_endpoint(client, httpx_mock):
     httpx_mock.add_response(
         url="https://api.resend.com/domains",
