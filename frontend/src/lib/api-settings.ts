@@ -3,6 +3,8 @@ import type {
   IntegrationSummary, ProviderId, TestResult,
 } from "./settings-types";
 
+export type { TestResult, IntegrationSummary, ProviderId } from "./settings-types";
+
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 async function authedFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -55,3 +57,41 @@ export const testIntegration   = (provider: ProviderId) =>
 
 export const getProviderWebhookUrl = (provider: ProviderId) =>
   authedFetch<{ url: string }>(`/api/workspace/integrations/${provider}/webhook-url`);
+
+// Evolution-specific QR flow
+export type EvolutionState =
+  | "open"
+  | "connecting"
+  | "close"
+  | "unreachable"
+  | "error"
+  | "unknown";
+
+export type EvolutionConnectResponse =
+  | {
+      ok: true;
+      qr_base64: string | null;
+      pairing_code: string | null;
+      code: string | null;
+      state: string;
+      latency_ms: number;
+    }
+  | {
+      ok: false;
+      error: string;
+      status_code?: number;
+      latency_ms: number;
+    };
+
+export interface EvolutionStatusResponse {
+  state: string;  // "open" | "connecting" | "close" | "unreachable" | "error" | "unknown"
+  ok: boolean;
+  latency_ms: number;
+  error: string | null;
+}
+
+export const connectEvolution = () =>
+  authedFetch<EvolutionConnectResponse>("/api/workspace/integrations/evolution/connect", { method: "POST" });
+
+export const getEvolutionStatus = () =>
+  authedFetch<EvolutionStatusResponse>("/api/workspace/integrations/evolution/status");

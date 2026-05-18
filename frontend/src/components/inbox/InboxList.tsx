@@ -25,8 +25,8 @@ function fmtRelative(iso: string | null): string {
 export function InboxList({ items, selectedId }: Props) {
   if (items.length === 0) {
     return (
-      <div className="inbox-empty" style={{ padding: 24 }}>
-        Nenhuma conversa ainda.
+      <div className="inbox-empty" style={{ padding: 24, fontSize: 13, lineHeight: 1.5 }}>
+        Sem conversas ainda. Quando um lead responder no WhatsApp, ele aparece aqui.
       </div>
     );
   }

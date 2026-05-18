@@ -219,6 +219,58 @@ class EvolutionAdapter(WhatsAppProvider):
 
         return []
 
+    # --- connect_instance ---
+    def connect_instance(self) -> dict:
+        """Inicia connection flow da instance — retorna QR code base64 + estado atual.
+
+        Evolution: GET /instance/connect/<instance>
+        Response shape (varia entre versões): { base64, code, pairingCode?, state? }
+        """
+        t0 = time.monotonic()
+        try:
+            r = httpx.get(
+                self._url(f"instance/connect/{self.instance}"),
+                headers=self._headers(),
+                timeout=self.timeout,
+            )
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "evolution.connect.unreachable instance=%s exc=%s",
+                self.instance, exc,
+            )
+            return {
+                "ok": False,
+                "error": "Evolution server unreachable",
+                "latency_ms": int((time.monotonic() - t0) * 1000),
+            }
+        if r.status_code != 200:
+            logger.warning(
+                "evolution.connect.http_error instance=%s status=%s body=%r",
+                self.instance, r.status_code, r.text[:500],
+            )
+            return {
+                "ok": False,
+                "error": f"Evolution returned {r.status_code}",
+                "status_code": r.status_code,
+                "latency_ms": int((time.monotonic() - t0) * 1000),
+            }
+        body = r.json() if r.text else {}
+        # Normalize fields — Evolution version variability:
+        qr_base64 = (
+            body.get("base64")
+            or (body.get("qrcode") or {}).get("base64")
+            or None
+        )
+        pairing_code = body.get("pairingCode") or body.get("pairing_code")
+        code = body.get("code") or (body.get("qrcode") or {}).get("code")
+        return {
+            "ok": True,
+            "qr_base64": qr_base64,
+            "pairing_code": pairing_code,
+            "code": code,
+            "latency_ms": int((time.monotonic() - t0) * 1000),
+        }
+
     # --- health_check ---
     def health_check(self) -> ProviderHealth:
         t0 = time.monotonic()
