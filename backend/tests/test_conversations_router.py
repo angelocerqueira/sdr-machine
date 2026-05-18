@@ -205,3 +205,19 @@ def test_send_message_empty_body_rejected(client, db):
     lead, conv = _seed_conversation(db, lead_telefone="5544999990000")
     r = client.post(f"/api/conversations/{conv.id}/messages", json={"body": ""})
     assert r.status_code == 422
+
+
+def test_mark_read_zeros_unread(client, db):
+    lead, conv = _seed_conversation(db, unread=5, msgs=[("in", "x")])
+    r = client.patch(f"/api/conversations/{conv.id}/read")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["unread_count"] == 0
+
+    db.refresh(conv)
+    assert conv.unread_count == 0
+
+
+def test_mark_read_not_found(client, db):
+    r = client.patch("/api/conversations/9999/read")
+    assert r.status_code == 404

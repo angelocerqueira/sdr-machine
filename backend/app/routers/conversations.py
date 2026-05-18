@@ -157,3 +157,29 @@ def send_message(
     )
 
     return MessageOut.model_validate(msg)
+
+
+@router.patch("/{conversation_id}/read", response_model=ConversationListItem)
+def mark_read(conversation_id: int, db: Session = Depends(get_db)):
+    conv = (
+        db.query(Conversation)
+        .filter_by(id=conversation_id, workspace_id=WORKSPACE_ID)
+        .first()
+    )
+    if not conv:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    conv.unread_count = 0
+    db.commit()
+    db.refresh(conv)
+
+    lead = db.query(Lead).filter_by(id=conv.lead_id).first()
+    return ConversationListItem(
+        id=conv.id, lead_id=conv.lead_id,
+        lead_nome=lead.nome if lead else None,
+        lead_telefone=lead.telefone if lead else None,
+        lead_status=lead.status if lead else None,
+        provider=conv.provider, phone=conv.phone,
+        last_message_at=conv.last_message_at,
+        last_message_preview=_build_preview(conv, db),
+        unread_count=conv.unread_count, status=conv.status,
+    )
