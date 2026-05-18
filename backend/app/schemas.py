@@ -276,3 +276,59 @@ class LeadIdsResponse(BaseModel):
     ids: list[int] = Field(default_factory=list)
     total: int
     truncated: bool = False
+
+
+# === Conversations / Inbox ===
+
+class MessageOut(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: int
+    conversation_id: int
+    direction: str  # "in" | "out"
+    provider_message_id: str | None
+    body: str | None
+    media_url: str | None
+    status: str
+    sent_at: datetime | None
+    delivered_at: datetime | None
+    read_at: datetime | None
+    received_at: datetime | None
+    error: str | None
+    created_at: datetime
+
+
+class ConversationListItem(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: int
+    lead_id: int
+    lead_nome: str | None
+    lead_telefone: str | None
+    lead_status: str | None
+    provider: str
+    phone: str
+    last_message_at: datetime | None
+    last_message_preview: str | None
+    unread_count: int
+    status: str
+
+
+class ConversationOut(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: int
+    workspace_id: int
+    lead_id: int
+    provider: str
+    provider_chat_id: str
+    phone: str
+    last_message_at: datetime | None
+    unread_count: int
+    status: str
+    created_at: datetime
+    messages: list[MessageOut]
+
+
+class SendMessageIn(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)

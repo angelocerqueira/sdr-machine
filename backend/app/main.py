@@ -10,7 +10,7 @@ from app.database import SessionLocal
 from app.integrations.crypto import SettingsEncKeyMissing
 from app.middleware import AuthMiddleware
 from app.models import Job
-from app.routers import dashboard, leads, pipeline, settings, webhooks, workspace_settings
+from app.routers import conversations, dashboard, leads, pipeline, settings, webhooks, workspace_settings
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +87,7 @@ app.include_router(settings.router)
 app.include_router(pipeline.router)
 app.include_router(workspace_settings.router)
 app.include_router(webhooks.router)
+app.include_router(conversations.router)
 
 
 @app.get("/api/health")

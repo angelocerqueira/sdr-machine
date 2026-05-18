@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smoke Test — Evolution → Webhook P2</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --surface: #181b22;
+    --surface-2: #1f2530;
+    --border: #2a3142;
+    --text: #e4e7ef;
+    --text-dim: #9aa3b8;
+    --accent: #7aa6ff;
+    --terra: #ff8b6e;
+    --mostarda: #e6c45c;
+    --salvia: #88c08a;
+    --mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+    --sans: 'Inter Tight', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #fafaf7;
+      --surface: #ffffff;
+      --surface-2: #f3f4f0;
+      --border: #d8dbd5;
+      --text: #1a1d24;
+      --text-dim: #5a6275;
+      --accent: #2563eb;
+      --terra: #c2410c;
+      --mostarda: #a16207;
+      --salvia: #166534;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+
+  .container {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+    margin-bottom: 28px;
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+
+  h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 36px 0 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    letter-spacing: -0.01em;
+  }
+
+  h2:first-of-type { border-top: none; padding-top: 0; }
+
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 22px 0 8px;
+    color: var(--accent);
+  }
+
+  p { margin: 8px 0; }
+
+  ul, ol { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--surface-2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 12px 0;
+  }
+
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: inherit;
+  }
+
+  .warn {
+    background: rgba(230, 196, 92, 0.1);
+    border-left: 3px solid var(--mostarda);
+    padding: 12px 16px;
+    margin: 14px 0;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+
+  .warn strong { color: var(--mostarda); }
+
+  .danger {
+    background: rgba(255, 139, 110, 0.08);
+    border-left: 3px solid var(--terra);
+    padding: 12px 16px;
+    margin: 14px 0;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+
+  .danger strong { color: var(--terra); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  th {
+    background: var(--surface-2);
+    font-weight: 600;
+    color: var(--text-dim);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  td code { font-size: 12px; }
+
+  .step-num {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    line-height: 28px;
+    text-align: center;
+    background: var(--accent);
+    color: white;
+    border-radius: 50%;
+    font-weight: 600;
+    margin-right: 10px;
+    font-size: 14px;
+  }
+
+  .meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .meta span {
+    background: var(--surface);
+    padding: 4px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 32px 0;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .check::before { content: "✓ "; color: var(--salvia); font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>Smoke Test — Evolution → Webhook P2</h1>
+  <p class="subtitle">Validar end-to-end o webhook receiver do WhatsApp Inbox antes de mergear PR #100.</p>
+  <div class="meta">
+    <span>Feature: <code>feat/whatsapp-inbox-p2-webhook</code></span>
+    <span>PR: <a href="https://github.com/angelocerqueira/sdr-machine/pull/100">#100</a></span>
+    <span>Foundation: PR #99 (P0-P1) já merged</span>
+  </div>
+</header>
+
+<h2>Pré-requisitos</h2>
+<ul>
+  <li>Evolution API rodando (Docker, VPS, ou serviço gerenciado)</li>
+  <li>Instance Evolution criada + conectada via QR (WhatsApp real funcionando)</li>
+  <li>Backend SDR rodando com variável <code>SETTINGS_ENC_KEY</code> setada (Fernet key)</li>
+  <li>URL pública do backend acessível pela Evolution (ngrok pra local, ou staging deploy)</li>
+</ul>
+
+<h2>Passos</h2>
+
+<h3><span class="step-num">1</span>Subir backend local</h3>
+<pre><code>docker compose up --build</code></pre>
+<p>Confirma que <code>GET /api/health</code> retorna <code>{"status": "ok"}</code>.</p>
+
+<h3><span class="step-num">2</span>Expor backend público</h3>
+<p><strong>Local:</strong></p>
+<pre><code>ngrok http 8000
+# copia URL https://abc123.ngrok.io</code></pre>
+<p><strong>Staging:</strong> usar Railway URL direto.</p>
+
+<h3><span class="step-num">3</span>Gerar HMAC secret + cadastrar Evolution</h3>
+<p>Gera secret:</p>
+<pre><code>openssl rand -hex 32
+# ex: 9f2a8e1b...</code></pre>
+
+<p>Cadastra via PUT (assumindo session cookie válida ou bypass auth em dev):</p>
+<pre><code>curl -X PUT https://abc123.ngrok.io/api/workspace/integrations/evolution \
+  -H "Content-Type: application/json" \
+  -d '{
+    "config": {
+      "base_url": "https://evolution.seu-host.com",
+      "instance": "nome-da-instance",
+      "api_key": "EVOLUTION_API_KEY_AQUI",
+      "webhook_secret": "9f2a8e1b..."
+    }
+  }'</code></pre>
+
+<p>Ou direto via SQL:</p>
+<pre><code>INSERT INTO integration_settings (workspace_id, provider, enabled, config)
+VALUES (1, 'evolution', true,
+  '{"base_url":"...", "instance":"...",
+    "api_key":"&lt;encrypted&gt;", "webhook_secret":"&lt;encrypted&gt;"}');</code></pre>
+<div class="warn">
+  <strong>Atenção:</strong> <code>api_key</code> e <code>webhook_secret</code> precisam estar
+  <strong>cifrados via Fernet</strong>. Use <code>encrypt()</code> do módulo
+  <code>app.integrations.crypto</code>:
+  <pre><code>cd backend && venv/bin/python -c "
+from app.integrations.crypto import encrypt
+print(encrypt('SEU_VALOR_AQUI'))
+"</code></pre>
+</div>
+
+<h3><span class="step-num">4</span>Configurar webhook na Evolution</h3>
+<p><strong>URL do endpoint:</strong></p>
+<pre><code>https://abc123.ngrok.io/api/webhooks/whatsapp/1/evolution</code></pre>
+
+<p>Na Evolution API (admin UI ou <code>POST /webhook/set/&lt;instance&gt;</code>):</p>
+<ul>
+  <li><strong>URL:</strong> a do endpoint</li>
+  <li><strong>Events:</strong> <code>messages.upsert</code>, <code>messages.update</code></li>
+  <li><strong>Header custom:</strong> <code>X-Sdr-Signature</code> com valor HMAC</li>
+</ul>
+
+<div class="danger">
+  <strong>Crítico:</strong> Evolution precisa enviar HMAC do <strong>raw body</strong> no header
+  <code>X-Sdr-Signature</code>. Confirma na doc da Evolution se ela suporta isso nativamente.
+  Se não, talvez precise de proxy intermediário ou desabilitar HMAC nesse smoke
+  (skip secret, accept all — só pra teste, <strong>nunca</strong> em prod).
+</div>
+
+<h3><span class="step-num">5</span>Criar Lead com telefone real</h3>
+<pre><code>INSERT INTO leads (nome, telefone, status)
+VALUES ('Teste Smoke', '5544SEUNUMERO', 'outreach_sent');</code></pre>
+<p>Pega o <code>id</code> retornado.</p>
+
+<p>(Opcional) OutreachMessage com <code>provider_message_id</code> pra testar status update:</p>
+<pre><code>INSERT INTO outreach_messages (lead_id, type, message_text, status, provider_message_id)
+VALUES (&lt;lead_id&gt;, 'initial', 'oi', 'enviada', 'TEST-OUT-1');</code></pre>
+
+<h3><span class="step-num">6</span>Disparar inbound</h3>
+<p>Do <strong>seu celular</strong> real, manda msg WhatsApp pro número da instance Evolution.</p>
+
+<h3><span class="step-num">7</span>Verificar</h3>
+<p><strong>Logs backend:</strong></p>
+<pre><code>webhook.processed workspace=1 provider=evolution
+  summary={'inbound_processed': 1, 'inbound_skipped_no_lead': 0,
+           'status_updates_processed': 0, 'lead_id': &lt;ID&gt;}</code></pre>
+
+<p><strong>DB:</strong></p>
+<pre><code>SELECT * FROM conversation_messages ORDER BY id DESC LIMIT 1;
+SELECT id, status, responded_at FROM leads WHERE id = &lt;lead_id&gt;;
+-- esperado: status='responded', responded_at preenchido</code></pre>
+
+<h3><span class="step-num">8</span>Idempotência</h3>
+<p>Reenvia exatamente a mesma msg (Evolution às vezes faz retry).</p>
+<pre><code>SELECT COUNT(*) FROM conversation_messages
+WHERE provider_message_id = '&lt;EVO_MSG_ID&gt;';
+-- esperado: 1 (não duplica)</code></pre>
+
+<h3><span class="step-num">9</span>Status update</h3>
+<p>Lê a msg do bot no celular. Evolution dispara <code>messages.update</code> com status <code>READ</code>.</p>
+<pre><code>SELECT read_at FROM outreach_messages
+WHERE provider_message_id = 'TEST-OUT-1';
+-- esperado: timestamp preenchido</code></pre>
+
+<h2>Critério de sucesso</h2>
+<ul>
+  <li class="check"><code>conversation_messages</code> tem exatamente 1 linha pro <code>provider_message_id</code></li>
+  <li class="check"><code>leads.status</code> = <code>responded</code> + <code>responded_at</code> preenchido</li>
+  <li class="check"><code>conversations.unread_count</code> = 1</li>
+  <li class="check">Retry de webhook não duplica linha</li>
+  <li class="check"><code>outreach_messages.read_at</code> preenchido após Evolution mandar <code>messages.update</code></li>
+  <li class="check">Nenhum 401/500 nos logs (exceto requests propositais sem HMAC)</li>
+</ul>
+
+<h2>Falhou? Debugging</h2>
+<table>
+  <thead>
+    <tr><th>Sintoma</th><th>Causa provável</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>401 invalid signature</code></td>
+      <td>HMAC errado. Confere secret igual nos dois lados + Evolution assinando raw body (não JSON re-serializado)</td>
+    </tr>
+    <tr>
+      <td><code>401</code> com log <code>reason=no_secret</code></td>
+      <td><code>webhook_secret</code> ausente em <code>integration_settings.config</code>, ou Fernet decrypt falhou (key rotation, ciphertext corrompido)</td>
+    </tr>
+    <tr>
+      <td><code>200</code> mas <code>inbound_skipped_no_lead=1</code></td>
+      <td>Telefone do Lead não normaliza pro mesmo valor do <code>remoteJid</code> Evolution. Confere via <code>normalize_phone_br()</code></td>
+    </tr>
+    <tr>
+      <td><code>200</code> mas <code>Lead.status</code> não muda</td>
+      <td><code>link_outreach_reply</code> respeitou status terminal (closed/won/lost/delivered/responded). Verifica status atual</td>
+    </tr>
+    <tr>
+      <td>Webhook nem chega no backend</td>
+      <td>Evolution não está disparando. Confere config webhook na Evolution + ngrok ativo + endpoint correto</td>
+    </tr>
+    <tr>
+      <td><code>400 invalid json</code></td>
+      <td>Evolution mandou body não-JSON. Aconteceu? Confere Content-Type</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Rollback</h2>
+<p>Se smoke falhar e quiser desabilitar o webhook sem rollback de código:</p>
+<pre><code>UPDATE integration_settings
+SET enabled = false
+WHERE provider = 'evolution' AND workspace_id = 1;</code></pre>
+<p>Endpoint passa a retornar <code>401</code> (sem secret resolvido) — Evolution para de processar. Inbox volta a ficar cego.</p>
+
+<hr>
+
+<p class="subtitle">
+  Documento gerado em 2026-05-17 · Base na implementação do PR #100 (P2 webhook receiver).
+  Próximos planos: P3 dispatch_outreach + scheduler · P4 frontend /app/inbox · P5 settings UI card.
+</p>
+
+</div>
+</body>
+</html>
