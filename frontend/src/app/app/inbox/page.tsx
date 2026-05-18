@@ -5,6 +5,8 @@ import useSWR from "swr";
 import { listConversations, type ConversationFilter } from "@/lib/api-inbox";
 import { InboxList } from "@/components/inbox/InboxList";
 import { InboxFilters } from "@/components/inbox/InboxFilters";
+import { InboxEmpty } from "@/components/inbox/InboxEmpty";
+import { useInboxState } from "@/components/inbox/use-inbox-state";
 import "@/components/inbox/inbox.css";
 
 export default function InboxPage() {
@@ -23,6 +25,8 @@ export default function InboxPage() {
     { refreshInterval: 5000 },
   );
 
+  const emptyState = useInboxState({ conversations: data });
+
   return (
     <div className="inbox-root">
       <div className="inbox-list-col">
@@ -34,9 +38,7 @@ export default function InboxPage() {
         {data && <InboxList items={data} selectedId={null} />}
       </div>
       <div className="inbox-conv-col">
-        <div className="inbox-empty">
-          Selecione uma conversa pra ver mensagens.
-        </div>
+        <InboxEmpty state={emptyState} />
       </div>
       <div className="inbox-rail-col" />
     </div>
