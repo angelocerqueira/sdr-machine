@@ -5,7 +5,7 @@ Backend pra o Inbox UI (P4). Reusa adapters do P1 e schemas do P0.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -139,7 +139,7 @@ def send_message(
         )
         raise HTTPException(status_code=503, detail=f"provider unavailable: {exc}")
 
-    idempotency_key = f"manual_send_conv_{conv.id}_{int(datetime.utcnow().timestamp()*1000)}"
+    idempotency_key = f"manual_send_conv_{conv.id}_{int(datetime.now(timezone.utc).timestamp()*1000)}"
 
     try:
         sent = adapter.send_text(
