@@ -59,14 +59,29 @@ export const getProviderWebhookUrl = (provider: ProviderId) =>
   authedFetch<{ url: string }>(`/api/workspace/integrations/${provider}/webhook-url`);
 
 // Evolution-specific QR flow
-export interface EvolutionConnectResponse {
-  ok: boolean;
-  qr_base64: string | null;
-  pairing_code: string | null;
-  code: string | null;
-  state: string;
-  latency_ms: number;
-}
+export type EvolutionState =
+  | "open"
+  | "connecting"
+  | "close"
+  | "unreachable"
+  | "error"
+  | "unknown";
+
+export type EvolutionConnectResponse =
+  | {
+      ok: true;
+      qr_base64: string | null;
+      pairing_code: string | null;
+      code: string | null;
+      state: string;
+      latency_ms: number;
+    }
+  | {
+      ok: false;
+      error: string;
+      status_code?: number;
+      latency_ms: number;
+    };
 
 export interface EvolutionStatusResponse {
   state: string;  // "open" | "connecting" | "close" | "unreachable" | "error" | "unknown"

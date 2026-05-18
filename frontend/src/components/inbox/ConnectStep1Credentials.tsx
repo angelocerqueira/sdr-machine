@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { mutate } from "swr";
 import {
   getIntegration,
   updateIntegration,
@@ -11,6 +12,13 @@ import {
 interface Props {
   onValidated: () => void;  // chama quando teste passou — wizard avança pra step 2
 }
+
+const fieldIds = {
+  baseUrl: "connect-evo-base-url",
+  instance: "connect-evo-instance",
+  apiKey: "connect-evo-api-key",
+  webhookSecret: "connect-evo-webhook-secret",
+};
 
 export function ConnectStep1Credentials({ onValidated }: Props) {
   const [baseUrl, setBaseUrl] = useState("");
@@ -45,6 +53,8 @@ export function ConnectStep1Credentials({ onValidated }: Props) {
       const res = await testIntegration("evolution");
       setTest(res);
       if (res.ok) {
+        await mutate("integration-evolution");
+        await mutate("evolution-status");
         setTimeout(onValidated, 400);  // pequena pausa pra user ver "✓"
       }
     } catch (e) {
@@ -64,8 +74,9 @@ export function ConnectStep1Credentials({ onValidated }: Props) {
       </p>
 
       <div className="connect-form-field">
-        <label className="connect-form-label">Base URL</label>
+        <label className="connect-form-label" htmlFor={fieldIds.baseUrl}>Base URL</label>
         <input
+          id={fieldIds.baseUrl}
           className="connect-form-input mono"
           type="url"
           placeholder="https://evolution.seuhost.com"
@@ -75,8 +86,9 @@ export function ConnectStep1Credentials({ onValidated }: Props) {
       </div>
 
       <div className="connect-form-field">
-        <label className="connect-form-label">Instance name</label>
+        <label className="connect-form-label" htmlFor={fieldIds.instance}>Instance name</label>
         <input
+          id={fieldIds.instance}
           className="connect-form-input"
           placeholder="sdr"
           value={instance}
@@ -86,10 +98,11 @@ export function ConnectStep1Credentials({ onValidated }: Props) {
       </div>
 
       <div className="connect-form-field">
-        <label className="connect-form-label">
+        <label className="connect-form-label" htmlFor={fieldIds.apiKey}>
           API key {hasApiKey && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(••••)</span>}
         </label>
         <input
+          id={fieldIds.apiKey}
           className="connect-form-input"
           type="password"
           placeholder={hasApiKey ? "Cole pra trocar" : "Sua API key"}
@@ -99,10 +112,11 @@ export function ConnectStep1Credentials({ onValidated }: Props) {
       </div>
 
       <div className="connect-form-field">
-        <label className="connect-form-label">
+        <label className="connect-form-label" htmlFor={fieldIds.webhookSecret}>
           Webhook secret {hasSecret && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(••••)</span>}
         </label>
         <input
+          id={fieldIds.webhookSecret}
           className="connect-form-input"
           type="password"
           placeholder={hasSecret ? "Cole pra trocar" : "Gere com openssl rand -hex 32"}

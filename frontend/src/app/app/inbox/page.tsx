@@ -26,21 +26,24 @@ export default function InboxPage() {
   );
 
   const emptyState = useInboxState({ conversations: data });
+  const showList = !["not-configured", "disconnected"].includes(emptyState.kind);
 
   return (
     <div className="inbox-root">
-      <div className="inbox-list-col">
-        <InboxFilters
-          value={filter} onChange={setFilter}
-          search={search} onSearchChange={setSearch}
-        />
-        {error && <div style={{ padding: 16, color: "var(--terra)" }}>Erro: {String(error)}</div>}
-        {data && <InboxList items={data} selectedId={null} />}
-      </div>
+      {showList && (
+        <div className="inbox-list-col">
+          <InboxFilters
+            value={filter} onChange={setFilter}
+            search={search} onSearchChange={setSearch}
+          />
+          {error && <div style={{ padding: 16, color: "var(--terra)" }}>Erro: {String(error)}</div>}
+          {data && <InboxList items={data} selectedId={null} />}
+        </div>
+      )}
       <div className="inbox-conv-col">
         <InboxEmpty state={emptyState} />
       </div>
-      <div className="inbox-rail-col" />
+      {showList && <div className="inbox-rail-col" />}
     </div>
   );
 }

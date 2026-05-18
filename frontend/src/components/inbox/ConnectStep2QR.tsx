@@ -41,6 +41,9 @@ export function ConnectStep2QR({ onConnected }: Props) {
     try {
       const res = await connectEvolution();
       setConn(res);
+      if (!res.ok) {
+        setQrError(res.error || "Falhou ao gerar QR.");
+      }
     } catch (e) {
       setQrError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -52,13 +55,19 @@ export function ConnectStep2QR({ onConnected }: Props) {
     refreshQR();
   }, [refreshQR]);
 
-  // Polling status a cada 3s
+  // Polling status a cada 3s — skip first fetch if we already have state from connect
   const { data: status } = useSWR("evolution-status", getEvolutionStatus, {
     refreshInterval: 3000,
     revalidateOnFocus: false,
+    revalidateOnMount: !conn,
+    fallbackData:
+      conn?.ok && conn.state
+        ? { state: conn.state, ok: conn.state === "open", latency_ms: 0, error: null }
+        : undefined,
   });
 
-  const currentState = status?.state ?? conn?.state ?? "unknown";
+  const connState = conn?.ok ? conn.state : "unknown";
+  const currentState = status?.state ?? connState;
 
   useEffect(() => {
     if (currentState === "open") {
@@ -67,7 +76,8 @@ export function ConnectStep2QR({ onConnected }: Props) {
     }
   }, [currentState, onConnected]);
 
-  const qrSrc = conn?.qr_base64;
+  const qrSrc = conn?.ok ? conn.qr_base64 : null;
+  const codeText = conn?.ok ? conn.code : null;
   const isImage = qrSrc?.startsWith("data:image/") ?? false;
   // Se Evolution só retornar `code` (texto raw), poderíamos render via lib QR, mas MVP cobre base64
 
@@ -83,9 +93,9 @@ export function ConnectStep2QR({ onConnected }: Props) {
             { /* eslint-disable-next-line @next/next/no-img-element */ }
             <img className="connect-qr-img" src={qrSrc} alt="QR code Evolution" />
           </div>
-        ) : conn?.code ? (
+        ) : codeText ? (
           <div className="connect-qr-placeholder" style={{ padding: 12, fontSize: 11, fontFamily: "var(--font-jetbrains-mono, monospace)", wordBreak: "break-all" }}>
-            {conn.code}
+            {codeText}
           </div>
         ) : (
           <div className="connect-qr-placeholder">QR indisponível</div>

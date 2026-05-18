@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { mutate } from "swr";
 import { ConnectEvolutionSheet } from "./ConnectEvolutionSheet";
 import { WebhookUrlField } from "@/components/settings/webhook-url-field";
 import type { InboxState } from "./use-inbox-state";
@@ -54,7 +55,8 @@ export function InboxEmpty({ state }: Props) {
 
   function onConnected() {
     setSheetOpen(false);
-    // SWR revalidate via mutate seria mais imediato; aqui SWR auto-poll de 15s pega.
+    mutate("integration-evolution");
+    mutate("evolution-status");
   }
 
   if (state.kind === "loading") {
