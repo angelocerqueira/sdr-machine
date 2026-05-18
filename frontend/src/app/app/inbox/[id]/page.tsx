@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import { useRouter } from "next/navigation";
 import useSWR, { mutate } from "swr";
 import {
@@ -39,9 +39,16 @@ export default function InboxDetailPage({ params }: { params: Promise<{ id: stri
     { refreshInterval: 5000 },
   );
 
-  // Auto-mark-read on open + unread badge present
+  // Auto-mark-read: dispara só na primeira vez que conv carrega com unread > 0.
+  // Não re-dispara em re-polls (write-amplification) nem em inbounds subsequentes.
+  const markedReadRef = useRef<number | null>(null);
   useEffect(() => {
-    if (conv && conv.unread_count > 0) {
+    if (
+      conv &&
+      conv.unread_count > 0 &&
+      markedReadRef.current !== conv.id
+    ) {
+      markedReadRef.current = conv.id;
       markRead(conversationId).then(() => {
         mutate(["conversations-list", filter, debouncedSearch]);
       });

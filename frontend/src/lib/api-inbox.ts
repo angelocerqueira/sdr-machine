@@ -46,6 +46,20 @@ export interface ConversationDetail {
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+let redirectingToLogin = false;
+
+function forceLogout() {
+  if (redirectingToLogin) return;
+  redirectingToLogin = true;
+  document.cookie.split("; ").forEach((c) => {
+    const name = c.split("=")[0];
+    if (name.includes("better-auth")) {
+      document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    }
+  });
+  window.location.replace("/login");
+}
+
 function getSessionToken(): string | null {
   const cookies = document.cookie.split("; ");
   for (const c of cookies) {
@@ -62,17 +76,73 @@ function getSessionToken(): string | null {
       }
     }
   }
+  // Fallback: session_token in case httpOnly was disabled
+  for (const c of cookies) {
+    if (
+      c.startsWith("__Secure-better-auth.session_token=") ||
+      c.startsWith("better-auth.session_token=")
+    ) {
+      const val = decodeURIComponent(c.split("=").slice(1).join("="));
+      return val.split(".")[0];
+    }
+  }
   return null;
 }
 
+let refreshingSession = false;
+
+async function refreshSessionCache(): Promise<boolean> {
+  if (refreshingSession) return false;
+  refreshingSession = true;
+  try {
+    const res = await fetch("/api/auth/get-session", { credentials: "include" });
+    if (res.ok) return getSessionToken() !== null;
+    return false;
+  } catch {
+    return false;
+  } finally {
+    refreshingSession = false;
+  }
+}
+
 async function fetchInbox<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = getSessionToken();
+  let token = getSessionToken();
+
+  if (!token) {
+    const refreshed = await refreshSessionCache();
+    if (refreshed) token = getSessionToken();
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(init.headers as Record<string, string> | undefined),
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
+
   const res = await fetch(`${API}${path}`, { ...init, headers, credentials: "include" });
+
+  // On 401, try one session refresh before logging out
+  if (res.status === 401 && token) {
+    const refreshed = await refreshSessionCache();
+    if (refreshed) {
+      const retryToken = getSessionToken();
+      if (retryToken) {
+        headers["Authorization"] = `Bearer ${retryToken}`;
+        const retry = await fetch(`${API}${path}`, { ...init, headers, credentials: "include" });
+        if (retry.ok) {
+          return retry.status === 204 ? (undefined as T) : retry.json();
+        }
+      }
+    }
+    forceLogout();
+    throw new Error("Sessão expirada");
+  }
+
+  if (res.status === 401) {
+    forceLogout();
+    throw new Error("Sessão expirada");
+  }
+
   if (!res.ok) {
     const txt = await res.text();
     throw new Error(`${res.status}: ${txt}`);
