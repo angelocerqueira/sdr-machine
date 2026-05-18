@@ -109,3 +109,24 @@ def test_list_conversations_last_message_preview(client, db):
     assert preview is not None
     assert len(preview) <= 80
     assert preview.startswith("aaa")
+
+
+def test_get_conversation_detail(client, db):
+    lead, conv = _seed_conversation(
+        db, lead_nome="X", lead_telefone="5544999990000",
+        msgs=[("in", "oi"), ("out", "olá"), ("in", "tudo bem?")],
+    )
+
+    r = client.get(f"/api/conversations/{conv.id}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["id"] == conv.id
+    assert body["lead_id"] == lead.id
+    assert len(body["messages"]) == 3
+    assert body["messages"][0]["body"] == "oi"
+    assert body["messages"][-1]["body"] == "tudo bem?"
+
+
+def test_get_conversation_not_found(client, db):
+    r = client.get("/api/conversations/9999")
+    assert r.status_code == 404

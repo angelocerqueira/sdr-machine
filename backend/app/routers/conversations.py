@@ -92,3 +92,26 @@ def list_conversations(
             unread_count=conv.unread_count, status=conv.status,
         ))
     return out
+
+
+@router.get("/{conversation_id}", response_model=ConversationOut)
+def get_conversation(conversation_id: int, db: Session = Depends(get_db)):
+    conv = (
+        db.query(Conversation)
+        .options(joinedload(Conversation.messages))
+        .filter_by(id=conversation_id, workspace_id=WORKSPACE_ID)
+        .first()
+    )
+    if not conv:
+        raise HTTPException(status_code=404, detail="conversation not found")
+
+    messages = sorted(conv.messages, key=lambda m: m.created_at)
+
+    return ConversationOut(
+        id=conv.id, workspace_id=conv.workspace_id, lead_id=conv.lead_id,
+        provider=conv.provider, provider_chat_id=conv.provider_chat_id,
+        phone=conv.phone, last_message_at=conv.last_message_at,
+        unread_count=conv.unread_count, status=conv.status,
+        created_at=conv.created_at,
+        messages=[MessageOut.model_validate(m) for m in messages],
+    )
