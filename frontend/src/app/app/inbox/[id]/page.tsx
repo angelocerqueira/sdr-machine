@@ -46,19 +46,19 @@ export default function InboxDetailPage({ params }: { params: Promise<{ id: stri
         mutate(["conversations-list", filter, debouncedSearch]);
       });
     }
-  }, [conv?.id, conv?.unread_count, conversationId, filter, debouncedSearch, conv]);
+  }, [conv, conversationId, filter, debouncedSearch]);
+
+  // Redirect on 404 (must be in effect, not render body)
+  useEffect(() => {
+    if (convError && String(convError).includes("404")) {
+      router.replace("/app/inbox");
+    }
+  }, [convError, router]);
 
   async function handleSend(body: string) {
     await sendMessage(conversationId, body);
     mutate(["conversation", conversationId]);
     mutate(["conversations-list", filter, debouncedSearch]);
-  }
-
-  if (convError) {
-    if (String(convError).includes("404")) {
-      router.replace("/app/inbox");
-      return null;
-    }
   }
 
   return (
