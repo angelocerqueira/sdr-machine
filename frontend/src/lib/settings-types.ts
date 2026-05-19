@@ -53,3 +53,16 @@ export const PROVIDER_META: Record<ProviderId, { label: string; description: str
   langsmith: { label: "LangSmith", description: "Tracing de chains LLM",                            docs: "https://docs.smith.langchain.com" },
   evolution: { label: "WhatsApp (Evolution)", description: "Envio e recebimento de mensagens WhatsApp via Evolution API", docs: "https://doc.evolution-api.com" },
 };
+
+export interface McpTokenSummary {
+  id: number;
+  name: string;
+  last4: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface McpTokenCreated extends McpTokenSummary {
+  token: string;
+}
