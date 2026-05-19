@@ -60,6 +60,7 @@ def build_mcp_server() -> FastMCP:
         token_verifier=verifier,
         auth=auth_settings,
         json_response=True,
+        stateless_http=True,
         streamable_http_path="/",
         transport_security=transport_security,
     )
