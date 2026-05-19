@@ -42,3 +42,31 @@ def test_server_has_all_read_tools():
 
     missing = expected_tools - registered
     assert not missing, f"Tools missing: {missing}"
+
+
+def test_server_has_all_write_tools():
+    from app.mcp.server import build_mcp_server
+    server = build_mcp_server()
+
+    expected = {
+        "update_lead_status", "update_lead_fields", "mark_conversation_read",
+        "update_workspace_profile", "update_workspace_targeting",
+        "prepare_send_message", "prepare_bulk_send", "prepare_delete_lead",
+        "prepare_delete_conversations", "prepare_run_pipeline",
+        "prepare_classify_leads", "prepare_generate_lps",
+        "commit_action", "cancel_action",
+    }
+
+    registered = set()
+    obj = getattr(server, "_tool_manager", None)
+    if obj is not None:
+        tools = getattr(obj, "_tools", None)
+        if isinstance(tools, dict):
+            registered = set(tools.keys())
+    if not registered:
+        import asyncio
+        tools = asyncio.run(server.list_tools())
+        registered = {t.name for t in tools}
+
+    missing = expected - registered
+    assert not missing, f"Tools missing: {missing}"
