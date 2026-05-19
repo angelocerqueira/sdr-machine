@@ -168,6 +168,7 @@ def test_parse_webhook_messages_upsert_inbound(adapter):
     assert msg.provider_message_id == "EVO-IN-99"
     assert msg.from_phone == "5544999990000"
     assert msg.body == "Faz sentido sim, manda info"
+    assert msg.push_name == "Marcos"
 
 
 def test_parse_webhook_messages_upsert_outbound_ignored(adapter):
