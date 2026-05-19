@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import useSWR from "swr";
 import {
   connectEvolution,
@@ -79,7 +80,9 @@ export function ConnectStep2QR({ onConnected }: Props) {
   const qrSrc = conn?.ok ? conn.qr_base64 : null;
   const codeText = conn?.ok ? conn.code : null;
   const isImage = qrSrc?.startsWith("data:image/") ?? false;
-  // Se Evolution só retornar `code` (texto raw), poderíamos render via lib QR, mas MVP cobre base64
+  // Evolution v2 /instance/connect retorna apenas {pairingCode, code}.
+  // Base64 só vem via webhook/websocket. Renderizamos QR client-side
+  // a partir do `code` raw string (formato WhatsApp Web auth payload).
 
   return (
     <div>
@@ -94,8 +97,13 @@ export function ConnectStep2QR({ onConnected }: Props) {
             <img className="connect-qr-img" src={qrSrc} alt="QR code Evolution" />
           </div>
         ) : codeText ? (
-          <div className="connect-qr-placeholder" style={{ padding: 12, fontSize: 11, fontFamily: "var(--font-jetbrains-mono, monospace)", wordBreak: "break-all" }}>
-            {codeText}
+          <div className="connect-qr-frame">
+            <QRCodeSVG
+              value={codeText}
+              size={240}
+              level="M"
+              marginSize={2}
+            />
           </div>
         ) : (
           <div className="connect-qr-placeholder">QR indisponível</div>

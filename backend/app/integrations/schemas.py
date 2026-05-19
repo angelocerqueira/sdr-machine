@@ -3,7 +3,7 @@
 `SECRET_FIELDS[provider]` mapeia quais campos são criptografados
 antes de gravar e mascarados na resposta.
 """
-from pydantic import BaseModel, EmailStr, SecretStr
+from pydantic import BaseModel, EmailStr, Field, SecretStr
 
 
 class ResendConfig(BaseModel):
@@ -38,10 +38,10 @@ class ApolloConfig(BaseModel):
 
 
 class EvolutionConfig(BaseModel):
-    base_url: str           # ex: https://evo.example.com
-    instance: str           # nome da instância
-    api_key: SecretStr      # apikey header
-    webhook_secret: SecretStr | None = None  # HMAC pro receiver (P2)
+    base_url: str = Field(min_length=8)         # ex: https://evo.example.com
+    instance: str = Field(min_length=1)         # nome da instância — required
+    api_key: SecretStr                          # apikey header
+    webhook_secret: SecretStr | None = None     # HMAC pro receiver (P2)
 
 
 class LangsmithConfig(BaseModel):

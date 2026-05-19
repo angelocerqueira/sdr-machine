@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/settings/status-badge";
 import { WebhookUrlField } from "@/components/settings/webhook-url-field";
 import { PROVIDER_META, type IntegrationSummary, type ProviderId } from "@/lib/settings-types";
 
-const PROVIDER_FIELDS: Record<ProviderId, { secrets: { key: string; label: string }[]; plain: { key: string; label: string; type?: string }[] }> = {
+const PROVIDER_FIELDS: Record<ProviderId, { secrets: { key: string; label: string; required?: boolean }[]; plain: { key: string; label: string; type?: string; required?: boolean }[] }> = {
   resend:    { secrets: [{ key: "api_key", label: "API key" }, { key: "webhook_secret", label: "Webhook secret (opcional)" }],
                plain:   [{ key: "from_email", label: "From email", type: "email" }, { key: "from_name", label: "From name" }, { key: "reply_to", label: "Reply-to (opcional)", type: "email" }] },
   telegram:  { secrets: [{ key: "bot_token", label: "Bot token" }],
@@ -24,12 +24,12 @@ const PROVIDER_FIELDS: Record<ProviderId, { secrets: { key: string; label: strin
                plain:   [{ key: "project", label: "Projeto" }] },
   evolution: {
     secrets: [
-      { key: "api_key", label: "API key" },
-      { key: "webhook_secret", label: "Webhook secret (HMAC)" },
+      { key: "api_key", label: "API key", required: true },
+      { key: "webhook_secret", label: "Webhook secret (HMAC)", required: true },
     ],
     plain: [
-      { key: "base_url", label: "Base URL Evolution", type: "url" },
-      { key: "instance", label: "Instance name" },
+      { key: "base_url", label: "Base URL Evolution", type: "url", required: true },
+      { key: "instance", label: "Instance name", required: true },
     ],
   },
 };
@@ -124,12 +124,16 @@ export default function IntegrationDetail({ params }: { params: Promise<{ provid
           <h3 className="settings-section-title">Configuração</h3>
           {fields.plain.map((f) => (
             <div key={f.key} className="settings-field">
-              <label className="settings-field-label">{f.label}</label>
+              <label className="settings-field-label">
+                {f.label}
+                {f.required && <span style={{ color: "var(--danger)", marginLeft: 4 }} aria-label="obrigatório">*</span>}
+              </label>
               <input
                 className="settings-input"
                 type={f.type || "text"}
                 value={draft[f.key] || ""}
                 onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+                required={f.required}
               />
             </div>
           ))}

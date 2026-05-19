@@ -40,6 +40,43 @@ def test_llm_requires_three_fields():
     assert cfg.model == "claude-x"
 
 
+def test_evolution_requires_non_empty_instance_and_base_url():
+    from app.integrations.schemas import EvolutionConfig
+
+    # instance vazia → rejeita
+    with pytest.raises(ValidationError) as exc:
+        EvolutionConfig(
+            base_url="https://evo.example.com",
+            instance="",
+            api_key="key",
+        )
+    assert "instance" in str(exc.value).lower()
+
+    # base_url vazia → rejeita
+    with pytest.raises(ValidationError):
+        EvolutionConfig(
+            base_url="",
+            instance="sdr",
+            api_key="key",
+        )
+
+    # base_url muito curta (<8 chars) → rejeita
+    with pytest.raises(ValidationError):
+        EvolutionConfig(
+            base_url="http://",  # 7 chars
+            instance="sdr",
+            api_key="key",
+        )
+
+    # válido
+    cfg = EvolutionConfig(
+        base_url="https://evo.example.com",
+        instance="sdr",
+        api_key="key",
+    )
+    assert cfg.instance == "sdr"
+
+
 def test_secret_fields_set():
     """Campos cifrados devem estar declarados em SECRET_FIELDS por provider."""
     from app.integrations.schemas import SECRET_FIELDS
