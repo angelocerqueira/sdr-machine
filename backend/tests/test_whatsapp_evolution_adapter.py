@@ -294,6 +294,41 @@ def test_connect_instance_timeout_returns_sanitized(adapter):
     assert "unreachable" in result["error"].lower()
 
 
+def test_logout_instance_success(adapter):
+    fake_response = Mock(status_code=200, text='{"status":"SUCCESS"}')
+    with patch("httpx.delete", return_value=fake_response) as mock_delete:
+        result = adapter.logout_instance()
+    assert result["ok"] is True
+    assert "latency_ms" in result
+    url = mock_delete.call_args[0][0]
+    assert url == "https://evo.example.com/instance/logout/sdr"
+
+
+def test_logout_instance_404_treated_as_already_disconnected(adapter):
+    fake_response = Mock(status_code=404, text='{"error":"not connected"}')
+    with patch("httpx.delete", return_value=fake_response):
+        result = adapter.logout_instance()
+    assert result["ok"] is True
+    assert result["already_disconnected"] is True
+
+
+def test_logout_instance_5xx_returns_error(adapter):
+    fake_response = Mock(status_code=500, text="upstream error")
+    with patch("httpx.delete", return_value=fake_response):
+        result = adapter.logout_instance()
+    assert result["ok"] is False
+    assert "upstream error" in (result["error"] or "")
+
+
+def test_logout_instance_timeout_returns_unreachable(adapter):
+    import httpx as _httpx
+
+    with patch("httpx.delete", side_effect=_httpx.TimeoutException("timed out")):
+        result = adapter.logout_instance()
+    assert result["ok"] is False
+    assert "unreachable" in result["error"].lower()
+
+
 def test_fetch_instance_token_flat_shape(adapter):
     """Evolution v2.x recentes: {"name": "...", "token": "..."}."""
     fake_response = Mock(status_code=200, text='[{"name":"sdr","token":"T"}]')

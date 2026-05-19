@@ -343,6 +343,26 @@ def evolution_connect(request: Request, db: Session = Depends(get_db)):
     return result
 
 
+@router.post("/integrations/evolution/logout")
+def evolution_logout(request: Request, db: Session = Depends(get_db)):
+    """Desconecta sessão WhatsApp da instance, preservando config + credenciais.
+
+    Próximo passo do frontend é chamar /connect pra gerar QR novo.
+    """
+    ws = get_current_workspace_id(request)
+    try:
+        adapter = get_provider(db, workspace_id=ws, provider="evolution")
+    except (UnknownProviderError, ProviderNotConfigured) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    result = adapter.logout_instance()
+    if not result.get("ok"):
+        raise HTTPException(
+            status_code=502,
+            detail=result.get("error") or "Evolution logout failed",
+        )
+    return result
+
+
 @router.get("/integrations/evolution/status")
 def evolution_status(request: Request, db: Session = Depends(get_db)):
     """Estado atual da instance Evolution. Usado pra polling após scan QR."""

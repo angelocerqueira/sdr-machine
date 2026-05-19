@@ -312,6 +312,61 @@ def test_evolution_status_returns_state(client, db, httpx_mock):
     assert body["ok"] is True
 
 
+def test_evolution_logout_no_config(client, db):
+    """Logout sem config → 422."""
+    r = client.post("/api/workspace/integrations/evolution/logout")
+    assert r.status_code == 422
+
+
+def test_evolution_logout_success(client, db, httpx_mock):
+    from app.integrations.crypto import encrypt
+    from app.models import IntegrationSettings
+
+    db.add(IntegrationSettings(
+        workspace_id=1, provider="evolution", enabled=True,
+        config={
+            "base_url": "https://evo.example.com",
+            "instance": "sdr",
+            "api_key": encrypt("KEY"),
+        },
+    ))
+    db.commit()
+
+    httpx_mock.add_response(
+        url="https://evo.example.com/instance/logout/sdr",
+        method="DELETE",
+        json={"status": "SUCCESS"},
+    )
+
+    r = client.post("/api/workspace/integrations/evolution/logout")
+    assert r.status_code == 200, r.text
+    assert r.json()["ok"] is True
+
+
+def test_evolution_logout_502_when_upstream_fails(client, db, httpx_mock):
+    from app.integrations.crypto import encrypt
+    from app.models import IntegrationSettings
+
+    db.add(IntegrationSettings(
+        workspace_id=1, provider="evolution", enabled=True,
+        config={
+            "base_url": "https://evo.example.com",
+            "instance": "sdr",
+            "api_key": encrypt("KEY"),
+        },
+    ))
+    db.commit()
+
+    httpx_mock.add_response(
+        url="https://evo.example.com/instance/logout/sdr",
+        method="DELETE",
+        status_code=500, text="evolution down",
+    )
+
+    r = client.post("/api/workspace/integrations/evolution/logout")
+    assert r.status_code == 502
+
+
 def test_evolution_put_caches_instance_token(client, db, httpx_mock):
     """Save Evolution dispara fetch_instance_token e persiste cifrado."""
     from app.integrations.crypto import decrypt
