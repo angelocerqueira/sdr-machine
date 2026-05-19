@@ -1,7 +1,7 @@
 """Builder do FastMCP server pro SDR Machine.
 
-M-1 retorna server vazio (sem tools nem resources). M-2 adiciona READ tools,
-M-3 adiciona write tools, etc.
+M-1 retornou server vazio. M-2 adicionou READ tools + resources.
+M-3 adicionará write tools, M-5 prompts + subscriptions.
 """
 from __future__ import annotations
 
@@ -14,6 +14,13 @@ from mcp.server.transport_security import TransportSecuritySettings
 from app.config import settings as app_settings
 from app.database import SessionLocal
 from app.mcp.auth import BearerTokenVerifier
+from app.mcp.resources import register_resources
+from app.mcp.tools_conversations import register_conversations_tools
+from app.mcp.tools_jobs import register_jobs_tools
+from app.mcp.tools_leads import register_leads_tools
+from app.mcp.tools_pending import register_pending_tools
+from app.mcp.tools_stats import register_stats_tools
+from app.mcp.tools_workspace import register_workspace_tools
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +60,17 @@ def build_mcp_server() -> FastMCP:
         transport_security=transport_security,
     )
 
-    # M-2/3/4/5 adicionarão tools/resources/prompts aqui
+    # READ tools (M-2)
+    register_leads_tools(server)
+    register_conversations_tools(server)
+    register_jobs_tools(server)
+    register_stats_tools(server)
+    register_workspace_tools(server)
+    register_pending_tools(server)
+
+    # Resources (M-2)
+    register_resources(server)
+
+    # M-3 vai adicionar write tools, M-5 vai adicionar prompts + subscriptions
 
     return server
