@@ -82,3 +82,33 @@ def test_list_excludes_revoked_by_default(client, db):
     items = r.json()
     assert len(items) == 1
     assert items[0]["name"] == "active"
+
+
+def test_list_isolates_by_workspace(client, db):
+    """Token de outro workspace não aparece na lista do workspace atual (=1)."""
+    db.add(McpToken(
+        workspace_id=2, name="other-ws",
+        token_hash=hash_token(generate_token()), last4="zzzz",
+    ))
+    db.commit()
+
+    r = client.get("/api/workspace/mcp-tokens")
+    names = [t["name"] for t in r.json()]
+    assert "other-ws" not in names
+
+
+def test_revoke_cross_workspace_returns_404(client, db):
+    """DELETE em token de outro workspace retorna 404 (não 403, não revela existência)."""
+    plain = generate_token()
+    db.add(McpToken(
+        workspace_id=2, name="other-ws",
+        token_hash=hash_token(plain), last4="zzzz",
+    ))
+    db.commit()
+    tok = db.query(McpToken).filter_by(name="other-ws").first()
+
+    r = client.delete(f"/api/workspace/mcp-tokens/{tok.id}")
+    assert r.status_code == 404
+
+    db.refresh(tok)
+    assert tok.revoked_at is None  # não foi revogado
