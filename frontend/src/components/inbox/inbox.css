@@ -208,3 +208,78 @@
   font-weight: 600;
   cursor: help;
 }
+
+/* Header rico da conversa */
+.inbox-conv-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.inbox-conv-header-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent-soft, #e8eef9);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.inbox-conv-header-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.inbox-conv-header-name {
+  font-size: 15px;
+  font-weight: 480;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inbox-conv-header-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.inbox-conv-header-status {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 460;
+  color: var(--text);
+  text-transform: lowercase;
+}
+
+.inbox-conv-header-phone {
+  font-family: var(--font-jetbrains-mono, monospace);
+  font-size: 11px;
+}
+
+.inbox-conv-header-action {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.inbox-conv-header-action:hover {
+  background: var(--accent-soft, #e8eef9);
+}
