@@ -15,12 +15,16 @@ from app.config import settings as app_settings
 from app.database import SessionLocal
 from app.mcp.auth import BearerTokenVerifier
 from app.mcp.resources import register_resources
+from app.mcp.tools_commit import register_commit_tools
 from app.mcp.tools_conversations import register_conversations_tools
 from app.mcp.tools_jobs import register_jobs_tools
 from app.mcp.tools_leads import register_leads_tools
 from app.mcp.tools_pending import register_pending_tools
+from app.mcp.tools_prepare import register_prepare_tools
+from app.mcp.tools_soft_write import register_soft_write_tools
 from app.mcp.tools_stats import register_stats_tools
 from app.mcp.tools_workspace import register_workspace_tools
+import app.mcp.action_handlers  # noqa: F401 — força registro dos handlers
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +75,11 @@ def build_mcp_server() -> FastMCP:
     # Resources (M-2)
     register_resources(server)
 
-    # M-3 vai adicionar write tools, M-5 vai adicionar prompts + subscriptions
+    # M-3 write tools
+    register_soft_write_tools(server)
+    register_prepare_tools(server)
+    register_commit_tools(server)
+
+    # M-5 vai adicionar prompts + subscriptions
 
     return server
