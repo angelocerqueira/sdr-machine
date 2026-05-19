@@ -272,3 +272,42 @@ class ConversationMessage(Base):
     __table_args__ = (
         Index("ix_conversation_messages_conv_created", "conversation_id", "created_at"),
     )
+
+
+class McpToken(Base):
+    __tablename__ = "mcp_tokens"
+
+    id = Column(Integer, primary_key=True)
+    workspace_id = Column(Integer, nullable=False, default=1)
+    name = Column(String(120), nullable=False)
+    token_hash = Column(String(80), nullable=False, unique=True)
+    last4 = Column(String(4), nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    last_used_at = Column(DateTime)
+    revoked_at = Column(DateTime)
+
+    __table_args__ = (
+        Index("ix_mcp_tokens_hash", "token_hash"),
+        Index("ix_mcp_tokens_workspace", "workspace_id"),
+    )
+
+
+class PendingAction(Base):
+    __tablename__ = "pending_actions"
+
+    id = Column(String(40), primary_key=True)
+    workspace_id = Column(Integer, nullable=False, default=1)
+    action_type = Column(String(60), nullable=False)
+    params = Column(JSON, nullable=False, default=dict)
+    preview = Column(JSON, nullable=False, default=dict)
+    created_by_token_hash = Column(String(80), nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    committed_at = Column(DateTime)
+    cancelled_at = Column(DateTime)
+    result = Column(JSON)
+
+    __table_args__ = (
+        Index("ix_pending_actions_expires", "expires_at"),
+        Index("ix_pending_actions_workspace", "workspace_id", "created_at"),
+    )
