@@ -1,0 +1,95 @@
+.tcm-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  opacity: 0;
+  animation: tcm-fade 200ms ease-out forwards;
+}
+
+@keyframes tcm-fade {
+  to { opacity: 1; }
+}
+
+.tcm-sheet {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 540px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.tcm-title {
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0 0 6px;
+  color: var(--text);
+}
+
+.tcm-warn {
+  font-size: 13px;
+  color: var(--mostarda, #e6c45c);
+  margin: 0 0 16px;
+}
+
+.tcm-token-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.tcm-token-text {
+  flex: 1;
+  font-family: var(--font-jetbrains-mono, monospace);
+  font-size: 12px;
+  color: var(--text);
+  user-select: all;
+  word-break: break-all;
+}
+
+.tcm-copy-btn {
+  padding: 6px 12px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.tcm-copy-btn.copied {
+  background: var(--salvia, #88c08a);
+}
+
+.tcm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tcm-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.tcm-btn.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
