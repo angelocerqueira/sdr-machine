@@ -133,17 +133,6 @@ def test_get_conversation_not_found(client, db):
 
 
 def test_conversation_detail_includes_lead_nome_and_status(client, db):
-    from app.models import IntegrationSettings
-    from app.integrations.crypto import encrypt
-
-    db.add(IntegrationSettings(
-        workspace_id=1, provider="evolution", enabled=True,
-        config={
-            "base_url": "https://evo.example.com",
-            "instance": "sdr",
-            "api_key": encrypt("KEY"),
-        },
-    ))
     lead = Lead(nome="Maria Silva", telefone="5511999990000", status="responded")
     db.add(lead)
     db.flush()
