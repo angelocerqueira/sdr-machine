@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+
+from mcp.server.fastmcp import Context
 
 from app.mcp.context import get_workspace_id
 from app.mcp.db import db_session
@@ -22,58 +23,58 @@ def _json(data) -> str:
     return json.dumps(data, default=str, indent=2)
 
 
-async def leads_list_resource(ctx: Any) -> str:
+async def leads_list_resource(ctx: Context) -> str:
     result = await list_leads(ctx, filter=None, limit=50, offset=0)
     return _json(result)
 
 
-async def lead_detail_resource(ctx: Any, lead_id: int) -> str:
+async def lead_detail_resource(ctx: Context, lead_id: int) -> str:
     result = await get_lead(ctx, id=lead_id)
     if result is None:
         return json.dumps({"not_found": True, "id": lead_id})
     return _json(result)
 
 
-async def lead_landing_pages_resource(ctx: Any, lead_id: int) -> str:
+async def lead_landing_pages_resource(ctx: Context, lead_id: int) -> str:
     result = await list_landing_pages(ctx, lead_id=lead_id)
     return _json([r.model_dump() for r in result])
 
 
-async def conversations_list_resource(ctx: Any) -> str:
+async def conversations_list_resource(ctx: Context) -> str:
     result = await list_conversations(ctx, filter=None)
     return _json([r.model_dump() for r in result])
 
 
-async def conversation_detail_resource(ctx: Any, conv_id: int) -> str:
+async def conversation_detail_resource(ctx: Context, conv_id: int) -> str:
     result = await get_conversation(ctx, id=conv_id)
     if result is None:
         return json.dumps({"not_found": True, "id": conv_id})
     return _json(result)
 
 
-async def jobs_list_resource(ctx: Any) -> str:
+async def jobs_list_resource(ctx: Context) -> str:
     result = await list_jobs(ctx, status=None, type=None, limit=20)
     return _json([r.model_dump() for r in result])
 
 
-async def job_detail_resource(ctx: Any, job_id: int) -> str:
+async def job_detail_resource(ctx: Context, job_id: int) -> str:
     result = await get_job(ctx, id=job_id)
     if result is None:
         return json.dumps({"not_found": True, "id": job_id})
     return _json(result)
 
 
-async def workspace_profile_resource(ctx: Any) -> str:
+async def workspace_profile_resource(ctx: Context) -> str:
     result = await workspace_profile(ctx)
     return _json(result)
 
 
-async def workspace_targeting_resource(ctx: Any) -> str:
+async def workspace_targeting_resource(ctx: Context) -> str:
     result = await workspace_targeting(ctx)
     return _json(result)
 
 
-async def workspace_integrations_resource(ctx: Any) -> str:
+async def workspace_integrations_resource(ctx: Context) -> str:
     """NUNCA retorna secrets em plain."""
     workspace_id = get_workspace_id(ctx)
     with db_session() as db:
@@ -103,7 +104,7 @@ async def workspace_integrations_resource(ctx: Any) -> str:
         return json.dumps(out, default=str, indent=2)
 
 
-async def pending_actions_list_resource(ctx: Any) -> str:
+async def pending_actions_list_resource(ctx: Context) -> str:
     result = await list_pending_actions(ctx, include_expired=False)
     return _json([r.model_dump() for r in result])
 
