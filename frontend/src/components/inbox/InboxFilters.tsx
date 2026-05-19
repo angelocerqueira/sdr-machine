@@ -7,6 +7,9 @@ interface Props {
   onChange: (next: ConversationFilter) => void;
   search: string;
   onSearchChange: (next: string) => void;
+  connectionState?: string;
+  onReconnect?: () => void;
+  reconnecting?: boolean;
 }
 
 const FILTERS: { key: ConversationFilter; label: string }[] = [
@@ -16,9 +19,51 @@ const FILTERS: { key: ConversationFilter; label: string }[] = [
   { key: "won", label: "Ganho" },
 ];
 
-export function InboxFilters({ value, onChange, search, onSearchChange }: Props) {
+export function InboxFilters({
+  value, onChange, search, onSearchChange,
+  connectionState, onReconnect, reconnecting,
+}: Props) {
+  const showPill = connectionState === "open" && onReconnect;
   return (
     <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+      {showPill && (
+        <div
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            marginBottom: 10, gap: 8,
+          }}
+        >
+          <span
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              fontSize: 12, color: "var(--text-muted)",
+            }}
+          >
+            <span
+              style={{
+                width: 6, height: 6, borderRadius: "50%",
+                background: "var(--ok, #5b8a72)",
+              }}
+            />
+            WhatsApp conectado
+          </span>
+          <button
+            type="button"
+            onClick={onReconnect}
+            disabled={reconnecting}
+            style={{
+              padding: "4px 10px", borderRadius: 8,
+              border: "1px solid var(--border)",
+              background: "var(--surface)", color: "var(--text)",
+              fontSize: 12, cursor: reconnecting ? "wait" : "pointer",
+              opacity: reconnecting ? 0.6 : 1,
+            }}
+            title="Desconecta o WhatsApp e abre o leitor de QR pra conectar de novo"
+          >
+            {reconnecting ? "Desconectando…" : "Reconectar"}
+          </button>
+        </div>
+      )}
       <input
         type="search"
         placeholder="Buscar nome ou telefone..."

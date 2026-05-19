@@ -271,6 +271,35 @@ class EvolutionAdapter(WhatsAppProvider):
             "latency_ms": int((time.monotonic() - t0) * 1000),
         }
 
+    # --- logout_instance ---
+    def logout_instance(self) -> dict:
+        """Desconecta a sessão WhatsApp sem deletar a instance.
+
+        Evolution: DELETE /instance/logout/<instance>. State vai pra `close`.
+        Instance, credenciais e webhook config preservados. Próximo
+        connect_instance() gera QR novo.
+        """
+        t0 = time.monotonic()
+        try:
+            r = httpx.delete(
+                self._url(f"instance/logout/{self.instance}"),
+                headers=self._headers(),
+                timeout=self.timeout,
+            )
+        except httpx.HTTPError as exc:
+            return {
+                "ok": False,
+                "error": f"unreachable: {str(exc)[:200]}",
+                "latency_ms": int((time.monotonic() - t0) * 1000),
+            }
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        # Evolution v2 retorna 200 com {"status":"SUCCESS"} ou 404 se já desconectado
+        if r.status_code == 404:
+            return {"ok": True, "already_disconnected": True, "latency_ms": latency_ms}
+        if r.status_code >= 400:
+            return {"ok": False, "error": r.text[:200], "latency_ms": latency_ms}
+        return {"ok": True, "latency_ms": latency_ms}
+
     # --- fetch_instance_token ---
     def fetch_instance_token(self) -> str | None:
         """Resolve a apikey específica da instance via /instance/fetchInstances.

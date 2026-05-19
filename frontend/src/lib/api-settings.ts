@@ -95,3 +95,12 @@ export const connectEvolution = () =>
 
 export const getEvolutionStatus = () =>
   authedFetch<EvolutionStatusResponse>("/api/workspace/integrations/evolution/status");
+
+export interface EvolutionLogoutResponse {
+  ok: boolean;
+  already_disconnected?: boolean;
+  latency_ms: number;
+}
+
+export const logoutEvolution = () =>
+  authedFetch<EvolutionLogoutResponse>("/api/workspace/integrations/evolution/logout", { method: "POST" });

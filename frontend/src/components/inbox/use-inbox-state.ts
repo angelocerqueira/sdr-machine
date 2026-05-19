@@ -22,10 +22,10 @@ export function useInboxState({ conversations }: Args): InboxState {
     { refreshInterval: 0, revalidateOnFocus: true },
   );
 
+  // Evolution v2 não usa webhook_secret (auth via apikey-in-body) — só exigimos api_key.
   const credsOk = Boolean(
     integration?.enabled &&
-      integration?.config?.has_api_key &&
-      integration?.config?.has_webhook_secret,
+      integration?.config?.has_api_key,
   );
 
   const { data: status } = useSWR(
