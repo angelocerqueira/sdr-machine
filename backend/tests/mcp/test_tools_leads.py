@@ -4,7 +4,7 @@ from unittest.mock import Mock
 from mcp.server.auth.provider import AccessToken
 
 from app.models import Lead
-from app.mcp.tools_leads import list_leads, get_lead
+from app.mcp.tools_leads import list_leads, get_lead, list_landing_pages
 
 
 def _ctx(workspace_id: int = 1):
@@ -98,3 +98,17 @@ def test_get_lead_returns_full(db):
 def test_get_lead_not_found(db):
     result = asyncio.run(get_lead(_ctx(), id=9999))
     assert result is None
+
+
+def test_list_landing_pages_respects_limit(db):
+    from app.models import LandingPage
+    lead = Lead(nome="X", telefone="x", status="enriched")
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+    for i in range(5):
+        db.add(LandingPage(lead_id=lead.id, version=i+1, html="<p>x</p>"))
+    db.commit()
+
+    result = asyncio.run(list_landing_pages(_ctx(), lead_id=lead.id, limit=3))
+    assert len(result) == 3

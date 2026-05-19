@@ -79,3 +79,15 @@ def test_get_conversation_returns_msgs_chronological(db):
 def test_get_conversation_not_found(db):
     result = asyncio.run(get_conversation(_ctx(), id=9999))
     assert result is None
+
+
+def test_list_conversations_pagination(db):
+    for i in range(5):
+        _seed_conv(db, lead_nome=f"L{i}", phone=f"5544000000{i:03d}",
+                   msgs=[("in", f"msg {i}")])
+
+    p1 = asyncio.run(list_conversations(_ctx(), filter=None, limit=2, offset=0))
+    p2 = asyncio.run(list_conversations(_ctx(), filter=None, limit=2, offset=2))
+    assert len(p1) == 2
+    assert len(p2) == 2
+    assert {c.lead_nome for c in p1} != {c.lead_nome for c in p2}
