@@ -28,7 +28,10 @@ def _preview(db, conv_id: int) -> Optional[str]:
 
 
 async def list_conversations(
-    ctx: Any, filter: Optional[dict] = None,
+    ctx: Any,
+    filter: Optional[dict] = None,
+    limit: int = 50,
+    offset: int = 0,
 ) -> list[ConversationSummary]:
     workspace_id = get_workspace_id(ctx)
     f = filter or {}
@@ -51,7 +54,12 @@ async def list_conversations(
                 Conversation.phone.ilike(pat),
             ))
 
-        rows = q.order_by(desc(Conversation.last_message_at)).all()
+        rows = (
+            q.order_by(desc(Conversation.last_message_at))
+            .limit(limit)
+            .offset(offset)
+            .all()
+        )
         out = []
         for conv, lead in rows:
             out.append(ConversationSummary(

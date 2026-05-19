@@ -63,7 +63,9 @@ async def get_lead(ctx: Any, id: int) -> Optional[LeadFull]:
         return LeadFull.model_validate(lead)
 
 
-async def list_landing_pages(ctx: Any, lead_id: int) -> list[LandingPageSummary]:
+async def list_landing_pages(
+    ctx: Any, lead_id: int, limit: int = 50,
+) -> list[LandingPageSummary]:
     workspace_id = get_workspace_id(ctx)  # noqa: F841
 
     with db_session() as db:
@@ -71,6 +73,7 @@ async def list_landing_pages(ctx: Any, lead_id: int) -> list[LandingPageSummary]
             db.query(LandingPage)
             .filter_by(lead_id=lead_id)
             .order_by(LandingPage.version.desc())
+            .limit(limit)
             .all()
         )
         return [
