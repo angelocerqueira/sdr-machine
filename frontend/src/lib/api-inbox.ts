@@ -34,6 +34,8 @@ export interface ConversationDetail {
   id: number;
   workspace_id: number;
   lead_id: number;
+  lead_nome: string;
+  lead_status: string;
   provider: string;
   provider_chat_id: string;
   phone: string;
