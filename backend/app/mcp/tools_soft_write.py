@@ -17,7 +17,7 @@ _LEAD_ALLOWED_FIELDS = {
 
 
 async def update_lead_status(ctx: Any, id: int, new_status: str) -> dict:
-    workspace_id = get_workspace_id(ctx)  # noqa: F841
+    workspace_id = get_workspace_id(ctx)  # noqa: F841  # TODO(multi-tenant): Lead has no workspace_id column; all lead operations are workspace-global. See spec §11.
     with db_session() as db:
         lead = db.get(Lead, id)
         if lead is None:
@@ -32,7 +32,7 @@ async def update_lead_status(ctx: Any, id: int, new_status: str) -> dict:
 
 
 async def update_lead_fields(ctx: Any, id: int, patch: dict) -> dict:
-    workspace_id = get_workspace_id(ctx)  # noqa: F841
+    workspace_id = get_workspace_id(ctx)  # noqa: F841  # TODO(multi-tenant): Lead has no workspace_id column; all lead operations are workspace-global. See spec §11.
     with db_session() as db:
         lead = db.get(Lead, id)
         if lead is None:
