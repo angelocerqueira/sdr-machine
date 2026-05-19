@@ -332,3 +332,93 @@
   flex: 1;
   overflow-y: auto;
 }
+
+/* Modal de cheat sheet de atalhos (abre com ?) */
+.inbox-shortcuts-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.inbox-shortcuts-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+  width: 440px;
+  max-width: 92vw;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.inbox-shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.inbox-shortcuts-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 480;
+}
+
+.inbox-shortcuts-header button {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.inbox-shortcuts-header button:hover {
+  background: var(--paper-1, #f5f5f5);
+}
+
+.inbox-shortcuts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.inbox-shortcuts-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.inbox-shortcuts-item:last-child {
+  border-bottom: none;
+}
+
+.inbox-shortcuts-label {
+  color: var(--text);
+}
+
+.inbox-shortcuts-keys {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.inbox-shortcuts-keys kbd {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--paper-1, #f5f5f5);
+  border: 1px solid var(--border);
+  font-family: var(--font-jetbrains-mono, monospace);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+  min-width: 20px;
+  text-align: center;
+}
