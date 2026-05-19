@@ -105,10 +105,13 @@ def get_conversation(conversation_id: int, db: Session = Depends(get_db)):
     if not conv:
         raise HTTPException(status_code=404, detail="conversation not found")
 
+    lead = db.query(Lead).filter_by(id=conv.lead_id).first() if conv.lead_id else None
     messages = sorted(conv.messages, key=lambda m: m.created_at)
 
     return ConversationOut(
         id=conv.id, workspace_id=conv.workspace_id, lead_id=conv.lead_id,
+        lead_nome=lead.nome if lead else None,
+        lead_status=lead.status if lead else None,
         provider=conv.provider, provider_chat_id=conv.provider_chat_id,
         phone=conv.phone, last_message_at=conv.last_message_at,
         unread_count=conv.unread_count, status=conv.status,

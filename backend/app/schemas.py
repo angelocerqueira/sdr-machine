@@ -320,6 +320,9 @@ class ConversationOut(BaseModel):
     id: int
     workspace_id: int
     lead_id: int
+    # Denormalised from Lead for display (None when lead deleted)
+    lead_nome: str | None = None
+    lead_status: str | None = None
     provider: str
     provider_chat_id: str
     phone: str

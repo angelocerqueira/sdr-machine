@@ -132,6 +132,36 @@ def test_get_conversation_not_found(client, db):
     assert r.status_code == 404
 
 
+def test_conversation_detail_includes_lead_nome_and_status(client, db):
+    from app.models import IntegrationSettings
+    from app.integrations.crypto import encrypt
+
+    db.add(IntegrationSettings(
+        workspace_id=1, provider="evolution", enabled=True,
+        config={
+            "base_url": "https://evo.example.com",
+            "instance": "sdr",
+            "api_key": encrypt("KEY"),
+        },
+    ))
+    lead = Lead(nome="Maria Silva", telefone="5511999990000", status="responded")
+    db.add(lead)
+    db.flush()
+    conv = Conversation(
+        workspace_id=1, lead_id=lead.id, provider="evolution",
+        provider_chat_id="5511999990000@s.whatsapp.net",
+        phone="5511999990000", status="active",
+    )
+    db.add(conv)
+    db.commit()
+
+    r = client.get(f"/api/conversations/{conv.id}")
+    assert r.status_code == 200, r.text
+    j = r.json()
+    assert j["lead_nome"] == "Maria Silva"
+    assert j["lead_status"] == "responded"
+
+
 from unittest.mock import Mock, patch
 from app.integrations.crypto import encrypt
 from app.models import IntegrationSettings
