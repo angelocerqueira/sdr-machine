@@ -5,6 +5,8 @@ o helper get_current_workspace_id resolve do session — call sites não mudam.
 """
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
@@ -13,6 +15,8 @@ from app.config import settings as app_settings
 from app.database import get_db
 from app.integrations.tenant import get_current_workspace_id
 from app.models import WorkspaceProfile, WorkspaceTargeting
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/workspace", tags=["workspace"])
 
@@ -123,6 +127,7 @@ from app.integrations.resolver import _decrypt_secrets  # shared logic within ap
 from app.integrations.schemas import PROVIDER_SCHEMAS, SECRET_FIELDS
 from app.integrations.testers import run_test
 from app.models import IntegrationSettings
+from app.whatsapp.evolution_adapter import EvolutionAdapter
 from app.whatsapp.registry import (
     ProviderNotConfigured,
     UnknownProviderError,
@@ -175,6 +180,32 @@ def _serialize(row: IntegrationSettings) -> dict:
         "last_test_result": row.last_test_result,
         "config": _mask_config(row.provider, row.config or {}),
     }
+
+
+def _refresh_evolution_instance_token(row: IntegrationSettings, cfg: dict) -> None:
+    """Sincroniza row.config['instance_token'] com Evolution.
+
+    Evolution v2 envia no body do webhook a apikey da instance (não a global).
+    Cacheamos no save e no /test pra que o receiver consiga validar O(1).
+    Silenciosamente no-op se a instance ainda não existe ou Evolution está
+    offline — user pode rodar /test depois pra resyncar.
+    """
+    try:
+        adapter = EvolutionAdapter(
+            base_url=cfg["base_url"],
+            instance=cfg["instance"],
+            api_key=cfg["api_key"],
+        )
+        token = adapter.fetch_instance_token()
+    except Exception as exc:  # pragma: no cover — defensive, fetch_instance_token já trata HTTPError
+        logger.warning("refresh_evolution_instance_token failed: %s", exc)
+        return
+    new_config = dict(row.config or {})
+    if token:
+        new_config["instance_token"] = encrypt(token)
+    else:
+        new_config.pop("instance_token", None)
+    row.config = new_config
 
 
 def _stub(provider: str) -> dict:
@@ -252,6 +283,12 @@ def put_integration(provider: str, payload: IntegrationPut, request: Request, db
         row.config = new_config
         if payload.enabled is not None:
             row.enabled = payload.enabled
+
+    # Evolution: cache instance_token pra usar como auth do webhook.
+    # Best-effort: se Evolution offline ou instance inexistente, segue
+    # sem cache — user pode rodar /test depois.
+    if provider == "evolution":
+        _refresh_evolution_instance_token(row, decrypted)
 
     db.commit()
     db.refresh(row)
@@ -341,6 +378,12 @@ def test_integration(provider: str, request: Request, db: Session = Depends(get_
             f"Re-save the credential before testing.",
         )
     res = run_test(provider, cfg)
+
+    # Evolution: aproveita o /test pra resyncar o instance_token (cenário:
+    # user recriou instance no Evolution e webhook começou a falhar).
+    if provider == "evolution":
+        _refresh_evolution_instance_token(row, cfg)
+
     row.last_tested_at = _dt.datetime.utcnow()
     row.last_test_result = res.to_dict()
     db.commit()

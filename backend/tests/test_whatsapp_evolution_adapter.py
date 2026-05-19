@@ -292,3 +292,49 @@ def test_connect_instance_timeout_returns_sanitized(adapter):
         result = adapter.connect_instance()
     assert result["ok"] is False
     assert "unreachable" in result["error"].lower()
+
+
+def test_fetch_instance_token_flat_shape(adapter):
+    """Evolution v2.x recentes: {"name": "...", "token": "..."}."""
+    fake_response = Mock(status_code=200, text='[{"name":"sdr","token":"T"}]')
+    fake_response.json.return_value = [
+        {"name": "other", "token": "WRONG"},
+        {"name": "sdr", "token": "TOKEN-SDR"},
+    ]
+    with patch("httpx.get", return_value=fake_response):
+        token = adapter.fetch_instance_token()
+    assert token == "TOKEN-SDR"
+
+
+def test_fetch_instance_token_legacy_nested_shape(adapter):
+    """Evolution legado: {"instance": {"instanceName": "..."}, "hash": {"apikey": "..."}}."""
+    fake_response = Mock(status_code=200, text='[{}]')
+    fake_response.json.return_value = [
+        {"instance": {"instanceName": "sdr"}, "hash": {"apikey": "LEGACY-TOKEN"}},
+    ]
+    with patch("httpx.get", return_value=fake_response):
+        token = adapter.fetch_instance_token()
+    assert token == "LEGACY-TOKEN"
+
+
+def test_fetch_instance_token_returns_none_when_instance_missing(adapter):
+    fake_response = Mock(status_code=200, text="[]")
+    fake_response.json.return_value = []
+    with patch("httpx.get", return_value=fake_response):
+        token = adapter.fetch_instance_token()
+    assert token is None
+
+
+def test_fetch_instance_token_returns_none_on_http_error(adapter):
+    import httpx as _httpx
+
+    with patch("httpx.get", side_effect=_httpx.TimeoutException("timed out")):
+        token = adapter.fetch_instance_token()
+    assert token is None
+
+
+def test_fetch_instance_token_returns_none_on_non_200(adapter):
+    fake_response = Mock(status_code=401, text="unauthorized")
+    with patch("httpx.get", return_value=fake_response):
+        token = adapter.fetch_instance_token()
+    assert token is None

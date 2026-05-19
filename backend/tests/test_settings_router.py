@@ -310,3 +310,85 @@ def test_evolution_status_returns_state(client, db, httpx_mock):
     body = r.json()
     assert body["state"] == "open"
     assert body["ok"] is True
+
+
+def test_evolution_put_caches_instance_token(client, db, httpx_mock):
+    """Save Evolution dispara fetch_instance_token e persiste cifrado."""
+    from app.integrations.crypto import decrypt
+    from app.models import IntegrationSettings
+
+    httpx_mock.add_response(
+        url="https://evo.example.com/instance/fetchInstances?instanceName=sdr",
+        json=[{"name": "sdr", "token": "INSTANCE-TOKEN-XYZ"}],
+    )
+
+    r = client.put("/api/workspace/integrations/evolution", json={
+        "config": {
+            "base_url": "https://evo.example.com",
+            "instance": "sdr",
+            "api_key": "GLOBAL-KEY",
+        }
+    })
+    assert r.status_code == 200, r.text
+
+    row = db.query(IntegrationSettings).filter_by(provider="evolution").first()
+    assert row.config.get("instance_token"), "instance_token deveria estar cacheado"
+    assert decrypt(row.config["instance_token"]) == "INSTANCE-TOKEN-XYZ"
+
+
+def test_evolution_put_no_crash_when_fetch_fails(client, db, httpx_mock):
+    """Fetch falha (Evolution offline / instance ainda não criada) → save OK sem cache."""
+    from app.models import IntegrationSettings
+
+    httpx_mock.add_response(
+        url="https://evo.example.com/instance/fetchInstances?instanceName=sdr",
+        status_code=502,
+        text="upstream error",
+    )
+
+    r = client.put("/api/workspace/integrations/evolution", json={
+        "config": {
+            "base_url": "https://evo.example.com",
+            "instance": "sdr",
+            "api_key": "GLOBAL-KEY",
+        }
+    })
+    assert r.status_code == 200, r.text
+
+    row = db.query(IntegrationSettings).filter_by(provider="evolution").first()
+    assert "instance_token" not in row.config
+
+
+def test_evolution_test_refreshes_instance_token(client, db, httpx_mock):
+    """POST /test resyncs instance_token — caso instance recriada com mesmo nome."""
+    from app.integrations.crypto import decrypt, encrypt
+    from app.models import IntegrationSettings
+
+    # Estado inicial: token antigo cacheado
+    db.add(IntegrationSettings(
+        workspace_id=1, provider="evolution", enabled=True,
+        config={
+            "base_url": "https://evo.example.com",
+            "instance": "sdr",
+            "api_key": encrypt("GLOBAL-KEY"),
+            "instance_token": encrypt("OLD-TOKEN"),
+        },
+    ))
+    db.commit()
+
+    # run_test do tester chama health_check; fetch_instance_token roda em seguida
+    httpx_mock.add_response(
+        url="https://evo.example.com/instance/connectionState/sdr",
+        json={"instance": {"state": "open"}},
+    )
+    httpx_mock.add_response(
+        url="https://evo.example.com/instance/fetchInstances?instanceName=sdr",
+        json=[{"name": "sdr", "token": "NEW-TOKEN-AFTER-RECREATE"}],
+    )
+
+    r = client.post("/api/workspace/integrations/evolution/test")
+    assert r.status_code == 200, r.text
+
+    db.expire_all()
+    row = db.query(IntegrationSettings).filter_by(provider="evolution").first()
+    assert decrypt(row.config["instance_token"]) == "NEW-TOKEN-AFTER-RECREATE"
