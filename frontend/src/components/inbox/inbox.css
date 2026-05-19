@@ -184,3 +184,27 @@
   color: var(--text-muted);
   text-transform: capitalize;
 }
+
+/* Status delivery icons em mensagens outbound */
+.msg-status {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  color: var(--text-muted);
+}
+
+.msg-status-sent,
+.msg-status-delivered,
+.msg-status-queued {
+  color: var(--text-muted);
+}
+
+.msg-status-read {
+  color: var(--accent);
+}
+
+.msg-status-failed {
+  color: var(--terra, #c84e3a);
+  font-weight: 600;
+  cursor: help;
+}
