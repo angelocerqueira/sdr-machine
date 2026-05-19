@@ -25,7 +25,6 @@ const PROVIDER_FIELDS: Record<ProviderId, { secrets: { key: string; label: strin
   evolution: {
     secrets: [
       { key: "api_key", label: "API key", required: true },
-      { key: "webhook_secret", label: "Webhook secret (HMAC)", required: true },
     ],
     plain: [
       { key: "base_url", label: "Base URL Evolution", type: "url", required: true },
@@ -144,11 +143,11 @@ export default function IntegrationDetail({ params }: { params: Promise<{ provid
         <section className="settings-section">
           <h3 className="settings-section-title">Webhook</h3>
           <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 8 }}>
-            Configure essa URL no painel da Evolution API pra receber mensagens. Use o webhook secret como header <code>X-Sdr-Signature</code>.
+            Configure essa URL no painel da Evolution API pra receber mensagens. Evolution v2 autentica via <code>apikey</code> no body (mesma API key acima) — sem HMAC.
           </p>
           <WebhookUrlField
             provider="evolution"
-            hint="Eventos: messages.upsert (inbound) + messages.update (status)"
+            hint="Eventos obrigatórios: MESSAGES_UPSERT (inbound) + MESSAGES_UPDATE (status)"
           />
         </section>
       )}
