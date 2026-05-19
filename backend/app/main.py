@@ -69,6 +69,16 @@ async def _combined_lifespan(_app):
     instância — tests entram/saem do lifespan múltiplas vezes via TestClient.
     """
     _reap_orphaned_jobs()
+    # Reap MCP pending actions expired
+    try:
+        from app.mcp.reaper import reap_expired_actions
+        db = SessionLocal()
+        try:
+            reap_expired_actions(db)
+        finally:
+            db.close()
+    except Exception:
+        logger.exception("startup.reap_mcp_failed")
     server = build_mcp_server()
     _app.state.mcp_server = server
     # Aponta a Mount route pro ASGI app do server recém-criado.
