@@ -40,8 +40,8 @@ class ApolloConfig(BaseModel):
 class EvolutionConfig(BaseModel):
     base_url: str = Field(min_length=8)         # ex: https://evo.example.com
     instance: str = Field(min_length=1)         # nome da instância — required
-    api_key: SecretStr                          # apikey header
-    webhook_secret: SecretStr | None = None     # HMAC pro receiver (P2)
+    api_key: SecretStr                          # apikey header + auth de webhook (Evolution v2 não tem HMAC)
+    webhook_secret: SecretStr | None = None     # não usado por Evolution v2; reservado pra futuro provider com HMAC
 
 
 class LangsmithConfig(BaseModel):

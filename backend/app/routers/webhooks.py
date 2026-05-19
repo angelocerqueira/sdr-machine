@@ -1,10 +1,12 @@
 """POST /api/webhooks/whatsapp/{workspace_id}/{provider}
 
-Endpoint público autenticado por HMAC. Secret cifrado em
-IntegrationSettings.config.webhook_secret por workspace+provider.
+Endpoint público. Autenticação varia por provider:
+- Evolution v2: apikey no body (provider não tem HMAC nativo)
+- Demais providers: HMAC via header X-Sdr-Signature
 """
 from __future__ import annotations
 
+import hmac as _hmac
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -33,19 +35,9 @@ async def whatsapp_webhook(
     raw_body = await request.body()
 
     cfg = get_provider_config(db, workspace_id=workspace_id, provider=provider)
-    if cfg is None or not cfg.get("webhook_secret"):
+    if cfg is None:
         logger.warning(
-            "webhook.unauthorized workspace=%s provider=%s reason=no_secret",
-            workspace_id, provider,
-        )
-        raise HTTPException(status_code=401, detail="invalid signature")
-
-    secret = cfg["webhook_secret"]
-
-    signature = request.headers.get(SIGNATURE_HEADER)
-    if not verify_signature(secret, raw_body, signature):
-        logger.warning(
-            "webhook.invalid_signature workspace=%s provider=%s",
+            "webhook.unauthorized workspace=%s provider=%s reason=no_config",
             workspace_id, provider,
         )
         raise HTTPException(status_code=401, detail="invalid signature")
@@ -54,6 +46,34 @@ async def whatsapp_webhook(
         payload = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="invalid json")
+
+    if provider == "evolution":
+        # Evolution v2 não assina via HMAC. Manda apikey no body —
+        # comparamos com a api_key configurada (constant-time).
+        configured_key = cfg.get("api_key") or ""
+        received_key = (payload or {}).get("apikey") or ""
+        if not configured_key or not _hmac.compare_digest(
+            str(configured_key), str(received_key),
+        ):
+            logger.warning(
+                "webhook.invalid_apikey workspace=%s provider=%s",
+                workspace_id, provider,
+            )
+            raise HTTPException(status_code=401, detail="invalid apikey")
+    else:
+        if not cfg.get("webhook_secret"):
+            logger.warning(
+                "webhook.unauthorized workspace=%s provider=%s reason=no_secret",
+                workspace_id, provider,
+            )
+            raise HTTPException(status_code=401, detail="invalid signature")
+        signature = request.headers.get(SIGNATURE_HEADER)
+        if not verify_signature(cfg["webhook_secret"], raw_body, signature):
+            logger.warning(
+                "webhook.invalid_signature workspace=%s provider=%s",
+                workspace_id, provider,
+            )
+            raise HTTPException(status_code=401, detail="invalid signature")
 
     try:
         summary = handle_webhook(
