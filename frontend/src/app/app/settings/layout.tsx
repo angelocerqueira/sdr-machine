@@ -9,6 +9,7 @@ const SECTIONS = [
   { href: "/app/settings/perfil",       label: "Perfil",       icon: "user" as const },
   { href: "/app/settings/integracoes",  label: "Integrações",  icon: "settings" as const },
   { href: "/app/settings/targeting",    label: "Targeting",    icon: "target" as const },
+  { href: "/app/settings/mcp",          label: "MCP",          icon: "bolt" as const },
   { href: "/app/settings/avancado",     label: "Avançado",     icon: "tool" as const },
 ];
 
