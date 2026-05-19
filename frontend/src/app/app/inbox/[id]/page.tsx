@@ -11,6 +11,8 @@ import { InboxList } from "@/components/inbox/InboxList";
 import { InboxFilters } from "@/components/inbox/InboxFilters";
 import { ConversationView } from "@/components/inbox/ConversationView";
 import { ConversationRail } from "@/components/inbox/ConversationRail";
+import { ShortcutsModal } from "@/components/inbox/ShortcutsModal";
+import { useInboxShortcuts } from "@/components/inbox/use-inbox-shortcuts";
 import "@/components/inbox/inbox.css";
 
 export default function InboxDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -21,6 +23,8 @@ export default function InboxDetailPage({ params }: { params: Promise<{ id: stri
   const [filter, setFilter] = useState<ConversationFilter>("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
@@ -62,6 +66,15 @@ export default function InboxDetailPage({ params }: { params: Promise<{ id: stri
     }
   }, [convError, router]);
 
+  useInboxShortcuts({
+    list,
+    selectedId: conversationId,
+    setFilter,
+    setSearch,
+    onShowShortcuts: () => setShortcutsOpen(true),
+    searchInputRef,
+  });
+
   async function handleSend(body: string) {
     await sendMessage(conversationId, body);
     mutate(["conversation", conversationId]);
@@ -74,6 +87,7 @@ export default function InboxDetailPage({ params }: { params: Promise<{ id: stri
         <InboxFilters
           value={filter} onChange={setFilter}
           search={search} onSearchChange={setSearch}
+          inputRef={searchInputRef}
         />
         {list && <InboxList items={list} selectedId={conversationId} />}
       </div>
@@ -87,6 +101,8 @@ export default function InboxDetailPage({ params }: { params: Promise<{ id: stri
       <div className="inbox-rail-col">
         {conv && <ConversationRail conversation={conv} />}
       </div>
+
+      <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
   );
 }
