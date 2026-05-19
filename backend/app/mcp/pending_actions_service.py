@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 ACTION_TTL = timedelta(minutes=5)
 
-HandlerFn = Callable[[Session, dict], Dict[str, Any]]
+HandlerFn = Callable[[Session, dict, str], Dict[str, Any]]
 HANDLERS: Dict[str, HandlerFn] = {}
 
 

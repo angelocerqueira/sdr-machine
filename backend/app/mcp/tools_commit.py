@@ -50,7 +50,7 @@ async def commit_action(ctx: Any, action_id: str) -> dict:
             return {"ok": False, "error": f"No handler for {row.action_type}"}
 
         try:
-            result = handler(db, row.params)
+            result = handler(db, row.params, row.id)
         except Exception as exc:
             logger.exception("mcp.commit.handler_failed id=%s", action_id)
             return {"ok": False, "error": f"Handler failed: {exc}"}

@@ -92,8 +92,8 @@ def test_cancel_action_row_marks_cancelled(db):
 
 def test_register_handler_adds_to_registry():
     @register_handler("test_action_xyz")
-    def handler(db, params):
-        return {"echoed": params}
+    def handler(db, params, action_id):
+        return {"echoed": params, "action_id": action_id}
 
     assert "test_action_xyz" in HANDLERS
     HANDLERS.pop("test_action_xyz")

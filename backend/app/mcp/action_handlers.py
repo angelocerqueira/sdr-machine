@@ -2,11 +2,15 @@
 
 Registrados via `@register_handler("xxx")`. Importar este módulo dispara
 auto-registro (side effect).
+
+Signature comum: `handler(db, params, action_id) -> dict`. O `action_id`
+é usado para idempotency_key estável (send_message) — handlers que não
+precisam dele simplesmente ignoram o parâmetro.
 """
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -25,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 @register_handler("send_message")
-def handle_send_message(db: Session, params: dict) -> dict:
+def handle_send_message(db: Session, params: dict, action_id: str) -> dict:
     conv_id = params["conversation_id"]
     body = params["body"]
 
@@ -38,7 +42,9 @@ def handle_send_message(db: Session, params: dict) -> dict:
     except (UnknownProviderError, ProviderNotConfigured) as exc:
         return {"ok": False, "error": f"provider unavailable: {exc}"}
 
-    idem = f"mcp_send_conv_{conv.id}_{int(datetime.now(timezone.utc).timestamp()*1000)}"
+    # Idempotency_key vinculado ao action_id: retry após crash entre send +
+    # persist usa MESMA key → Evolution dedupa (não duplica msg).
+    idem = f"mcp_action_{action_id}"
     try:
         sent = adapter.send_text(
             to_phone=conv.phone, body=body, idempotency_key=idem,
@@ -62,7 +68,7 @@ def handle_send_message(db: Session, params: dict) -> dict:
 
 
 @register_handler("bulk_send")
-def handle_bulk_send(db: Session, params: dict) -> dict:
+def handle_bulk_send(db: Session, params: dict, action_id: str) -> dict:
     template = params["template"]
     recipients = params["recipient_lead_ids"]
 
@@ -80,7 +86,9 @@ def handle_bulk_send(db: Session, params: dict) -> dict:
 
 
 @register_handler("delete_lead")
-def handle_delete_lead(db: Session, params: dict) -> dict:
+def handle_delete_lead(db: Session, params: dict, action_id: str) -> dict:
+    # TODO(multi-tenant): Lead has no workspace_id column; deleting by id is workspace-global.
+    # Workspace isolation is enforced at the prepare/get_action layer via token ownership.
     lead_id = params["lead_id"]
     lead = db.get(Lead, lead_id)
     if lead is None:
@@ -91,11 +99,18 @@ def handle_delete_lead(db: Session, params: dict) -> dict:
 
 
 @register_handler("delete_conversations")
-def handle_delete_conversations(db: Session, params: dict) -> dict:
+def handle_delete_conversations(db: Session, params: dict, action_id: str) -> dict:
     ids = params["conversation_ids"]
+    workspace_id = params.get("workspace_id")
     if not ids:
         return {"ok": True, "deleted_count": 0}
-    rows = db.query(Conversation).filter(Conversation.id.in_(ids)).all()
+    q = db.query(Conversation).filter(Conversation.id.in_(ids))
+    if workspace_id is not None:
+        # Defense-in-depth: prepare/get_action já validam workspace via token,
+        # mas filtramos aqui também pra fechar o vector de cross-tenant delete
+        # caso params sejam manipulados.
+        q = q.filter(Conversation.workspace_id == workspace_id)
+    rows = q.all()
     for r in rows:
         db.delete(r)
     db.commit()
@@ -103,7 +118,7 @@ def handle_delete_conversations(db: Session, params: dict) -> dict:
 
 
 @register_handler("run_pipeline")
-def handle_run_pipeline(db: Session, params: dict) -> dict:
+def handle_run_pipeline(db: Session, params: dict, action_id: str) -> dict:
     stage = params["stage"]
     stage_params = params.get("params", {})
 
@@ -120,7 +135,7 @@ def handle_run_pipeline(db: Session, params: dict) -> dict:
 
 
 @register_handler("classify_leads")
-def handle_classify_leads(db: Session, params: dict) -> dict:
+def handle_classify_leads(db: Session, params: dict, action_id: str) -> dict:
     job = Job(
         type="classify", status="pending", params=params,
         started_at=datetime.utcnow(),
@@ -134,7 +149,7 @@ def handle_classify_leads(db: Session, params: dict) -> dict:
 
 
 @register_handler("generate_lps")
-def handle_generate_lps(db: Session, params: dict) -> dict:
+def handle_generate_lps(db: Session, params: dict, action_id: str) -> dict:
     job = Job(
         type="generate", status="pending", params=params,
         started_at=datetime.utcnow(),
@@ -150,9 +165,9 @@ def handle_generate_lps(db: Session, params: dict) -> dict:
 # ─── Spawners ───
 
 def _spawn_pipeline_stage(stage: str, job_id: int, params: dict) -> None:
-    import threading
     from app.routers.pipeline import (
         _run_scrape, _run_enrich, _run_generate, _run_outreach,
+        _spawn_job_thread,
     )
     runners = {
         "scrape": _run_scrape, "enrich": _run_enrich,
@@ -161,8 +176,9 @@ def _spawn_pipeline_stage(stage: str, job_id: int, params: dict) -> None:
     fn = runners.get(stage)
     if fn is None:
         return
-    t = threading.Thread(target=fn, args=(job_id, params), daemon=True, name=f"mcp-{stage}-{job_id}")
-    t.start()
+    # Reusa _spawn_job_thread do pipeline router → pega _job_semaphore +
+    # crash recovery sem reimplementar.
+    _spawn_job_thread(fn, job_id, params)
 
 
 def _spawn_bulk_send(job_id: int) -> None:
@@ -170,18 +186,14 @@ def _spawn_bulk_send(job_id: int) -> None:
 
 
 def _spawn_classify(job_id: int, params: dict) -> None:
-    import threading
     try:
-        from app.routers.pipeline import _run_classify
+        from app.routers.pipeline import _run_classify, _spawn_job_thread
     except ImportError:
         logger.warning("mcp.classify.no_runner job=%s", job_id)
         return
-    t = threading.Thread(target=_run_classify, args=(job_id, params), daemon=True, name=f"mcp-classify-{job_id}")
-    t.start()
+    _spawn_job_thread(_run_classify, job_id, params)
 
 
 def _spawn_generate_lps(job_id: int, params: dict) -> None:
-    import threading
-    from app.routers.pipeline import _run_generate
-    t = threading.Thread(target=_run_generate, args=(job_id, params), daemon=True, name=f"mcp-genlp-{job_id}")
-    t.start()
+    from app.routers.pipeline import _run_generate, _spawn_job_thread
+    _spawn_job_thread(_run_generate, job_id, params)

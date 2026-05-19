@@ -82,6 +82,8 @@ async def prepare_bulk_send(
 
 
 async def prepare_delete_lead(ctx: Any, lead_id: int) -> dict:
+    # TODO(multi-tenant): Lead has no workspace_id column; lookup is workspace-global.
+    # Workspace isolation is enforced at the get_action layer via token ownership. See spec §11.
     workspace_id = get_workspace_id(ctx)
     token_hash = _token_hash_from_ctx(ctx)
 
@@ -144,7 +146,7 @@ async def prepare_delete_conversations(
         }
         row = create_action(
             db, workspace_id=workspace_id, action_type="delete_conversations",
-            params={"conversation_ids": conversation_ids},
+            params={"conversation_ids": conversation_ids, "workspace_id": workspace_id},
             preview=preview, token_hash=token_hash,
         )
         return _result(row.id, preview, row)
