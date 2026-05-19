@@ -9,6 +9,7 @@ import logging
 
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from app.config import settings as app_settings
 from app.database import SessionLocal
@@ -30,6 +31,13 @@ def build_mcp_server() -> FastMCP:
         resource_server_url=api_url,
     )
 
+    # DNS rebinding protection desabilitada: backend roda atrás de Railway TLS,
+    # default do SDK 1.27 (allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*"])
+    # retorna 421 "Invalid Host header" em qualquer host externo.
+    transport_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
+    )
+
     server = FastMCP(
         "sdr-machine",
         instructions=(
@@ -42,6 +50,7 @@ def build_mcp_server() -> FastMCP:
         auth=auth_settings,
         json_response=True,
         streamable_http_path="/",
+        transport_security=transport_security,
     )
 
     # M-2/3/4/5 adicionarão tools/resources/prompts aqui

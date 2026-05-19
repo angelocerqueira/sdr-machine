@@ -29,18 +29,21 @@ class BearerTokenVerifier(TokenVerifier):
     async def verify_token(self, token: str) -> AccessToken | None:
         db = self._session_factory()
         try:
-            row = verify_token(db, token)
-        except Exception:
-            logger.exception("mcp.auth.verify_failed")
-            return None
+            try:
+                row = verify_token(db, token)
+            except Exception:
+                logger.exception("mcp.auth.verify_failed")
+                return None
 
-        if row is None:
-            return None
+            if row is None:
+                return None
 
-        return AccessToken(
-            token=token,
-            client_id=f"mcp-token-{row.id}",
-            scopes=[f"mcp:workspace:{row.workspace_id}"],
-            expires_at=None,
-            resource=None,
-        )
+            return AccessToken(
+                token=token,
+                client_id=f"mcp-token-{row.id}",
+                scopes=[f"mcp:workspace:{row.workspace_id}"],
+                expires_at=None,
+                resource=None,
+            )
+        finally:
+            db.close()
