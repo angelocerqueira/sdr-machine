@@ -17,6 +17,7 @@ from app.whatsapp.registry import (
 )
 from app.whatsapp.services import (
     append_message,
+    create_inbound_lead,
     find_lead_by_phone,
     get_or_create_conversation,
     link_outreach_reply,
@@ -50,7 +51,7 @@ def handle_webhook(
 
     summary = {
         "inbound_processed": 0,
-        "inbound_skipped_no_lead": 0,
+        "inbound_auto_created_lead": 0,
         "status_updates_processed": 0,
         "status_updates_no_outreach": 0,
         "lead_id": None,
@@ -62,12 +63,13 @@ def handle_webhook(
                 db, workspace_id=workspace_id, normalized_phone=item.from_phone,
             )
             if lead is None:
-                summary["inbound_skipped_no_lead"] += 1
-                logger.info(
-                    "webhook.inbound_no_lead workspace=%s phone=%s msg_id=%s",
-                    workspace_id, item.from_phone, item.provider_message_id,
+                lead = create_inbound_lead(
+                    db, workspace_id=workspace_id,
+                    normalized_phone=item.from_phone,
+                    push_name=item.push_name,
+                    provider=provider,
                 )
-                continue
+                summary["inbound_auto_created_lead"] += 1
             conv = get_or_create_conversation(
                 db, workspace_id=workspace_id, lead_id=lead.id, provider=provider,
                 provider_chat_id=to_chat_id(item.from_phone), phone=item.from_phone,

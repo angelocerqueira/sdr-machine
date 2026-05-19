@@ -202,6 +202,7 @@ class EvolutionAdapter(WhatsAppProvider):
                 from_phone=from_phone,
                 body=body,
                 received_at=received_at,
+                push_name=data.get("pushName") or None,
             )]
 
         if event == "messages.update":

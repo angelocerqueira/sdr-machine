@@ -47,6 +47,39 @@ def find_lead_by_phone(
     return None
 
 
+def create_inbound_lead(
+    db: Session, *, workspace_id: int, normalized_phone: str,
+    push_name: str | None, provider: str,
+) -> Lead:
+    """Cria Lead automaticamente quando webhook chega de número desconhecido.
+
+    Segue padrão Chatwoot/Intercom: contato inbound vira lead com role inicial,
+    user enriquece depois. Status='responded' porque é o estado mais próximo
+    semanticamente (o lead "respondeu" — mesmo sem outreach prévio).
+
+    enrichment_sources guarda o audit trail pra distinguir leads inbound
+    espontâneos de leads que entraram via scraping.
+    """
+    nome = (push_name or "").strip() or f"+{normalized_phone}"
+    lead = Lead(
+        nome=nome[:255],
+        telefone=normalized_phone,
+        status="responded",
+        enrichment_sources=[{
+            "source": "inbound_whatsapp",
+            "provider": provider,
+            "captured_at": datetime.utcnow().isoformat(),
+        }],
+    )
+    db.add(lead)
+    db.flush()  # popula lead.id antes do caller usar
+    logger.info(
+        "lead.auto_created_from_inbound workspace=%s phone=%s lead_id=%s push_name=%r",
+        workspace_id, normalized_phone, lead.id, push_name,
+    )
+    return lead
+
+
 def get_or_create_conversation(
     db: Session, *, workspace_id: int, lead_id: int, provider: str,
     provider_chat_id: str, phone: str,

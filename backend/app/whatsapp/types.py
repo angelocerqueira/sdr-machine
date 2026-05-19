@@ -29,6 +29,7 @@ class InboundMessage:
     media_url: str | None = None
     quoted_message_id: str | None = None
     direction: Direction = "in"
+    push_name: str | None = None  # nome exibido pelo remetente (WhatsApp); usado pra auto-criar lead
 
 
 @dataclass(frozen=True)
