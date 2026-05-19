@@ -271,6 +271,47 @@ class EvolutionAdapter(WhatsAppProvider):
             "latency_ms": int((time.monotonic() - t0) * 1000),
         }
 
+    # --- fetch_instance_token ---
+    def fetch_instance_token(self) -> str | None:
+        """Resolve a apikey específica da instance via /instance/fetchInstances.
+
+        Evolution v2 envia essa key (e não a global) no body do webhook —
+        precisamos cachear pra comparar no receiver. Retorna None se a
+        instance não existir ou se a chamada falhar.
+        """
+        try:
+            r = httpx.get(
+                self._url("instance/fetchInstances"),
+                params={"instanceName": self.instance},
+                headers=self._headers(),
+                timeout=self.timeout,
+            )
+        except httpx.HTTPError as exc:
+            logger.warning("evolution.fetch_instances failed: %s", exc)
+            return None
+        if r.status_code != 200:
+            logger.warning(
+                "evolution.fetch_instances status=%s body=%s",
+                r.status_code, r.text[:200],
+            )
+            return None
+        items = r.json() if r.text else []
+        if not isinstance(items, list):
+            return None
+        for item in items:
+            # Evolution v2 retorna em formatos variados entre versões:
+            # - {"name": "sdr", "token": "..."} (flat, v2.x recentes)
+            # - {"instance": {"instanceName": "sdr"}, "hash": {"apikey": "..."}} (legado)
+            name = item.get("name") or (item.get("instance") or {}).get("instanceName")
+            if name != self.instance:
+                continue
+            token = item.get("token")
+            if not token:
+                token = (item.get("hash") or {}).get("apikey")
+            if token:
+                return str(token)
+        return None
+
     # --- health_check ---
     def health_check(self) -> ProviderHealth:
         t0 = time.monotonic()

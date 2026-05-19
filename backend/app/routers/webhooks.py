@@ -48,16 +48,19 @@ async def whatsapp_webhook(
         raise HTTPException(status_code=400, detail="invalid json")
 
     if provider == "evolution":
-        # Evolution v2 não assina via HMAC. Manda apikey no body —
-        # comparamos com a api_key configurada (constant-time).
-        configured_key = cfg.get("api_key") or ""
-        received_key = (payload or {}).get("apikey") or ""
-        if not configured_key or not _hmac.compare_digest(
-            str(configured_key), str(received_key),
+        # Evolution v2 não assina via HMAC. Manda apikey-da-instance no body
+        # (diferente da apikey global). Cacheamos `instance_token` no save/test
+        # via /api/workspace/integrations/evolution. Fallback pra api_key
+        # (global) só pra não quebrar configs antigas que ainda não rodaram
+        # /test — o caminho recomendado é cachear instance_token.
+        received_key = str((payload or {}).get("apikey") or "")
+        expected = cfg.get("instance_token") or cfg.get("api_key") or ""
+        if not expected or not received_key or not _hmac.compare_digest(
+            str(expected), received_key,
         ):
             logger.warning(
-                "webhook.invalid_apikey workspace=%s provider=%s",
-                workspace_id, provider,
+                "webhook.invalid_apikey workspace=%s provider=%s has_instance_token=%s",
+                workspace_id, provider, bool(cfg.get("instance_token")),
             )
             raise HTTPException(status_code=401, detail="invalid apikey")
     else:

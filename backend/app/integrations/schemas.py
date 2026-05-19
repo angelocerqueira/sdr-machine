@@ -40,7 +40,8 @@ class ApolloConfig(BaseModel):
 class EvolutionConfig(BaseModel):
     base_url: str = Field(min_length=8)         # ex: https://evo.example.com
     instance: str = Field(min_length=1)         # nome da instância — required
-    api_key: SecretStr                          # apikey header + auth de webhook (Evolution v2 não tem HMAC)
+    api_key: SecretStr                          # apikey global do Evolution (cria/lista instances, envia mensagens)
+    instance_token: SecretStr | None = None     # apikey específica da instance — cacheada pelo backend (sync no save/test); usada pra autenticar webhooks
     webhook_secret: SecretStr | None = None     # não usado por Evolution v2; reservado pra futuro provider com HMAC
 
 
@@ -68,6 +69,6 @@ SECRET_FIELDS: dict[str, set[str]] = {
     "llm": {"api_key"},
     "hunter": {"api_key"},
     "apollo": {"api_key"},
-    "evolution": {"api_key", "webhook_secret"},
+    "evolution": {"api_key", "webhook_secret", "instance_token"},
     "langsmith": {"api_key"},
 }

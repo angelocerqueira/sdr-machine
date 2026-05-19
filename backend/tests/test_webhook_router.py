@@ -5,24 +5,42 @@ import pytest
 from app.integrations.crypto import encrypt
 from app.models import IntegrationSettings, Lead
 
-EVOLUTION_API_KEY = "evo-api-key-xyz"
+GLOBAL_API_KEY = "evo-global-xyz"
+INSTANCE_TOKEN = "evo-instance-token-abc"
 
 
 @pytest.fixture
 def seeded(db):
+    """Config Evolution com instance_token cacheado (happy path pós-save)."""
     db.add(IntegrationSettings(
         workspace_id=1, provider="evolution", enabled=True,
         config={
             "base_url": "https://evo.example.com",
             "instance": "sdr",
-            "api_key": encrypt(EVOLUTION_API_KEY),
+            "api_key": encrypt(GLOBAL_API_KEY),
+            "instance_token": encrypt(INSTANCE_TOKEN),
         },
     ))
     db.add(Lead(nome="Acme", telefone="5544999990000", status="outreach_sent"))
     db.commit()
 
 
-def _payload_inbound(*, apikey: str | None = EVOLUTION_API_KEY) -> dict:
+@pytest.fixture
+def seeded_no_instance_token(db):
+    """Config sem instance_token (config antiga / instance ainda não criada)."""
+    db.add(IntegrationSettings(
+        workspace_id=1, provider="evolution", enabled=True,
+        config={
+            "base_url": "https://evo.example.com",
+            "instance": "sdr",
+            "api_key": encrypt(GLOBAL_API_KEY),
+        },
+    ))
+    db.add(Lead(nome="Acme", telefone="5544999990000", status="outreach_sent"))
+    db.commit()
+
+
+def _payload_inbound(*, apikey: str | None = INSTANCE_TOKEN) -> dict:
     payload = {
         "event": "messages.upsert",
         "data": {
@@ -40,7 +58,7 @@ def _payload_inbound(*, apikey: str | None = EVOLUTION_API_KEY) -> dict:
     return payload
 
 
-def test_webhook_200_with_valid_apikey(client, db, seeded):
+def test_webhook_200_with_valid_instance_token(client, db, seeded):
     body = json.dumps(_payload_inbound()).encode("utf-8")
     r = client.post(
         "/api/webhooks/whatsapp/1/evolution",
@@ -51,6 +69,29 @@ def test_webhook_200_with_valid_apikey(client, db, seeded):
     j = r.json()
     assert j["ok"] is True
     assert j["summary"]["inbound_processed"] == 1
+
+
+def test_webhook_401_with_global_apikey_when_instance_token_cached(client, db, seeded):
+    # Evolution sempre manda instance_token; recusar global key quando cache existe
+    # evita false-positive de attacker que vazou só a global.
+    body = json.dumps(_payload_inbound(apikey=GLOBAL_API_KEY)).encode("utf-8")
+    r = client.post(
+        "/api/webhooks/whatsapp/1/evolution",
+        content=body,
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.status_code == 401
+
+
+def test_webhook_200_fallback_global_when_no_instance_token(client, db, seeded_no_instance_token):
+    # Backward compat: config antiga sem cache aceita global.
+    body = json.dumps(_payload_inbound(apikey=GLOBAL_API_KEY)).encode("utf-8")
+    r = client.post(
+        "/api/webhooks/whatsapp/1/evolution",
+        content=body,
+        headers={"Content-Type": "application/json"},
+    )
+    assert r.status_code == 200, r.text
 
 
 def test_webhook_401_without_apikey(client, db, seeded):
@@ -72,7 +113,7 @@ def test_webhook_401_with_wrong_apikey(client, db, seeded):
 
 
 def test_webhook_404_unknown_provider(client, db, seeded):
-    body = json.dumps({"event": "x", "apikey": EVOLUTION_API_KEY}).encode("utf-8")
+    body = json.dumps({"event": "x", "apikey": INSTANCE_TOKEN}).encode("utf-8")
     r = client.post(
         "/api/webhooks/whatsapp/1/bogus", content=body,
         headers={"Content-Type": "application/json"},
