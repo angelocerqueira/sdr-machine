@@ -151,3 +151,274 @@
   font-size: 14px;
 }
 
+
+/* Day divider — separador temporal entre mensagens */
+.inbox-day-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 8px 8px;
+  position: relative;
+}
+
+.inbox-day-divider::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  background: var(--border);
+  z-index: 0;
+}
+
+.inbox-day-divider-chip {
+  position: relative;
+  z-index: 1;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 460;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+/* Status delivery icons em mensagens outbound */
+.msg-status {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  color: var(--text-muted);
+}
+
+.msg-status-sent,
+.msg-status-delivered,
+.msg-status-queued {
+  color: var(--text-muted);
+}
+
+.msg-status-read {
+  color: var(--accent);
+}
+
+.msg-status-failed {
+  color: var(--terra, #c84e3a);
+  font-weight: 600;
+  cursor: help;
+}
+
+/* Header rico da conversa */
+.inbox-conv-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.inbox-conv-header-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent-soft, #e8eef9);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.inbox-conv-header-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.inbox-conv-header-name {
+  font-size: 15px;
+  font-weight: 480;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inbox-conv-header-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.inbox-conv-header-status {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 460;
+  color: var(--text);
+  text-transform: lowercase;
+}
+
+.inbox-conv-header-phone {
+  font-family: var(--font-jetbrains-mono, monospace);
+  font-size: 11px;
+}
+
+.inbox-conv-header-action {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.inbox-conv-header-action:hover {
+  background: var(--accent-soft, #e8eef9);
+}
+
+/* FAB "↓ N novas mensagens" — aparece quando user scrolla pra cima e msg nova chega */
+.inbox-scroll-fab {
+  position: absolute;
+  right: 24px;
+  bottom: 88px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+  animation: fadeInUp 0.2s ease-out;
+}
+
+.inbox-scroll-fab:hover {
+  filter: brightness(1.05);
+}
+
+.inbox-scroll-fab-arrow {
+  font-size: 14px;
+  line-height: 1;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Wrapper relativo pro FAB ancorar acima das mensagens */
+.inbox-conv-messages-wrap {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.inbox-conv-messages-wrap > .inbox-conv-messages {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Modal de cheat sheet de atalhos (abre com ?) */
+.inbox-shortcuts-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.inbox-shortcuts-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+  width: 440px;
+  max-width: 92vw;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.inbox-shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.inbox-shortcuts-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 480;
+}
+
+.inbox-shortcuts-header button {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.inbox-shortcuts-header button:hover {
+  background: var(--paper-1, #f5f5f5);
+}
+
+.inbox-shortcuts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.inbox-shortcuts-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.inbox-shortcuts-item:last-child {
+  border-bottom: none;
+}
+
+.inbox-shortcuts-label {
+  color: var(--text);
+}
+
+.inbox-shortcuts-keys {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.inbox-shortcuts-keys kbd {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--paper-1, #f5f5f5);
+  border: 1px solid var(--border);
+  font-family: var(--font-jetbrains-mono, monospace);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+  min-width: 20px;
+  text-align: center;
+}

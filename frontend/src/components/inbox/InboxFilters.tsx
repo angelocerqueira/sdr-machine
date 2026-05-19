@@ -10,6 +10,7 @@ interface Props {
   connectionState?: string;
   onReconnect?: () => void;
   reconnecting?: boolean;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
 const FILTERS: { key: ConversationFilter; label: string }[] = [
@@ -22,6 +23,7 @@ const FILTERS: { key: ConversationFilter; label: string }[] = [
 export function InboxFilters({
   value, onChange, search, onSearchChange,
   connectionState, onReconnect, reconnecting,
+  inputRef,
 }: Props) {
   const showPill = connectionState === "open" && onReconnect;
   return (
@@ -65,6 +67,7 @@ export function InboxFilters({
         </div>
       )}
       <input
+        ref={inputRef}
         type="search"
         placeholder="Buscar nome ou telefone..."
         value={search}
