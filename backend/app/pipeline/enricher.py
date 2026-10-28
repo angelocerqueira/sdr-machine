@@ -119,7 +119,7 @@ def _scrape_instagram_profile(url: str) -> dict | None:
         return None
 
 
-def _search_linkedin_company(company_name: str, city: str) -> dict | None:
+def _search_linkedin_company(company_name: str, city: str, company_url: str = "") -> dict | None:
     """
     Busca perfil de empresa no LinkedIn via Apify.
     Retorna dict com dados básicos ou None se não encontrar.
@@ -127,35 +127,35 @@ def _search_linkedin_company(company_name: str, city: str) -> dict | None:
     if not settings.apify_token or not company_name:
         return None
 
-    api_url = "https://api.apify.com/v2/acts/apify~linkedin-company-scraper/run-sync-get-dataset-items"
-    payload = {
-        "queries": [f"{company_name} {city}"],
-        "maxResults": 1,
-    }
+    api_url = "https://api.apify.com/v2/acts/johnvc~linkedin-company-api/run-sync-get-dataset-items"
+    if "linkedin.com/company/" in company_url.lower():
+        payload = {"companyUrls": [company_url]}
+    else:
+        payload = {"companyNames": [company_name]}
     params = {
         "token": settings.apify_token,
         "timeout": 30,
-        "memory": 256,
+        "memory": 128,
     }
 
     try:
         resp = requests.post(api_url, json=payload, params=params, timeout=60)
         resp.raise_for_status()
         results = resp.json()
-        if not results:
+        company = next((r for r in results if r.get("result_type") == "company"), None)
+        if not company:
             return None
 
-        company = results[0]
         return {
             "platform": "linkedin",
             "name": company.get("name", ""),
             "description": (company.get("description", "") or "")[:500],
-            "followers": company.get("followersCount", 0),
-            "employees_range": company.get("employeeCountRange", ""),
-            "industry": company.get("industry", ""),
+            "followers": company.get("followers", 0),
+            "employees_range": company.get("companySize", ""),
+            "industry": company.get("industries", ""),
             "website": company.get("website", ""),
             "specialties": company.get("specialties", []),
-            "url": company.get("url", ""),
+            "url": company.get("publicUrl", ""),
         }
     except Exception as exc:
         logger.warning("LinkedIn scrape failed for %s: %s", company_name, str(exc)[:100])
@@ -183,7 +183,7 @@ def scrape_social_profiles(lead_info: dict, social_urls: dict) -> dict:
     if li_url:
         nome = lead_info.get("nome", "")
         cidade = lead_info.get("cidade", "")
-        li_data = _search_linkedin_company(nome, cidade)
+        li_data = _search_linkedin_company(nome, cidade, li_url)
         if li_data:
             profiles["linkedin"] = li_data
             time.sleep(1)
